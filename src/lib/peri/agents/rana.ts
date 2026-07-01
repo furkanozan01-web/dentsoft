@@ -2,7 +2,7 @@ import 'server-only'
 
 import { createClient } from '@/lib/supabase/server'
 import type Anthropic from '@anthropic-ai/sdk'
-import { stubRead, stubWrite } from './base'
+import { stubWrite, type PeriAgent } from './base'
 import type { ToolResult, PendingWrite } from '../types'
 import { getHekimHakedis, getClinicDebts } from '@/app/finance/actions'
 import { canSeeAllHakedis } from '@/lib/permissions'
@@ -724,4 +724,4 @@ export const ranaAgent = {
   tools: RANA_TOOLS,
   writeTools: RANA_WRITE_TOOLS,
   executeTool: executeRanaTool,
-}
+} satisfies PeriAgent

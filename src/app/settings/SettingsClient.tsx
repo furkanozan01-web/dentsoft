@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useEffect, useMemo, useActionState, useTransition, useCallback, useRef, Fragment, type ReactNode } from 'react'
+import { useState, useEffect, useMemo, useActionState, useTransition, useCallback, useRef, startTransition, Fragment, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ConfirmModal'
@@ -33,7 +33,7 @@ import {
   addTariffItemToProfile,
   uploadClinicLogo,
 } from './actions'
-import type { TariffProfile, RolePermissionRow, UserPermissionRow, PermissionFields } from './actions'
+import type { TariffProfile, RolePermissionRow, UserPermissionRow } from './actions'
 import { ASSIGNABLE_ROLES, DAYS, PAYMENT_MODEL_LABEL, ROLE_LABEL, SETTINGS_TABS as TABS, SPECIALTIES } from './constants'
 import { emptyWorkHours, fmtPrice } from './helpers'
 import type { AppointmentType, ClinicSettings, DayHours, Doctor, Profile, R, SettingsTab, Tariff, TariffPriceHistory } from './types'
@@ -1265,9 +1265,13 @@ function RolePermissionMatrix({ rolePermissions, isAdmin }: { rolePermissions: R
   const [pending, startTransition] = useTransition()
   const [overrides, setOverrides] = useState<Record<string, PermRow>>({})
 
-  useEffect(() => {
+  // Rol değişince override'ları sıfırla — render sırasında (effect'te değil),
+  // React'in "resetting state when a prop changes" desenine uygun.
+  const [lastRole, setLastRole] = useState(selectedRole)
+  if (selectedRole !== lastRole) {
+    setLastRole(selectedRole)
     setOverrides({})
-  }, [selectedRole])
+  }
 
   const getRow = useCallback((resource: string): PermRow => {
     if (overrides[resource]) return overrides[resource]
@@ -1403,7 +1407,9 @@ function UserPermissionPanel({ user, isAdmin, onClose }: { user: Profile; isAdmi
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
+    startTransition(() => {
+      setLoading(true)
+    })
     getUserPermissionsPanel(user.id).then((res) => {
       if (cancelled) return
       if (res.error || !res.data) {

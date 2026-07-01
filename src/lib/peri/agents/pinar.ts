@@ -1,7 +1,7 @@
 import 'server-only'
 
 import type Anthropic from '@anthropic-ai/sdk'
-import { stubRead, stubWrite } from './base'
+import { stubRead, stubWrite, type PeriAgent } from './base'
 import type { ToolResult } from '../types'
 import { getPatientTreatmentHistory } from '@/app/patients/actions'
 
@@ -167,4 +167,4 @@ export const pinarAgent = {
   tools: PINAR_TOOLS,
   writeTools: PINAR_WRITE_TOOLS,
   executeTool: executePinarTool,
-}
+} satisfies PeriAgent

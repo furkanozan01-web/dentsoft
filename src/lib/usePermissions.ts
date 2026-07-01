@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, startTransition } from 'react'
 
 export interface Permissions {
   canView: boolean
@@ -19,7 +19,9 @@ export function usePermissions(resource: string): Permissions & { loading: boole
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
+    startTransition(() => {
+      setLoading(true)
+    })
     fetch(`/api/permissions?resource=${encodeURIComponent(resource)}`)
       .then((res) => (res.ok ? res.json() : NO_ACCESS))
       .then((data: Permissions) => {

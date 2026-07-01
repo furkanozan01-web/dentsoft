@@ -555,7 +555,6 @@ export default function PatientsClient({
         {activeTab === 'takip' && selected && (
           <TakipTab
             patient={selected}
-            clinicId={clinicId}
           />
         )}
 

@@ -26,23 +26,23 @@ const TEMPLATES = [
 ]
 
 // ---- Ana Bileşen ----
-export default function TakipTab({ patient, clinicId }: { patient: Patient; clinicId: number }) {
+export default function TakipTab({ patient }: { patient: Patient }) {
   const confirm = useConfirm()
   const [followups, setFollowups] = useState<Followup[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  const load = async () => {
-    setLoading(true)
-    const res = await getFollowupsForPatient(patient.id)
-    if (res.data) setFollowups(res.data)
-    setLoading(false)
-  }
-
   useEffect(() => {
-    void load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false
+    startTransition(async () => {
+      setLoading(true)
+      const res = await getFollowupsForPatient(patient.id)
+      if (cancelled) return
+      if (res.data) setFollowups(res.data)
+      setLoading(false)
+    })
+    return () => { cancelled = true }
   }, [patient.id])
 
   const handleToggleStep = (followupId: number, step: FollowupStep) => {
@@ -131,7 +131,6 @@ export default function TakipTab({ patient, clinicId }: { patient: Patient; clin
       {showModal && (
         <NewFollowupModal
           patientId={patient.id}
-          clinicId={clinicId}
           onClose={() => setShowModal(false)}
           onSuccess={(newFollowup) => {
             setFollowups((prev) => [newFollowup, ...prev])
@@ -211,11 +210,10 @@ function FollowupCard({
       <div className="px-4 py-2">
         {[...followup.steps]
           .sort((a, b) => a.step_order - b.step_order)
-          .map((step, idx) => (
+          .map((step) => (
             <StepRow
               key={step.id}
               step={step}
-              index={idx}
               onToggle={() => onToggleStep(step)}
               isPending={isPending}
             />
@@ -230,10 +228,9 @@ function FollowupCard({
 
 // ---- Adım Satırı ----
 function StepRow({
-  step, index, onToggle, isPending,
+  step, onToggle, isPending,
 }: {
   step: FollowupStep
-  index: number
   onToggle: () => void
   isPending: boolean
 }) {
@@ -280,12 +277,10 @@ function StepRow({
 // ---- Yeni Takip Modalı ----
 function NewFollowupModal({
   patientId,
-  clinicId,
   onClose,
   onSuccess,
 }: {
   patientId: number
-  clinicId: number
   onClose: () => void
   onSuccess: (f: Followup) => void
 }) {

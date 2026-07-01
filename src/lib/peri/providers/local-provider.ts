@@ -36,6 +36,7 @@ import type { ModelProvider } from './types'
 export class LocalProvider implements ModelProvider {
   readonly id = 'local:stub'
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- imza ModelProvider ile eşleşmeli, stub parametreleri kullanmaz
   async complete(_params: {
     systemPrompt: string
     tools: Anthropic.Tool[]

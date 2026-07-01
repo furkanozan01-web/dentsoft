@@ -165,7 +165,7 @@ export default function PeriAssistantButton() {
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E6FFFA] text-[#0F766E] text-xl">🦷</span>
-                <p className="text-sm font-semibold text-[#0F2B3D]">PERİ'ye hoş geldiniz!</p>
+                <p className="text-sm font-semibold text-[#0F2B3D]">PERİ&apos;ye hoş geldiniz!</p>
                 <p className="mt-1 text-xs text-slate-400">Randevu, hasta ve program sorularınızı yazın.</p>
                 <div className="mt-4 flex flex-wrap justify-center gap-1.5">
                   {['Bugünkü programım', 'Yarın boş slot var mı?', 'Açık bakiyeler'].map((q) => (

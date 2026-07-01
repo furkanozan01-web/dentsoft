@@ -431,4 +431,4 @@ export const emreAgent = {
   tools: EMRE_TOOLS,
   writeTools: EMRE_WRITE_TOOLS,
   executeTool: executeEmreTool,
-}
+} satisfies PeriAgent

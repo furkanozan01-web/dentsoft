@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import { useActionState, useEffect, useState, useTransition } from 'react'
-import { addPayment, addPaymentWithCurrency, createPatient, updatePatient } from './actions'
+import { addPaymentWithCurrency, createPatient, updatePatient } from './actions'
 import { getBusinessPartners } from '@/app/finance/actions'
 import { cap } from './formatters'
 import { localDateValue } from '@/lib/format'

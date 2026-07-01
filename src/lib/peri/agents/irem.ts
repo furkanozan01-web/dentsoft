@@ -2,9 +2,9 @@ import 'server-only'
 
 import { createClient } from '@/lib/supabase/server'
 import type Anthropic from '@anthropic-ai/sdk'
-import { stubWrite } from './base'
+import { stubWrite, type PeriAgent } from './base'
 import type { ToolResult, WriteAction } from '../types'
-import { getAnamnesis, updateAnamnesisFromPeri } from '@/app/patients/actions'
+import { getAnamnesis } from '@/app/patients/actions'
 
 // ─── Tool şemaları ────────────────────────────────────────────────────────────
 
@@ -469,4 +469,4 @@ export const iremAgent = {
   tools: IREM_TOOLS,
   writeTools: IREM_WRITE_TOOLS,
   executeTool: executeIremTool,
-}
+} satisfies PeriAgent
