@@ -1,0 +1,12 @@
+diff --git a/node_modules/next/dist/cli/next-dev.js b/node_modules/next/dist/cli/next-dev.js
+index 3a8678e..f40264e 100644
+--- a/node_modules/next/dist/cli/next-dev.js
++++ b/node_modules/next/dist/cli/next-dev.js
+@@ -252,6 +252,7 @@ const nextDev = async (options, portSource, directory)=>{
+             const { nodeOptions: formattedNodeOptions, execArgv } = (0, _utils.formatNodeOptions)(nodeOptions);
+             child = (0, _child_process.fork)(startServerPath, {
+                 stdio: 'inherit',
++                windowsHide: true,
+                 execArgv,
+                 env: {
+                     ...defaultEnv,
