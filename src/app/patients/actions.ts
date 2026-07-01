@@ -1069,41 +1069,6 @@ export async function deletePayment(
   return { success: true }
 }
 
-export async function addPayment(
-  _prev: ActionResult,
-  formData: FormData
-): Promise<ActionResult> {
-  const ctx = await getCtx()
-  if (!ctx) return { error: 'Yetkisiz erişim' }
-  const { supabase, clinicId } = ctx
-
-  const patientId = Number(formData.get('patient_id'))
-  const raw = (formData.get('amount') as string)
-    ?.replace(/\./g, '')
-    .replace(',', '.')
-    .replace(/[^0-9.]/g, '')
-  const amountTL = parseFloat(raw)
-  if (!patientId || isNaN(amountTL) || amountTL <= 0) {
-    return { error: 'Geçerli bir tutar girin' }
-  }
-  const patientError = await validatePatient(supabase, clinicId, patientId)
-  if (patientError) return { error: patientError }
-  const { error } = await supabase.from('transactions').insert({
-    clinic_id: clinicId,
-    patient_id: patientId,
-    amount: Math.round(amountTL * 100),
-    method: (formData.get('method') as string) || 'cash',
-    type: 'payment',
-    transaction_date:
-      (formData.get('date') as string) ||
-      localDateValue(),
-    description: (formData.get('description') as string) || null,
-  })
-
-  if (error) return { error: error.message }
-  return { success: true }
-}
-
 export async function addPaymentWithCurrency(
   patientId: number,
   params: {

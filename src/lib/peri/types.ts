@@ -2,7 +2,7 @@
  * PERİ — Tip tanımları
  *
  * Kural: Bu dosya saf tip tanımlarıdır, iş mantığı içermez.
- * Hem route.ts hem tools-executor.ts bu tipleri import eder.
+ * route.ts ve her ajan dosyası (agents/*.ts) bu tipleri import eder.
  */
 
 // ─── Sohbet mesajı ────────────────────────────────────────────────────────────
