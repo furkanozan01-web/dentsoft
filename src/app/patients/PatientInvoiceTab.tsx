@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useState, useTransition, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { getNextInvoiceNo, getPatientTc, sendInvoiceToInstitution } from './actions'
-import { escapeHtml } from '@/lib/format'
-import { cap, fmt } from './formatters'
+import { escapeHtml, toTitleCase, formatAmount } from '@/lib/format'
 import type { ClinicInfo, Patient, Transaction, Treatment } from './types'
 
 function parseKurus(value: string): number {
@@ -101,7 +100,7 @@ function FaturaTab({
   const canSend = Boolean(institution) && transactionIds.length > 0 && grossTotal > 0 && !pending
 
   const printInvoice = () => {
-    const patientName = escapeHtml(`${cap(patient.name)} ${cap(patient.surname)}`)
+    const patientName = escapeHtml(`${toTitleCase(patient.name)} ${toTitleCase(patient.surname)}`)
     const clinicName = escapeHtml(clinic?.clinic_name ?? 'Klinik')
     const clinicAddress = escapeHtml(clinic?.address)
     const clinicPhone = escapeHtml(clinic?.phone)
@@ -145,12 +144,12 @@ function FaturaTab({
       <p class="muted"><strong>Adres:</strong> ${escapeHtml(patient.address) || '-'}</p>
       <table>
         <thead><tr><th>İşlem</th><th style="text-align:right">Alınan Ücret</th></tr></thead>
-        <tbody><tr><td>${escapeHtml(lineDescription) || 'Diş tedavi hizmeti'}</td><td style="text-align:right">₺${fmt(grossTotal)}</td></tr></tbody>
+        <tbody><tr><td>${escapeHtml(lineDescription) || 'Diş tedavi hizmeti'}</td><td style="text-align:right">₺${formatAmount(grossTotal)}</td></tr></tbody>
       </table>
       <div class="totals">
-        <div><span>KDV Matrahı</span><span>₺${fmt(kdvMatrah)}</span></div>
-        <div><span>KDV (%${vatPercent})</span><span>₺${fmt(kdvTutar)}</span></div>
-        <div class="grand"><span>Genel Toplam</span><span>₺${fmt(grossTotal)}</span></div>
+        <div><span>KDV Matrahı</span><span>₺${formatAmount(kdvMatrah)}</span></div>
+        <div><span>KDV (%${vatPercent})</span><span>₺${formatAmount(kdvTutar)}</span></div>
+        <div class="grand"><span>Genel Toplam</span><span>₺${formatAmount(grossTotal)}</span></div>
       </div>
       <hr>
       <p class="muted" style="text-align:center">Teşekkür ederiz · ${clinicName}</p>
@@ -250,8 +249,8 @@ function FaturaTab({
           </span>
           <div className="min-w-0 flex-1 text-xs font-semibold leading-5 text-slate-500">
             <p>
-              KDV dahil hesaplanır: matrah <strong className="text-[#142536]">₺{fmt(kdvMatrah)}</strong> · KDV %{vatPercent}{' '}
-              <strong className="text-[#142536]">₺{fmt(kdvTutar)}</strong>
+              KDV dahil hesaplanır: matrah <strong className="text-[#142536]">₺{formatAmount(kdvMatrah)}</strong> · KDV %{vatPercent}{' '}
+              <strong className="text-[#142536]">₺{formatAmount(kdvTutar)}</strong>
             </p>
             <p>
               Gönderim kurumu:{' '}
@@ -339,7 +338,7 @@ function FaturaTab({
 
             <div className="rounded-2xl border border-[#EEF2F6] bg-[#FAFBFC] p-4">
               <div className="grid gap-3 sm:grid-cols-3">
-                <InfoItem label="Hasta" value={`${cap(patient.name)} ${cap(patient.surname)}`} />
+                <InfoItem label="Hasta" value={`${toTitleCase(patient.name)} ${toTitleCase(patient.surname)}`} />
                 <InfoItem label="Telefon" value={patient.phone1 ?? '—'} />
                 <InfoItem label="Adres" value={patient.address ?? '—'} />
               </div>
@@ -356,7 +355,7 @@ function FaturaTab({
                 <tbody>
                   <tr className="h-16 border-b border-[#EEF2F6] last:border-0">
                     <td className="px-4 font-semibold text-[#0F2B3D]">{lineDescription || 'Diş tedavi hizmeti'}</td>
-                    <td className="px-4 text-right font-black text-[#142536]">₺{fmt(grossTotal)}</td>
+                    <td className="px-4 text-right font-black text-[#142536]">₺{formatAmount(grossTotal)}</td>
                   </tr>
                 </tbody>
               </table>
@@ -370,7 +369,7 @@ function FaturaTab({
                     <div className="space-y-1">
                       {invoicePayments.map((tx) => (
                         <p key={tx.id} className="font-semibold text-slate-500">
-                          {new Date(tx.transaction_date).toLocaleDateString('tr-TR')} · ₺{fmt(tx.amount)}
+                          {new Date(tx.transaction_date).toLocaleDateString('tr-TR')} · ₺{formatAmount(tx.amount)}
                           {tx.invoice_no ? ` · ${tx.invoice_no}` : ''}
                         </p>
                       ))}
@@ -385,11 +384,11 @@ function FaturaTab({
               </div>
 
               <div className="w-full rounded-[18px] border border-[#EEF2F6] bg-[#FAFBFC] p-4 text-sm lg:w-80">
-                <TotalLine label="KDV Matrahı" value={`₺${fmt(kdvMatrah)}`} />
-                <TotalLine label={`KDV (%${vatPercent})`} value={`₺${fmt(kdvTutar)}`} />
+                <TotalLine label="KDV Matrahı" value={`₺${formatAmount(kdvMatrah)}`} />
+                <TotalLine label={`KDV (%${vatPercent})`} value={`₺${formatAmount(kdvTutar)}`} />
                 <div className="mt-3 flex justify-between border-t-2 border-[#5FD3C1] pt-3 text-[17px] font-black text-[#142536]">
                   <span>Genel Toplam</span>
-                  <span>₺{fmt(grossTotal)}</span>
+                  <span>₺{formatAmount(grossTotal)}</span>
                 </div>
               </div>
             </div>

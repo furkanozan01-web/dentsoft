@@ -3,8 +3,7 @@
 import { useActionState, useEffect, useState, useTransition } from 'react'
 import { addPaymentWithCurrency, createPatient, updatePatient } from './actions'
 import { getBusinessPartners } from '@/app/finance/actions'
-import { cap } from './formatters'
-import { localDateValue } from '@/lib/format'
+import { localDateValue, toTitleCase } from '@/lib/format'
 import { toast } from 'sonner'
 import type { ActionResult, BusinessPartner, Patient } from './types'
 // ---- New Patient Modal ----
@@ -132,7 +131,7 @@ export function EditPatientModal({
   return (
     <Modal
       title="Hasta Bilgilerini Düzenle"
-      subtitle={`${cap(patient.name)} ${cap(patient.surname)}`}
+      subtitle={`${toTitleCase(patient.name)} ${toTitleCase(patient.surname)}`}
       onClose={onClose}
     >
       <form onSubmit={submit} className="p-6 space-y-4">

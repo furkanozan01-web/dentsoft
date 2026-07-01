@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ConfirmModal'
-import { parseToKurus } from '@/lib/format'
+import { parseToKurus, formatAmount } from '@/lib/format'
 import {
   addTreatment,
   applyTreatmentAdjustment,
@@ -19,7 +19,6 @@ import {
   reorderPlanItem,
 } from './treatment-plan-actions'
 import { FDI } from './constants'
-import { fmt } from './formatters'
 import ToothChart, { classifyTreatment, classifyDiagnosis, type ToothFlags } from './ToothChart'
 import TreatmentStatementPrint, { printTreatmentStatement } from './TreatmentStatementPrint'
 import type {
@@ -1248,7 +1247,7 @@ function TreatmentHistoryCard({
             Hesabı Kapat
           </button>
           <span className="rounded-full bg-[#E6FFFA] px-3 py-1.5 text-sm font-black text-[#0F766E]">
-            Açık Toplam: ₺{fmt(openTotal)}
+            Açık Toplam: ₺{formatAmount(openTotal)}
           </span>
         </div>
       </div>
@@ -1326,11 +1325,11 @@ function TreatmentHistoryCard({
                       </div>
                     ) : adjusted ? (
                       <span className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-[11px] font-semibold text-slate-400 line-through">₺{fmt(originalFee)}</span>
-                        <span>₺{fmt(t.fee)}</span>
+                        <span className="text-[11px] font-semibold text-slate-400 line-through">₺{formatAmount(originalFee)}</span>
+                        <span>₺{formatAmount(t.fee)}</span>
                       </span>
                     ) : (
-                      <span>₺{fmt(t.fee)}</span>
+                      <span>₺{formatAmount(t.fee)}</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
@@ -1390,7 +1389,7 @@ function TreatmentHistoryCard({
       <div className="flex flex-col gap-3 border-t border-[#EEF2F6] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Açık Tedavi Toplamı</p>
-          <p className="mt-0.5 text-lg font-black text-[#0F2B3D]">₺{fmt(openTotal)}</p>
+          <p className="mt-0.5 text-lg font-black text-[#0F2B3D]">₺{formatAmount(openTotal)}</p>
         </div>
         <button
           type="button"
@@ -1409,7 +1408,7 @@ function TreatmentHistoryCard({
             <div className="space-y-4">
               <div>
                 <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">Mevcut Toplam</p>
-                <p className="mt-1 text-xl font-black text-[#0F2B3D]">₺{fmt(openTotal)}</p>
+                <p className="mt-1 text-xl font-black text-[#0F2B3D]">₺{formatAmount(openTotal)}</p>
               </div>
 
               <div>
@@ -1470,15 +1469,15 @@ function TreatmentHistoryCard({
             <div className="rounded-[18px] border border-[#BFEFE8] bg-white p-4">
               <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">Önizleme</p>
               <div className="mt-3 flex flex-wrap items-baseline gap-2">
-                <span className="text-sm font-bold text-slate-400">₺{fmt(openTotal)}</span>
+                <span className="text-sm font-bold text-slate-400">₺{formatAmount(openTotal)}</span>
                 <span className="text-slate-300">→</span>
                 <span className={`text-xl font-black ${adjustmentValid ? 'text-[#0F766E]' : 'text-red-500'}`}>
-                  ₺{fmt(Math.max(previewTotal, 0))}
+                  ₺{formatAmount(Math.max(previewTotal, 0))}
                 </span>
               </div>
               {adjustmentValid && previewDifference !== 0 && (
                 <p className={`mt-1 text-xs font-black ${previewDifference < 0 ? 'text-green-600' : 'text-amber-600'}`}>
-                  {previewDifference < 0 ? '-' : '+'}₺{fmt(Math.abs(previewDifference))}
+                  {previewDifference < 0 ? '-' : '+'}₺{formatAmount(Math.abs(previewDifference))}
                 </p>
               )}
               <p className="mt-4 rounded-xl bg-[#FAFBFC] px-3 py-3 text-xs font-semibold leading-5 text-slate-500">

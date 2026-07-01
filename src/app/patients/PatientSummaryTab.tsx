@@ -12,7 +12,8 @@ import {
 import { getPatientTc, setUntrusted, updateAnamnesis } from './actions'
 import DonutChart from './PatientCharts'
 import PatientQuickActions from './PatientQuickActions'
-import { cap, calcAge, fmt } from './formatters'
+import { calcAge } from './formatters'
+import { toTitleCase, formatAmount } from '@/lib/format'
 import type { Patient, TabId, Transaction, Treatment } from './types'
 
 // ---- Hasta Kartı Tab ----
@@ -167,7 +168,7 @@ function HastaKartiTab({
                   {p.name.charAt(0)}{p.surname.charAt(0)}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-[#0F2B3D] truncate">{cap(p.name)} {cap(p.surname)}</p>
+                  <p className="text-sm font-bold text-[#0F2B3D] truncate">{toTitleCase(p.name)} {toTitleCase(p.surname)}</p>
                   <p className="text-xs text-slate-400">{p.phone1 ?? '—'}{p.protocol_no ? ` · ${p.protocol_no}` : ''}</p>
                 </div>
                 <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${p.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
@@ -196,7 +197,7 @@ function HastaKartiTab({
               </div>
               <div>
                 <h2 className="text-lg font-black text-[#0F2B3D]">
-                  {cap(patient.name)} {cap(patient.surname)}
+                  {toTitleCase(patient.name)} {toTitleCase(patient.surname)}
                 </h2>
                 <p className="mt-1 text-sm font-semibold text-slate-400">
                   {patient.status === 'active' ? 'Aktif hasta' : 'Pasif hasta'} · Kayıt: {regDate}
@@ -230,8 +231,8 @@ function HastaKartiTab({
           </div>
 
           <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-            <InfoRow label="Ad" value={cap(patient.name)} />
-            <InfoRow label="Soyad" value={cap(patient.surname)} />
+            <InfoRow label="Ad" value={toTitleCase(patient.name)} />
+            <InfoRow label="Soyad" value={toTitleCase(patient.surname)} />
             <InfoRow label="Cinsiyet" value={genderLabel} />
             <InfoRow
               label="Doğum Tarihi"
@@ -280,10 +281,10 @@ function HastaKartiTab({
                 <div className="min-w-0 space-y-1">
                   <p className="text-xs font-bold text-slate-400">Kalan Borç</p>
                   <p className={`text-2xl font-black ${balance > 0 ? 'text-[#DC2626]' : 'text-green-600'}`}>
-                    ₺{fmt(Math.max(balance, 0))}
+                    ₺{formatAmount(Math.max(balance, 0))}
                   </p>
-                  <p className="text-[12px] font-semibold text-slate-400">Ödenen: ₺{fmt(totalPaid)}</p>
-                  <p className="text-[12px] font-semibold text-slate-400">Toplam: ₺{fmt(totalOwed)}</p>
+                  <p className="text-[12px] font-semibold text-slate-400">Ödenen: ₺{formatAmount(totalPaid)}</p>
+                  <p className="text-[12px] font-semibold text-slate-400">Toplam: ₺{formatAmount(totalOwed)}</p>
                 </div>
               </div>
             )}
@@ -360,7 +361,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 // ---- KVKK Modal ----
 function KvkkModal({ patient, onClose }: { patient: Patient; onClose: () => void }) {
-  const fullName = `${cap(patient.name)} ${cap(patient.surname)}`
+  const fullName = `${toTitleCase(patient.name)} ${toTitleCase(patient.surname)}`
   const today = new Date().toLocaleDateString('tr-TR')
 
   const handleSmsSend = () => {
@@ -440,7 +441,7 @@ Yukarıdaki bilgileri okudum, anladım ve kişisel verilerimin belirtilen amaçl
 
 // ---- Dijital Onam Modal ----
 function OnamModal({ patient, onClose }: { patient: Patient; onClose: () => void }) {
-  const fullName = `${cap(patient.name)} ${cap(patient.surname)}`
+  const fullName = `${toTitleCase(patient.name)} ${toTitleCase(patient.surname)}`
   const today = new Date().toLocaleDateString('tr-TR')
 
   const handleSmsSend = () => {
@@ -563,7 +564,7 @@ function buildPrintHtml({ patient, tcValue, anamnesis, balance, totalOwed, total
   age: number | null
   genderLabel: string
 }): string {
-  const name = `${cap(patient.name)} ${cap(patient.surname)}`
+  const name = `${toTitleCase(patient.name)} ${toTitleCase(patient.surname)}`
   const today = new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
   const diseases = anamnesis.diseases.join(', ') || '—'
   const meds = anamnesis.medications.join(', ') || '—'

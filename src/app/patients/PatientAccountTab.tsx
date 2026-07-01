@@ -16,8 +16,7 @@ import {
   markReminderDone,
 } from './actions'
 import DonutChart from './PatientCharts'
-import { fmt } from './formatters'
-import { localDateValue } from '@/lib/format'
+import { localDateValue, formatAmount } from '@/lib/format'
 import TreatmentStatementPrint, { printTreatmentStatement } from './TreatmentStatementPrint'
 import type { ClinicInfo, Installment, Patient, PatientReminder, Transaction, Treatment } from './types'
 
@@ -60,7 +59,7 @@ function HesapTab({
   const handleDeletePayment = async (tx: Transaction) => {
     const ok = await confirm({
       title: 'Ödemeyi Sil',
-      message: `₺${fmt(tx.amount)} tutarındaki ödeme kaydı silinecek. Bakiyeler yeniden hesaplanacak. Emin misiniz?`,
+      message: `₺${formatAmount(tx.amount)} tutarındaki ödeme kaydı silinecek. Bakiyeler yeniden hesaplanacak. Emin misiniz?`,
       confirmText: 'Evet, Sil',
     })
     if (!ok) return
@@ -117,21 +116,21 @@ function HesapTab({
       <div className="grid gap-4 md:grid-cols-3">
         <FinanceSummaryCard
           title="Toplam Borç"
-          value={`₺${fmt(totalOwed)}`}
+          value={`₺${formatAmount(totalOwed)}`}
           description={`${treatments.length} tedavi kalemi`}
           tone="navy"
           icon={<IconReceipt />}
         />
         <FinanceSummaryCard
           title="Toplam Ödeme"
-          value={`₺${fmt(totalPaid)}`}
+          value={`₺${formatAmount(totalPaid)}`}
           description={`${payments.length} ödeme kaydı`}
           tone="green"
           icon={<IconWallet />}
         />
         <FinanceSummaryCard
           title="Kalan Borç"
-          value={`₺${fmt(clampedBalance)}`}
+          value={`₺${formatAmount(clampedBalance)}`}
           description={clampedBalance > 0 ? 'Tahsil edilmesi gereken tutar' : 'Borç bulunmuyor'}
           tone={clampedBalance > 0 ? 'red' : 'green'}
           icon={<IconAlertCircle />}
@@ -161,11 +160,11 @@ function HesapTab({
             </div>
 
             <div className="overflow-hidden rounded-[18px] border border-[#E7ECF2]">
-              <FinanceLine label="Toplam Borç" value={`₺${fmt(totalOwed)}`} />
-              <FinanceLine label="Toplam Ödeme" value={`₺${fmt(totalPaid)}`} valueClassName="text-green-600" />
+              <FinanceLine label="Toplam Borç" value={`₺${formatAmount(totalOwed)}`} />
+              <FinanceLine label="Toplam Ödeme" value={`₺${formatAmount(totalPaid)}`} valueClassName="text-green-600" />
               <FinanceLine
                 label="Kalan Borç"
-                value={`₺${fmt(clampedBalance)}`}
+                value={`₺${formatAmount(clampedBalance)}`}
                 valueClassName={clampedBalance > 0 ? 'text-red-600' : 'text-green-600'}
                 strong
               />
@@ -225,7 +224,7 @@ function HesapTab({
                         {new Date(tx.transaction_date).toLocaleDateString('tr-TR')}
                       </td>
                       <td className="px-4">
-                        <span className="font-black text-[#0F2B3D]">₺{fmt(tx.amount)}</span>
+                        <span className="font-black text-[#0F2B3D]">₺{formatAmount(tx.amount)}</span>
                         {tx.original_currency && tx.original_currency !== 'TRY' && tx.original_amount && tx.exchange_rate && (
                           <span className="ml-2 text-[11px] font-semibold text-slate-400">
                             ({Math.round(tx.original_amount / 100).toLocaleString('tr-TR')} {tx.original_currency} @ {Number(tx.exchange_rate).toLocaleString('tr-TR', { minimumFractionDigits: 2 })})
@@ -325,7 +324,7 @@ function HesapTab({
               Yazdır
             </button>
             <span className="inline-flex w-fit rounded-full bg-[#E6FFFA] px-3 py-1.5 text-sm font-black text-[#0F766E]">
-              Toplam: ₺{fmt(totalOwed)}
+              Toplam: ₺{formatAmount(totalOwed)}
             </span>
           </div>
         </div>
@@ -371,7 +370,7 @@ function HesapTab({
                           {tr.tooth ?? '—'}
                         </span>
                       </td>
-                      <td className="px-5 font-black text-[#0F2B3D]">₺{fmt(tr.fee)}</td>
+                      <td className="px-5 font-black text-[#0F2B3D]">₺{formatAmount(tr.fee)}</td>
                       <td className="px-5">
                         <TreatmentStatusBadge status={tr.status} />
                       </td>
@@ -676,7 +675,7 @@ function PaymentPlanCard({
                     <td className="px-4 font-semibold text-slate-500">
                       {new Date(it.due_date).toLocaleDateString('tr-TR')}
                     </td>
-                    <td className="px-4 font-black text-[#0F2B3D]">₺{fmt(it.amount)}</td>
+                    <td className="px-4 font-black text-[#0F2B3D]">₺{formatAmount(it.amount)}</td>
                     <td className="px-4">
                       <InstallmentStatusBadge paid={it.paid} overdue={overdue} />
                     </td>
@@ -838,13 +837,13 @@ function PaymentPlanCard({
                         <td className="px-3 text-slate-600">
                           {new Date(row.dueDate).toLocaleDateString('tr-TR')}
                         </td>
-                        <td className="px-3 font-black text-[#0F2B3D]">₺{fmt(row.amount)}</td>
+                        <td className="px-3 font-black text-[#0F2B3D]">₺{formatAmount(row.amount)}</td>
                       </tr>
                     ))}
                     <tr className="h-10 border-t-2 border-[#C4B5FD] bg-[#F3E8FF]">
                       <td className="px-3 font-black text-[#6D28D9]" colSpan={2}>Toplam</td>
                       <td className="px-3 font-black text-[#6D28D9]">
-                        ₺{fmt(senetPreview.reduce((s, r) => s + r.amount, 0))}
+                        ₺{formatAmount(senetPreview.reduce((s, r) => s + r.amount, 0))}
                       </td>
                     </tr>
                   </tbody>
@@ -925,7 +924,7 @@ function DoctorBreakdownCard({ treatments }: { treatments: Treatment[] }) {
                   <tr key={row.name} className="h-16 border-b border-[#EEF2F6] last:border-0 hover:bg-[#5FD3C1]/[0.04]">
                     <td className="px-5 font-bold text-[#0F2B3D]">{row.name}</td>
                     <td className="px-5 font-semibold text-slate-500">{row.count} kalem</td>
-                    <td className="px-5 font-black text-[#0F2B3D]">₺{fmt(row.total)}</td>
+                    <td className="px-5 font-black text-[#0F2B3D]">₺{formatAmount(row.total)}</td>
                     <td className="px-5">
                       <div className="flex items-center gap-2">
                         <div className="h-2 w-24 overflow-hidden rounded-full bg-[#EEF2F6]">
@@ -949,7 +948,7 @@ function DoctorBreakdownCard({ treatments }: { treatments: Treatment[] }) {
                 <td className="px-5 font-semibold text-slate-500">
                   {rows.reduce((s, r) => s + r.count, 0)} kalem
                 </td>
-                <td className="px-5 font-black text-[#0F766E]">₺{fmt(grandTotal)}</td>
+                <td className="px-5 font-black text-[#0F766E]">₺{formatAmount(grandTotal)}</td>
                 <td className="px-5 font-black text-[#0F2B3D]">%100</td>
               </tr>
             </tfoot>
@@ -1065,7 +1064,7 @@ function RemindersCard({
         {overdueInstallments.map((it) => (
           <div key={`inst-${it.id}`} className="flex items-start gap-3 rounded-[14px] border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
             <IconAlertCircle />
-            <span>Gecikmiş taksit: {new Date(it.due_date).toLocaleDateString('tr-TR')} — ₺{fmt(it.amount)}</span>
+            <span>Gecikmiş taksit: {new Date(it.due_date).toLocaleDateString('tr-TR')} — ₺{formatAmount(it.amount)}</span>
           </div>
         ))}
 

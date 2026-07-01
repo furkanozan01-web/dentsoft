@@ -1,7 +1,8 @@
 ﻿'use client'
 
 import type { ReactNode } from 'react'
-import { cap, calcAge } from './formatters'
+import { calcAge } from './formatters'
+import { toTitleCase } from '@/lib/format'
 import type { Patient } from './types'
 
 // ---- Liste Tab ----
@@ -200,7 +201,7 @@ function ListeTab({
                         </div>
                         <div className="min-w-0">
                           <p className="truncate font-black text-[#0F2B3D]">
-                            {cap(p.name)} {cap(p.surname)}
+                            {toTitleCase(p.name)} {toTitleCase(p.surname)}
                           </p>
                           {p.untrusted && (
                             <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-red-500">

@@ -8,7 +8,7 @@ import { useConfirm } from '@/components/ConfirmModal'
 import { createPatient, deletePatient, dismissImportantNotes, getAnamnesis } from './actions'
 import { EMPTY_ANAMNESIS, type Anamnesis } from '@/lib/anamnesis'
 import { PATIENT_TABS as TABS } from './constants'
-import { cap } from './formatters'
+import { toTitleCase } from '@/lib/format'
 import type {
   ClinicInfo,
   ClinicalNote,
@@ -348,7 +348,7 @@ export default function PatientsClient({
   const handleDeletePatient = async (p: Patient) => {
     const ok = await confirm({
       title: 'Hastayı Kalıcı Olarak Sil',
-      message: `${cap(p.name)} ${cap(p.surname)} ve hastaya bağlı randevu, tedavi, ödeme, not ve dosya kayıtları kalıcı olarak silinecek. Bu işlem geri alınamaz.`,
+      message: `${toTitleCase(p.name)} ${toTitleCase(p.surname)} ve hastaya bağlı randevu, tedavi, ödeme, not ve dosya kayıtları kalıcı olarak silinecek. Bu işlem geri alınamaz.`,
       confirmText: 'Kalıcı Olarak Sil',
     })
     if (!ok) return

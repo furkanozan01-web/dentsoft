@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { FDI } from './constants'
-import { fmt } from './formatters'
+import { formatAmount } from '@/lib/format'
 import ToothChart, { classifyTreatment, type ToothFlags } from './ToothChart'
 import type { ClinicInfo, Installment, Patient, Transaction, Treatment } from './types'
 
@@ -28,7 +28,7 @@ function formatDate(value: string | null | undefined): string {
 
 function signedMoney(value: number): string {
   if (value === 0) return '₺0,00'
-  return `${value > 0 ? '+' : '-'}₺${fmt(Math.abs(value))}`
+  return `${value > 0 ? '+' : '-'}₺${formatAmount(Math.abs(value))}`
 }
 
 export default function TreatmentStatementPrint({
@@ -153,11 +153,11 @@ export default function TreatmentStatementPrint({
                       {treatment.is_closed && <span className="statement-closed">KPL</span>}
                     </td>
                     <td>{formatDate(treatment.treatment_date)}</td>
-                    <td>₺{fmt(originalFee)}</td>
+                    <td>₺{formatAmount(originalFee)}</td>
                     <td className={treatment.fee - originalFee < 0 ? 'statement-discount' : ''}>
                       {signedMoney(treatment.fee - originalFee)}
                     </td>
-                    <td><strong>₺{fmt(treatment.fee)}</strong></td>
+                    <td><strong>₺{formatAmount(treatment.fee)}</strong></td>
                   </tr>
                 )
               })}
@@ -184,7 +184,7 @@ export default function TreatmentStatementPrint({
                     <tr key={row.name}>
                       <td><strong>{row.name}</strong></td>
                       <td>{row.count} kalem</td>
-                      <td>₺{fmt(row.total)}</td>
+                      <td>₺{formatAmount(row.total)}</td>
                       <td>%{pct.toLocaleString('tr-TR', { maximumFractionDigits: 1 })}</td>
                     </tr>
                   )
@@ -211,7 +211,7 @@ export default function TreatmentStatementPrint({
                   <tr key={it.id}>
                     <td>{i + 1}</td>
                     <td>{formatDate(it.due_date)}</td>
-                    <td>₺{fmt(it.amount)}</td>
+                    <td>₺{formatAmount(it.amount)}</td>
                     <td>
                       <span className={it.paid ? 'statement-badge-paid' : 'statement-badge-pending'}>
                         {it.paid ? 'Ödendi' : 'Bekliyor'}
@@ -230,7 +230,7 @@ export default function TreatmentStatementPrint({
             <p>Yukarıda belirtilen tedavi ücretlerini ödemeyi kabul ve taahhüt ederim.</p>
           </div>
           <div className="statement-totals">
-            <SummaryLine label="Toplam (orijinal)" value={`₺${fmt(originalTotal)}`} />
+            <SummaryLine label="Toplam (orijinal)" value={`₺${formatAmount(originalTotal)}`} />
             {adjustmentTotal !== 0 && (
               <>
                 <SummaryLine
@@ -240,9 +240,9 @@ export default function TreatmentStatementPrint({
                 <SummaryLine label={adjustmentTotal > 0 ? 'Artırım Oranı' : 'İndirim Oranı'} value={`%${discountRate.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`} />
               </>
             )}
-            <SummaryLine label="İndirimli Toplam" value={`₺${fmt(netTotal)}`} strong />
-            <SummaryLine label="Yapılan Ödemeler" value={`₺${fmt(paidTotal)}`} />
-            <SummaryLine label="Kalan Bakiye" value={`₺${fmt(balance)}`} strong />
+            <SummaryLine label="İndirimli Toplam" value={`₺${formatAmount(netTotal)}`} strong />
+            <SummaryLine label="Yapılan Ödemeler" value={`₺${formatAmount(paidTotal)}`} />
+            <SummaryLine label="Kalan Bakiye" value={`₺${formatAmount(balance)}`} strong />
           </div>
         </section>
 

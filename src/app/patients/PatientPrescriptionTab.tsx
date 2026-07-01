@@ -4,8 +4,7 @@ import { useMemo, useState, useTransition, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ConfirmModal'
 import { addPrescription, deletePrescription } from './actions'
-import { cap } from './formatters'
-import { escapeHtml, localDateValue } from '@/lib/format'
+import { escapeHtml, localDateValue, toTitleCase } from '@/lib/format'
 import type { ClinicInfo, DoctorOption, DrugEntry, Patient, Prescription } from './types'
 
 const DRUG_TABLE: DrugEntry[] = [
@@ -187,7 +186,7 @@ function ReceteTab({
     const dateStr = new Date(rxDate).toLocaleDateString('tr-TR', {
       day: '2-digit', month: '2-digit', year: 'numeric',
     })
-    const patientName = escapeHtml(`${cap(patient.name)} ${cap(patient.surname)}`)
+    const patientName = escapeHtml(`${toTitleCase(patient.name)} ${toTitleCase(patient.surname)}`)
     const clinicName = escapeHtml(clinic?.clinic_name ?? 'Klinik')
     const clinicContact = [clinic?.phone, clinic?.email].filter(Boolean).map((item) => escapeHtml(item)).join(' · ')
     const medicationItems = rxContent
@@ -292,7 +291,7 @@ li{padding:0 0 9px 5px;font-size:11pt;font-weight:700;color:#0f172a;break-inside
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#E6FFFA] text-[#0F766E]">
                 <IconUser />
               </span>
-              {cap(patient.name)} {cap(patient.surname)}
+              {toTitleCase(patient.name)} {toTitleCase(patient.surname)}
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="T.C. No">
