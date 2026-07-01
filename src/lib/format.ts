@@ -27,13 +27,6 @@ export function formatAmount(kurus: number | null | undefined): string {
   })
 }
 
-// kuruş → "₺1.000,00" (sembol bitişik, boşluksuz).
-// Not: Intl currency biçimi sembol ile sayı arasına dar boşluk (U+00A0/U+202F)
-// koyuyor; o yüzden manuel birleştiriyoruz.
-export function formatCurrency(kurus: number | null | undefined): string {
-  return '₺' + formatAmount(kurus)
-}
-
 // kuruş → "1.000" (ondalıksız, yuvarlanmış — KPI kartları gibi özet alanlarda kullanılır)
 export function formatAmountRounded(kurus: number | null | undefined): string {
   return Math.round((kurus ?? 0) / 100).toLocaleString('tr-TR')
