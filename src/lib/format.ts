@@ -1,6 +1,11 @@
 // Ortak biçimlendirme yardımcıları.
 // Para birimi alanları DB'de kuruş (integer) tutulur: 1 TL = 100 kuruş.
 
+export const MONTHS_TR = [
+  'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+  'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',
+]
+
 // Türkçe-duyarlı başlık biçimi. Sadece GÖSTERİMDE kullanılır, DB'ye yazılmaz.
 export function toTitleCase(s: string | null | undefined): string {
   if (!s) return ''
@@ -27,6 +32,11 @@ export function formatAmount(kurus: number | null | undefined): string {
 // koyuyor; o yüzden manuel birleştiriyoruz.
 export function formatCurrency(kurus: number | null | undefined): string {
   return '₺' + formatAmount(kurus)
+}
+
+// kuruş → "1.000" (ondalıksız, yuvarlanmış — KPI kartları gibi özet alanlarda kullanılır)
+export function formatAmountRounded(kurus: number | null | undefined): string {
+  return Math.round((kurus ?? 0) / 100).toLocaleString('tr-TR')
 }
 
 // "1.500,50" / "1500,50" / "1500.50" gibi kullanıcı girdisini kuruşa çevirir.
