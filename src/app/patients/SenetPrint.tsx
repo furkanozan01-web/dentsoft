@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { formatAmount } from '@/lib/format'
 import { amountToTurkishWords } from '@/lib/turkishNumbers'
 import { getPatientTc } from './actions'
+import { triggerPrint } from './printTarget'
 import type { ClinicInfo, Patient } from './types'
 
 export interface SenetRow {
@@ -19,10 +20,7 @@ interface SenetPrintProps {
 }
 
 export function printSenetPlan(patientId: number): boolean {
-  const el = document.getElementById(`senet-print-${patientId}`)
-  if (!el) return false
-  window.print()
-  return true
+  return triggerPrint(`senet-print-${patientId}`, 'senet')
 }
 
 function formatDate(value: string): string {
@@ -108,10 +106,10 @@ export default function SenetPrint({ patient, clinic, title, rows }: SenetPrintP
         .senet-print { display: none; }
         @media print {
           @page { size: A4 portrait; margin: 10mm; }
-          body * { visibility: hidden !important; }
-          .senet-print,
-          .senet-print * { visibility: visible !important; }
-          .senet-print {
+          html[data-print-target="senet"] body * { visibility: hidden !important; }
+          html[data-print-target="senet"] .senet-print,
+          html[data-print-target="senet"] .senet-print * { visibility: visible !important; }
+          html[data-print-target="senet"] .senet-print {
             display: block !important;
             position: absolute;
             inset: 0;

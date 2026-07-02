@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { FDI } from './constants'
 import { formatAmount } from '@/lib/format'
 import ToothChart, { classifyTreatment, type ToothFlags } from './ToothChart'
+import { triggerPrint } from './printTarget'
 import type { ClinicInfo, Installment, Patient, Transaction, Treatment } from './types'
 
 type TreatmentStatementPrintProps = {
@@ -15,10 +16,7 @@ type TreatmentStatementPrintProps = {
 }
 
 export function printTreatmentStatement(patientId: number): boolean {
-  const statement = document.getElementById(`treatment-statement-${patientId}`)
-  if (!statement) return false
-  window.print()
-  return true
+  return triggerPrint(`treatment-statement-${patientId}`, 'statement')
 }
 
 function formatDate(value: string | null | undefined): string {
@@ -259,10 +257,10 @@ export default function TreatmentStatementPrint({
         .treatment-statement-print { display: none; }
         @media print {
           @page { size: A4 portrait; margin: 10mm; }
-          body * { visibility: hidden !important; }
-          .treatment-statement-print,
-          .treatment-statement-print * { visibility: visible !important; }
-          .treatment-statement-print {
+          html[data-print-target="statement"] body * { visibility: hidden !important; }
+          html[data-print-target="statement"] .treatment-statement-print,
+          html[data-print-target="statement"] .treatment-statement-print * { visibility: visible !important; }
+          html[data-print-target="statement"] .treatment-statement-print {
             display: block !important;
             position: absolute;
             inset: 0;

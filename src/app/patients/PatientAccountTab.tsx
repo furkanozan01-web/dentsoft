@@ -19,6 +19,7 @@ import DonutChart from './PatientCharts'
 import { localDateValue, formatAmount } from '@/lib/format'
 import TreatmentStatementPrint, { printTreatmentStatement } from './TreatmentStatementPrint'
 import SenetPrint, { printSenetPlan, type SenetRow } from './SenetPrint'
+import PaymentHistoryPrint, { printPaymentHistory } from './PaymentHistoryPrint'
 import type { ClinicInfo, Installment, Patient, PatientReminder, Transaction, Treatment } from './types'
 
 // ---- Hesap Tab ----
@@ -193,13 +194,24 @@ function HesapTab({
               description="Hasta ödemeleri ve tahsilat hareketleri"
               iconClassName="bg-[#EAF7FF] text-[#0284C7]"
             />
-            <button
-              onClick={onAddPayment}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-[14px] bg-[linear-gradient(135deg,#5FD3C1,#1EAEA0)] px-4 text-xs font-black text-white shadow-[0_10px_20px_rgba(30,174,160,0.18)] transition hover:brightness-105"
-            >
-              <IconPlus />
-              Ödeme Ekle
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => {
+                  if (!printPaymentHistory(patient.id)) toast.error('Yazdırma alanı hazırlanamadı')
+                }}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-[14px] border border-[#D9E4EA] bg-white px-4 text-xs font-black text-[#315164] transition hover:bg-slate-50"
+              >
+                <IconPrint />
+                Yazdır
+              </button>
+              <button
+                onClick={onAddPayment}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-[14px] bg-[linear-gradient(135deg,#5FD3C1,#1EAEA0)] px-4 text-xs font-black text-white shadow-[0_10px_20px_rgba(30,174,160,0.18)] transition hover:brightness-105"
+              >
+                <IconPlus />
+                Ödeme Ekle
+              </button>
+            </div>
           </div>
 
           {payments.length === 0 ? (
@@ -305,6 +317,7 @@ function HesapTab({
         clinic={clinic}
         installments={installments}
       />
+      <PaymentHistoryPrint patient={patient} clinic={clinic} transactions={transactions} />
     </div>
   )
 }
