@@ -355,8 +355,6 @@ export default function FinanceClient({
             treatments={treatments}
             doctors={doctors}
             patients={patients}
-            doctorPayments={doctorPayments}
-            installments={installments}
             partners={initialPartners}
             debts={initialDebts}
             initialStart={`${monthKey}-01`}

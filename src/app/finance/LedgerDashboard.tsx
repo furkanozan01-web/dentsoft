@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import { localDateValue } from '@/lib/format'
 import { addClinicDebt, addExpense, deleteTransaction, payClinicDebt } from './actions'
 import type {
-  ClinicDebt, DoctorPayment, FinBusinessPartner, FinDoctor, FinInstallment,
+  ClinicDebt, FinBusinessPartner, FinDoctor,
   FinPatient, FinTreatment, FinTx,
 } from './FinanceClient'
 
@@ -68,15 +68,13 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
 }
 
 export default function LedgerDashboard({
-  txs, treatments, doctors, patients, doctorPayments, installments, partners, debts,
+  txs, treatments, doctors, patients, partners, debts,
   initialStart, initialEnd, onChanged, onPatientClick,
 }: {
   txs: FinTx[]
   treatments: FinTreatment[]
   doctors: FinDoctor[]
   patients: FinPatient[]
-  doctorPayments: DoctorPayment[]
-  installments: FinInstallment[]
   partners: FinBusinessPartner[]
   debts: ClinicDebt[]
   initialStart: string
@@ -94,7 +92,6 @@ export default function LedgerDashboard({
   const patientMap = useMemo(() => new Map(patients.map((p) => [p.id, `${p.name} ${p.surname}`])), [patients])
   const doctorMap = useMemo(() => new Map(doctors.map((d) => [d.id, d.name])), [doctors])
   const partnerMap = useMemo(() => new Map(partners.map((p) => [p.id, p.name])), [partners])
-  const treatmentMap = useMemo(() => new Map(treatments.map((t) => [t.id, t.treatment_name])), [treatments])
   const filtered = useMemo(
     () => txs.filter((t) => t.transaction_date >= start && t.transaction_date <= end),
     [txs, start, end]
@@ -104,12 +101,6 @@ export default function LedgerDashboard({
   const totalIncome = income.reduce((sum, t) => sum + t.amount, 0)
   const totalExpense = expense.reduce((sum, t) => sum + t.amount, 0)
   const net = totalIncome - totalExpense
-  const pendingPayments = installments
-    .filter((i) => !i.paid && i.due_date >= start && i.due_date <= end)
-    .reduce((sum, i) => sum + i.amount, 0)
-  const fixedTotal = expense.filter((t) => t.source_type === 'fixed_expense' || t.category === 'Sabit Gider').reduce((s, t) => s + t.amount, 0)
-  const doctorTotal = doctorPayments.filter((p) => p.payment_date >= start && p.payment_date <= end).reduce((s, p) => s + p.amount, 0)
-  const companyTotal = expense.filter((t) => t.partner_id).reduce((s, t) => s + t.amount, 0)
 
   const trend = useMemo(() => {
     const buckets = new Map<string, { label: string; Gelir: number; Gider: number }>()
@@ -122,6 +113,27 @@ export default function LedgerDashboard({
     })
     return Array.from(buckets.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([, value]) => value)
   }, [filtered, period])
+
+  const incomeRows = useMemo(() => {
+    const buckets = new Map<string, { label: string; total: number }>()
+    income.forEach((tx) => {
+      const p = periodKey(tx.transaction_date, period)
+      const item = buckets.get(p.key) ?? { label: p.label, total: 0 }
+      item.total += tx.amount
+      buckets.set(p.key, item)
+    })
+    return Array.from(buckets.entries()).sort(([a], [b]) => b.localeCompare(a)).map(([, value]) => value)
+  }, [income, period])
+  const expenseRows = useMemo(() => {
+    const buckets = new Map<string, { label: string; total: number }>()
+    expense.forEach((tx) => {
+      const p = periodKey(tx.transaction_date, period)
+      const item = buckets.get(p.key) ?? { label: p.label, total: 0 }
+      item.total += tx.amount
+      buckets.set(p.key, item)
+    })
+    return Array.from(buckets.entries()).sort(([a], [b]) => b.localeCompare(a)).map(([, value]) => value)
+  }, [expense, period])
 
   const monthly = useMemo(() => {
     const year = Number(end.slice(0, 4))
@@ -137,8 +149,6 @@ export default function LedgerDashboard({
   }, [txs, end])
 
   const dueDebts = debts.filter((d) => d.status === 'active' && d.due_date && d.due_date <= localDateValue())
-  const companyRows = expense.filter((t) => t.partner_id)
-  const doctorRows = expense.filter((t) => t.doctor_id || t.source_type === 'doctor_payment')
 
   const remove = (id: number) => begin(async () => {
     const result = await deleteTransaction(id)
@@ -157,29 +167,40 @@ export default function LedgerDashboard({
         </div>
       )}
 
-      <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div><h2 className="text-base font-black text-[#142536]">Finansal Özet Panosu</h2><p className="mt-1 text-xs font-semibold text-slate-400">Seçilen tarih aralığındaki tüm finansal hareketler</p></div>
-          <div className="flex flex-wrap items-end gap-3">
-            <DateField label="Başlangıç" value={start} onChange={setStart} />
-            <DateField label="Bitiş" value={end} onChange={setEnd} />
-            <button onClick={() => setModal('expense')} className="h-10 rounded-xl bg-[#1EAEA0] px-4 text-xs font-black text-white shadow-lg">+ Gider Ekle</button>
-          </div>
+      <div className="flex justify-end">
+        <div className="flex rounded-xl bg-slate-100 p-1">
+          {(Object.keys(PERIOD_LABEL) as Period[]).map((p) => (
+            <button key={p} onClick={() => setPeriod(p)} className={`rounded-lg px-3 py-1.5 text-[11px] font-black ${period === p ? 'bg-white text-[#0F766E] shadow-sm' : 'text-slate-400'}`}>
+              {PERIOD_LABEL[p]}
+            </button>
+          ))}
         </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Summary label="Toplam gelir" value={totalIncome} tone="green" />
-          <Summary label="Toplam gider" value={totalExpense} tone="red" />
-          <Summary label="Net kâr" value={net} tone={net >= 0 ? 'green' : 'red'} />
-          <Summary label="Tahsil edilen" value={totalIncome} tone="blue" />
-          <Summary label="Bekleyen ödemeler" value={pendingPayments} tone="amber" />
-          <Summary label="Sabit gider toplamı" value={fixedTotal} />
-          <Summary label="Hekim hakediş ödemeleri" value={doctorTotal} tone="violet" />
-          <Summary label="Firma ödemeleri" value={companyTotal} tone="red" />
-        </div>
-      </section>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <PeriodTableCard title="Gelir" tone="green" total={totalIncome} rows={incomeRows} />
+        <PeriodTableCard title="Gider" tone="red" total={totalExpense} netLabel="Net Kâr" netValue={net}
+          headerAction={
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => setModal('expense')} className="rounded-lg border border-[#BFEFE8] bg-[#E9FBF8] px-2.5 py-1.5 text-[11px] font-black text-[#0F766E]">+ Gider</button>
+              <button onClick={() => setModal('company')} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-600">+ Firma</button>
+              <button onClick={() => setModal('doctor')} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-600">+ Hekim</button>
+            </div>
+          }
+          rows={expenseRows} />
+      </div>
 
       <section className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
-        <SectionHeader title="Gelir-Gider Kayıtları" subtitle={`${dateText(start)} – ${dateText(end)} arasında ${filtered.length} kayıt`} />
+        <SectionHeader
+          title="Gelir-Gider Kayıtları"
+          subtitle={`${dateText(start)} – ${dateText(end)} arasında ${filtered.length} kayıt`}
+          action={
+            <div className="flex flex-wrap items-end gap-3">
+              <DateField label="Başlangıç" value={start} onChange={setStart} />
+              <DateField label="Bitiş" value={end} onChange={setEnd} />
+            </div>
+          }
+        />
         <div className="max-h-[420px] overflow-auto">
           <table className="w-full min-w-[850px] text-sm">
             <thead className="sticky top-0 bg-slate-50 text-left text-[11px] font-black uppercase tracking-wide text-slate-400"><tr>{['Tarih', 'Tür', 'Açıklama', 'Bağlantı', 'Yöntem', 'Tutar', ''].map((h) => <th key={h} className="px-5 py-3">{h}</th>)}</tr></thead>
@@ -211,15 +232,6 @@ export default function LedgerDashboard({
         {debts.filter((d) => d.status !== 'cancelled').length === 0 ? <Empty text="Henüz sabit gider tanımlanmadı." /> : debts.filter((d) => d.status !== 'cancelled').map((d) => <ManagementRow key={d.id} title={d.title} meta={`${d.due_date ? dateText(d.due_date) : 'Vade yok'} • ${d.recurrence === 'aylik' ? 'Aylık' : d.recurrence === 'yillik' ? 'Yıllık' : 'Tek seferlik'}${d.account_name ? ` • ${d.account_name}` : ''}`} amount={d.total_amount - d.paid_amount} badge={d.status === 'paid' ? 'Ödendi' : 'Bekliyor'} action={d.status === 'active' ? <button onClick={() => setPayDebt(d)} className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700">Öde</button> : null} />)}
       </ManagementSection>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <ManagementSection title="Firma Ödemeleri" subtitle="Firma, hasta ve tedavi bağlantılı giderler" button="Firma Ödemesi" onAdd={() => setModal('company')}>
-          {companyRows.length === 0 ? <Empty text="Seçilen dönemde firma ödemesi yok." /> : companyRows.slice(0, 8).map((t) => <ManagementRow key={t.id} title={partnerMap.get(t.partner_id!) || `Firma #${t.partner_id}`} meta={`${dateText(t.transaction_date)}${t.patient_id ? ` • ${patientMap.get(t.patient_id)}` : ''}${t.treatment_id ? ` • ${treatmentMap.get(t.treatment_id)}` : ''} • ${t.invoice_status === 'faturali' ? 'Faturalı' : 'Fatura bekliyor'}`} amount={t.amount} badge={t.payment_status === 'bekliyor' ? 'Bekliyor' : 'Ödendi'} />)}
-        </ManagementSection>
-        <ManagementSection title="Hekim Hakediş Bağlantılı Giderler" subtitle="Hakediş ile Defter arasında çift yönlü senkron" button="Hekim Ödemesi" onAdd={() => setModal('doctor')}>
-          {doctorRows.length === 0 ? <Empty text="Seçilen dönemde hekim ödemesi yok." /> : doctorRows.slice(0, 8).map((t) => <ManagementRow key={t.id} title={`Dt. ${doctorMap.get(t.doctor_id!) || 'Hekim'}`} meta={`${dateText(t.transaction_date)} • ${METHOD_LABEL[t.method || ''] || 'Diğer'} • Hakedişe işlendi`} amount={t.amount} badge="Senkron" />)}
-        </ManagementSection>
-      </div>
-
       {modal && <EntryModal mode={modal} doctors={doctors} partners={partners} patients={patients} treatments={treatments} onClose={() => setModal(null)} onSuccess={() => { setModal(null); onChanged() }} />}
       {payDebt && <PayDebtModal debt={payDebt} onClose={() => setPayDebt(null)} onSuccess={() => { setPayDebt(null); onChanged() }} />}
     </div>
@@ -230,9 +242,55 @@ function DateField({ label, value, onChange }: { label: string; value: string; o
   return <label className="text-[10px] font-black uppercase tracking-wide text-slate-400">{label}<input type="date" value={value} max={label === 'Başlangıç' ? undefined : undefined} onChange={(e) => onChange(e.target.value)} className="mt-1 block h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none focus:border-[#2DD4BF]" /></label>
 }
 
-function Summary({ label, value, tone = 'slate' }: { label: string; value: number; tone?: string }) {
-  const colors: Record<string, string> = { green: 'text-emerald-600 bg-emerald-50', red: 'text-red-600 bg-red-50', blue: 'text-blue-600 bg-blue-50', amber: 'text-amber-600 bg-amber-50', violet: 'text-violet-600 bg-violet-50', slate: 'text-slate-700 bg-slate-50' }
-  return <div className={`rounded-[18px] p-4 ${colors[tone] || colors.slate}`}><p className="text-[10px] font-black uppercase tracking-wide opacity-70">{label}</p><p className="mt-2 text-xl font-black">{money(value)}</p></div>
+function PeriodTableCard({
+  title, tone, total, rows, netLabel, netValue, headerAction,
+}: {
+  title: string
+  tone: 'green' | 'red'
+  total: number
+  rows: { label: string; total: number }[]
+  netLabel?: string
+  netValue?: number
+  headerAction?: ReactNode
+}) {
+  const toneClass = tone === 'green' ? 'text-emerald-600 bg-emerald-50' : 'text-red-600 bg-red-50'
+  return (
+    <section className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-5">
+        <h3 className="font-black text-[#142536]">{title}</h3>
+        {headerAction}
+      </div>
+      <div className="grid grid-cols-2 gap-3 px-6 pt-5">
+        <div className={`rounded-[16px] p-4 ${toneClass}`}>
+          <p className="text-[10px] font-black uppercase tracking-wide opacity-70">Toplam {title}</p>
+          <p className="mt-1 text-xl font-black">{money(total)}</p>
+        </div>
+        {netLabel !== undefined && (
+          <div className={`rounded-[16px] p-4 ${(netValue ?? 0) >= 0 ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'}`}>
+            <p className="text-[10px] font-black uppercase tracking-wide opacity-70">{netLabel}</p>
+            <p className="mt-1 text-xl font-black">{money(netValue ?? 0)}</p>
+          </div>
+        )}
+      </div>
+      <div className="mt-4 max-h-[320px] overflow-auto px-6 pb-6">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 bg-white text-left text-[11px] font-black uppercase tracking-wide text-slate-400">
+            <tr><th className="py-2">Dönem</th><th className="py-2 text-right">Tutar</th></tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={2} className="py-8 text-center text-sm font-semibold text-slate-400">Bu aralıkta kayıt yok.</td></tr>
+            ) : rows.map((row) => (
+              <tr key={row.label} className="border-t border-slate-100">
+                <td className="py-3 font-bold text-[#142536]">{row.label}</td>
+                <td className="py-3 text-right font-black text-[#142536]">{money(row.total)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
 }
 
 function SectionHeader({ title, subtitle, action }: { title: string; subtitle: string; action?: ReactNode }) {
