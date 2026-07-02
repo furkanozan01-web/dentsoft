@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ConfirmModal'
 import {
@@ -19,8 +19,6 @@ import DonutChart from './PatientCharts'
 import { localDateValue, formatAmount } from '@/lib/format'
 import TreatmentStatementPrint, { printTreatmentStatement } from './TreatmentStatementPrint'
 import SenetPrint, { printSenetPlan, type SenetRow } from './SenetPrint'
-import ToothChart, { classifyTreatment, type ToothFlags } from './ToothChart'
-import { FDI } from './constants'
 import type { ClinicInfo, Installment, Patient, PatientReminder, Transaction, Treatment } from './types'
 
 // ---- Hesap Tab ----
@@ -53,29 +51,6 @@ function HesapTab({
   const hasOpenTreatments = treatments.some((t) => !t.is_closed)
   const hasClosedTreatments = treatments.some((t) => t.is_closed)
   const visibleTreatments = showClosed ? treatments : treatments.filter((t) => !t.is_closed)
-
-  // Minyatür diş şeması — Oral sekmesindeki aynı mantıkla tedavi sembolleri
-  const miniToothStates = useMemo(() => {
-    const m = new Map<number, ToothFlags>()
-    for (const t of visibleTreatments) {
-      if (!t.tooth) continue
-      const kind = classifyTreatment(t.treatment_name)
-      if (!kind) continue
-      const cur = m.get(t.tooth) ?? {}
-      cur[kind] = true
-      m.set(t.tooth, cur)
-    }
-    return m
-  }, [visibleTreatments])
-  const miniExtractedTeeth = useMemo(() => {
-    const set = new Set<number>()
-    for (const t of visibleTreatments) {
-      if (!t.tooth) continue
-      const n = t.treatment_name.toLowerCase()
-      if (n.includes('çekim') || n.includes('cekim')) set.add(t.tooth)
-    }
-    return set
-  }, [visibleTreatments])
 
   const totalOwed = treatments.reduce((s, t) => s + (t.fee ?? 0), 0)
   const payments = transactions.filter((t) => t.type === 'payment')
@@ -156,32 +131,17 @@ function HesapTab({
             </p>
           </div>
 
-          <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_200px]">
-            <div className="overflow-hidden rounded-[18px] border border-[#E7ECF2]">
-              {visibleTreatments.length === 0 ? (
-                <p className="px-4 py-6 text-center text-xs font-semibold text-slate-400">Henüz işlem kaydı yok.</p>
-              ) : (
-                <>
-                  {visibleTreatments.map((tr) => (
-                    <FinanceLine key={tr.id} label={tr.treatment_name} value={`₺${formatAmount(tr.fee)}`} />
-                  ))}
-                  <FinanceLine label="Toplam Ücret" value={`₺${formatAmount(totalOwed)}`} strong />
-                </>
-              )}
-            </div>
-            <div className="flex items-center justify-center overflow-hidden rounded-[18px] border border-[#E7ECF2] bg-[#FAFBFC] p-2">
-              {/* zoom (transform yerine) katman boyutunu da küçültür, taşma olmaz */}
-              <div style={{ zoom: 0.22 }}>
-                <ToothChart
-                  upperTeeth={FDI.upperPermanent}
-                  lowerTeeth={FDI.lowerPermanent}
-                  selected={null}
-                  states={miniToothStates}
-                  hiddenTeeth={miniExtractedTeeth}
-                  onSelect={() => undefined}
-                />
-              </div>
-            </div>
+          <div className="mt-5 overflow-hidden rounded-[18px] border border-[#E7ECF2]">
+            {visibleTreatments.length === 0 ? (
+              <p className="px-4 py-6 text-center text-xs font-semibold text-slate-400">Henüz işlem kaydı yok.</p>
+            ) : (
+              <>
+                {visibleTreatments.map((tr) => (
+                  <FinanceLine key={tr.id} label={tr.treatment_name} value={`₺${formatAmount(tr.fee)}`} />
+                ))}
+                <FinanceLine label="Toplam Ücret" value={`₺${formatAmount(totalOwed)}`} strong />
+              </>
+            )}
           </div>
 
           <div className="mt-5 flex flex-col items-center gap-2 border-t border-[#EEF2F6] pt-5">
