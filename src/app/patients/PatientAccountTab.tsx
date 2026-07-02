@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ConfirmModal'
 import {
@@ -18,6 +18,9 @@ import {
 import DonutChart from './PatientCharts'
 import { localDateValue, formatAmount } from '@/lib/format'
 import TreatmentStatementPrint, { printTreatmentStatement } from './TreatmentStatementPrint'
+import SenetPrint, { printSenetPlan, type SenetRow } from './SenetPrint'
+import ToothChart, { classifyTreatment, type ToothFlags } from './ToothChart'
+import { FDI } from './constants'
 import type { ClinicInfo, Installment, Patient, PatientReminder, Transaction, Treatment } from './types'
 
 // ---- Hesap Tab ----
@@ -50,6 +53,29 @@ function HesapTab({
   const hasOpenTreatments = treatments.some((t) => !t.is_closed)
   const hasClosedTreatments = treatments.some((t) => t.is_closed)
   const visibleTreatments = showClosed ? treatments : treatments.filter((t) => !t.is_closed)
+
+  // Minyatür diş şeması — Oral sekmesindeki aynı mantıkla tedavi sembolleri
+  const miniToothStates = useMemo(() => {
+    const m = new Map<number, ToothFlags>()
+    for (const t of visibleTreatments) {
+      if (!t.tooth) continue
+      const kind = classifyTreatment(t.treatment_name)
+      if (!kind) continue
+      const cur = m.get(t.tooth) ?? {}
+      cur[kind] = true
+      m.set(t.tooth, cur)
+    }
+    return m
+  }, [visibleTreatments])
+  const miniExtractedTeeth = useMemo(() => {
+    const set = new Set<number>()
+    for (const t of visibleTreatments) {
+      if (!t.tooth) continue
+      const n = t.treatment_name.toLowerCase()
+      if (n.includes('çekim') || n.includes('cekim')) set.add(t.tooth)
+    }
+    return set
+  }, [visibleTreatments])
 
   const totalOwed = treatments.reduce((s, t) => s + (t.fee ?? 0), 0)
   const payments = transactions.filter((t) => t.type === 'payment')
@@ -113,31 +139,6 @@ function HesapTab({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-3">
-        <FinanceSummaryCard
-          title="Toplam Borç"
-          value={`₺${formatAmount(totalOwed)}`}
-          description={`${treatments.length} tedavi kalemi`}
-          tone="navy"
-          icon={<IconReceipt />}
-        />
-        <FinanceSummaryCard
-          title="Toplam Ödeme"
-          value={`₺${formatAmount(totalPaid)}`}
-          description={`${payments.length} ödeme kaydı`}
-          tone="green"
-          icon={<IconWallet />}
-        />
-        <FinanceSummaryCard
-          title="Kalan Borç"
-          value={`₺${formatAmount(clampedBalance)}`}
-          description={clampedBalance > 0 ? 'Tahsil edilmesi gereken tutar' : 'Borç bulunmuyor'}
-          tone={clampedBalance > 0 ? 'red' : 'green'}
-          icon={<IconAlertCircle />}
-        />
-      </div>
-
-
       <div className="grid gap-6 xl:grid-cols-2">
         {/* Borç Özeti */}
         <section className="rounded-[24px] border border-slate-200/90 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
@@ -147,28 +148,79 @@ function HesapTab({
             description="Hastanın toplam borç ve ödeme durumu"
             iconClassName="bg-[#FFF7E6] text-[#B45309]"
           />
-          <div className="mt-5 grid gap-6 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-center">
-            <div className="flex flex-col items-center justify-center rounded-[20px] border border-[#E7ECF2] bg-[#FAFBFC] px-5 py-6 text-center">
-              <div className="relative flex h-[112px] w-[112px] items-center justify-center">
-                <DonutChart ratio={ratio} />
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-2xl font-black text-[#0F2B3D]">%{Math.round(ratio * 100)}</span>
-                  <span className="text-[10px] font-bold uppercase text-slate-400">Oran</span>
-                </div>
-              </div>
-              <p className="mt-3 text-xs font-black text-[#142536]">Ödeme Oranı</p>
-            </div>
 
+          <div className="mt-5 rounded-[20px] border border-[#E7ECF2] bg-[#FAFBFC] px-6 py-5 text-center">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-400">Kalan Borç</p>
+            <p className={`mt-1 text-3xl font-black ${clampedBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+              ₺{formatAmount(clampedBalance)}
+            </p>
+          </div>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_200px]">
             <div className="overflow-hidden rounded-[18px] border border-[#E7ECF2]">
-              <FinanceLine label="Toplam Borç" value={`₺${formatAmount(totalOwed)}`} />
-              <FinanceLine label="Toplam Ödeme" value={`₺${formatAmount(totalPaid)}`} valueClassName="text-green-600" />
-              <FinanceLine
-                label="Kalan Borç"
-                value={`₺${formatAmount(clampedBalance)}`}
-                valueClassName={clampedBalance > 0 ? 'text-red-600' : 'text-green-600'}
-                strong
-              />
+              {visibleTreatments.length === 0 ? (
+                <p className="px-4 py-6 text-center text-xs font-semibold text-slate-400">Henüz işlem kaydı yok.</p>
+              ) : (
+                <>
+                  {visibleTreatments.map((tr) => (
+                    <FinanceLine key={tr.id} label={tr.treatment_name} value={`₺${formatAmount(tr.fee)}`} />
+                  ))}
+                  <FinanceLine label="Toplam Ücret" value={`₺${formatAmount(totalOwed)}`} strong />
+                </>
+              )}
             </div>
+            <div className="flex items-center justify-center overflow-hidden rounded-[18px] border border-[#E7ECF2] bg-[#FAFBFC] p-2">
+              {/* zoom (transform yerine) katman boyutunu da küçültür, taşma olmaz */}
+              <div style={{ zoom: 0.22 }}>
+                <ToothChart
+                  upperTeeth={FDI.upperPermanent}
+                  lowerTeeth={FDI.lowerPermanent}
+                  selected={null}
+                  states={miniToothStates}
+                  hiddenTeeth={miniExtractedTeeth}
+                  onSelect={() => undefined}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-col items-center gap-2 border-t border-[#EEF2F6] pt-5">
+            <DonutChart ratio={ratio} />
+            <p className="text-sm font-black text-[#142536]">Ödeme Oranı: %{Math.round(ratio * 100)}</p>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2 border-t border-[#EEF2F6] pt-5">
+            {hasClosedTreatments && (
+              <button
+                type="button"
+                onClick={() => setShowClosed((v) => !v)}
+                className={`inline-flex h-9 items-center gap-2 rounded-xl border px-3 text-[11px] font-black transition ${showClosed ? 'border-[#0F766E] bg-[#E6FFFA] text-[#0F766E]' : 'border-[#D9E4EA] bg-white text-[#315164] hover:bg-slate-50'}`}
+              >
+                <IconEye />
+                {showClosed ? 'Kapalıları Gizle' : 'Kapalı Hesabı Göster'}
+              </button>
+            )}
+            {hasOpenTreatments && (
+              <button
+                type="button"
+                onClick={handleCloseAccount}
+                disabled={closePending}
+                className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3 text-[11px] font-black text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+              >
+                <IconLock />
+                Hesabı Kapat
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (!printTreatmentStatement(patient.id)) toast.error('Yazdırma alanı hazırlanamadı')
+              }}
+              className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#D9E4EA] bg-white px-3 text-[11px] font-black text-[#315164] transition hover:bg-slate-50"
+            >
+              <IconPrint />
+              Yazdır
+            </button>
           </div>
         </section>
 
@@ -206,60 +258,65 @@ function HesapTab({
               }
             />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[560px] text-xs">
-                <thead className="bg-[#FAFBFC]">
-                  <tr className="h-12 border-b border-[#EEF2F6]">
-                    {['Tarih', 'Tutar', 'Yöntem', 'Açıklama', ''].map((h) => (
-                      <th key={h} className="px-4 text-left font-black uppercase tracking-wide text-slate-400">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {payments.map((tx) => (
-                    <tr key={tx.id} className="h-16 border-b border-[#EEF2F6] transition last:border-0 hover:bg-[#5FD3C1]/[0.04]">
-                      <td className="px-4 font-semibold text-slate-500">
-                        {new Date(tx.transaction_date).toLocaleDateString('tr-TR')}
-                      </td>
-                      <td className="px-4">
-                        <span className="font-black text-[#0F2B3D]">₺{formatAmount(tx.amount)}</span>
-                        {tx.original_currency && tx.original_currency !== 'TRY' && tx.original_amount && tx.exchange_rate && (
-                          <span className="ml-2 text-[11px] font-semibold text-slate-400">
-                            ({Math.round(tx.original_amount / 100).toLocaleString('tr-TR')} {tx.original_currency} @ {Number(tx.exchange_rate).toLocaleString('tr-TR', { minimumFractionDigits: 2 })})
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 text-slate-500">
-                        <span className="rounded-full bg-[#F1F5F9] px-2.5 py-1 font-bold text-[#142536]">
-                          {methodLabel[tx.method ?? ''] ?? tx.method ?? '—'}
-                        </span>
-                      </td>
-                      <td className="px-4 font-medium text-slate-500">
-                        {tx.method === 'firma_odemesi' && tx.partner_name ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-700">
-                            🏢 {tx.partner_name}
-                          </span>
-                        ) : (
-                          <span className="max-w-[160px] truncate block" title={tx.description ?? ''}>{tx.description || '—'}</span>
-                        )}
-                      </td>
-                      <td className="px-4 text-right">
-                        <button
-                          onClick={() => handleDeletePayment(tx)}
-                          disabled={delPending}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
-                          title="Ödemeyi sil"
-                        >
-                          <IconTrash />
-                        </button>
-                      </td>
+            <>
+              <div className="mb-4 inline-flex w-fit rounded-full bg-[#E6FFFA] px-3 py-1.5 text-sm font-black text-[#0F766E]">
+                Toplam Ödeme: ₺{formatAmount(totalPaid)}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[560px] text-xs">
+                  <thead className="bg-[#FAFBFC]">
+                    <tr className="h-12 border-b border-[#EEF2F6]">
+                      {['Tarih', 'Tutar', 'Yöntem', 'Açıklama', ''].map((h) => (
+                        <th key={h} className="px-4 text-left font-black uppercase tracking-wide text-slate-400">
+                          {h}
+                        </th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {payments.map((tx) => (
+                      <tr key={tx.id} className="h-16 border-b border-[#EEF2F6] transition last:border-0 hover:bg-[#5FD3C1]/[0.04]">
+                        <td className="px-4 font-semibold text-slate-500">
+                          {new Date(tx.transaction_date).toLocaleDateString('tr-TR')}
+                        </td>
+                        <td className="px-4">
+                          <span className="font-black text-[#0F2B3D]">₺{formatAmount(tx.amount)}</span>
+                          {tx.original_currency && tx.original_currency !== 'TRY' && tx.original_amount && tx.exchange_rate && (
+                            <span className="ml-2 text-[11px] font-semibold text-slate-400">
+                              ({Math.round(tx.original_amount / 100).toLocaleString('tr-TR')} {tx.original_currency} @ {Number(tx.exchange_rate).toLocaleString('tr-TR', { minimumFractionDigits: 2 })})
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 text-slate-500">
+                          <span className="rounded-full bg-[#F1F5F9] px-2.5 py-1 font-bold text-[#142536]">
+                            {methodLabel[tx.method ?? ''] ?? tx.method ?? '—'}
+                          </span>
+                        </td>
+                        <td className="px-4 font-medium text-slate-500">
+                          {tx.method === 'firma_odemesi' && tx.partner_name ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-700">
+                              🏢 {tx.partner_name}
+                            </span>
+                          ) : (
+                            <span className="max-w-[160px] truncate block" title={tx.description ?? ''}>{tx.description || '—'}</span>
+                          )}
+                        </td>
+                        <td className="px-4 text-right">
+                          <button
+                            onClick={() => handleDeletePayment(tx)}
+                            disabled={delPending}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                            title="Ödemeyi sil"
+                          >
+                            <IconTrash />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </section>
       </div>
@@ -268,124 +325,18 @@ function HesapTab({
         <PaymentPlanCard
           patientId={patient.id}
           installments={installments}
-          balance={balance}
-          onChanged={onChanged}
-        />
-        <RemindersCard
-          patientId={patient.id}
-          installments={installments}
           reminders={reminders}
           balance={balance}
           onChanged={onChanged}
         />
+        <SenetRobotuCard
+          patientId={patient.id}
+          patient={patient}
+          clinic={clinic}
+          balance={balance}
+          onChanged={onChanged}
+        />
       </div>
-
-      <DoctorBreakdownCard treatments={treatments} />
-
-      {/* Tedavi Geçmişi */}
-      <section className="overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
-        <div className="flex flex-col gap-3 border-b border-[#EEF2F6] px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
-          <SectionHeader
-            icon={<IconFileText />}
-            title="Tedavi Geçmişi"
-            description="Ücretlendirilmiş tedavi ve işlem kalemleri"
-            iconClassName="bg-[#DDF8F4] text-[#0F766E]"
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            {hasClosedTreatments && (
-              <button
-                type="button"
-                onClick={() => setShowClosed((v) => !v)}
-                className={`inline-flex h-9 items-center gap-2 rounded-xl border px-3 text-[11px] font-black transition ${showClosed ? 'border-[#0F766E] bg-[#E6FFFA] text-[#0F766E]' : 'border-[#D9E4EA] bg-white text-[#315164] hover:bg-slate-50'}`}
-              >
-                <IconEye />
-                {showClosed ? 'Kapalıları Gizle' : 'Kapalıları Göster'}
-              </button>
-            )}
-            {hasOpenTreatments && (
-              <button
-                type="button"
-                onClick={handleCloseAccount}
-                disabled={closePending}
-                className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3 text-[11px] font-black text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-              >
-                <IconLock />
-                Hesabı Kapat
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                if (!printTreatmentStatement(patient.id)) toast.error('Yazdırma alanı hazırlanamadı')
-              }}
-              className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#D9E4EA] bg-white px-3 text-[11px] font-black text-[#315164] transition hover:bg-slate-50"
-            >
-              <IconPrint />
-              Yazdır
-            </button>
-            <span className="inline-flex w-fit rounded-full bg-[#E6FFFA] px-3 py-1.5 text-sm font-black text-[#0F766E]">
-              Toplam: ₺{formatAmount(totalOwed)}
-            </span>
-          </div>
-        </div>
-
-        {visibleTreatments.length === 0 ? (
-          <div className="px-6 py-6">
-            <EmptyState
-              icon={<IconFileTextLarge />}
-              title={treatments.length === 0 ? 'Henüz tedavi kaydı yok.' : 'Tüm tedaviler kapatıldı.'}
-              description={treatments.length === 0 ? 'Ücretlendirilmiş tedavi kalemleri eklendiğinde bu tabloda görünür.' : 'Kapalı tedavileri görmek için "Kapalıları Göster" butonuna tıklayın.'}
-              compact
-            />
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-xs">
-                <thead className="bg-[#FAFBFC]">
-                  <tr className="h-[52px] border-b border-[#EEF2F6]">
-                    {['Tarih', 'Tedavi', 'Diş', 'Ücret', 'Durum'].map((h) => (
-                      <th key={h} className="px-5 text-left font-black uppercase tracking-wide text-slate-400">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleTreatments.map((tr) => (
-                    <tr key={tr.id} className={`h-16 border-b border-[#EEF2F6] transition last:border-0 ${tr.is_closed ? 'bg-slate-50/60 opacity-60 hover:opacity-80' : 'hover:bg-[#5FD3C1]/[0.04]'}`}>
-                      <td className="px-5 font-semibold text-slate-500">
-                        {tr.treatment_date
-                          ? new Date(tr.treatment_date).toLocaleDateString('tr-TR')
-                          : '—'}
-                      </td>
-                      <td className="px-5 font-bold text-[#0F2B3D]">
-                        <span>{tr.treatment_name}</span>
-                        {tr.is_closed && (
-                          <span className="ml-2 rounded border border-slate-300 px-1.5 py-0.5 text-[10px] font-bold text-slate-400">KPL</span>
-                        )}
-                      </td>
-                      <td className="px-5">
-                        <span className="rounded-full bg-[#F1F5F9] px-2.5 py-1 text-xs font-black text-[#142536]">
-                          {tr.tooth ?? '—'}
-                        </span>
-                      </td>
-                      <td className="px-5 font-black text-[#0F2B3D]">₺{formatAmount(tr.fee)}</td>
-                      <td className="px-5">
-                        <TreatmentStatusBadge status={tr.status} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex items-center justify-between border-t border-[#EEF2F6] px-6 py-3 text-[11px] font-bold text-slate-400">
-              <span>Toplam {visibleTreatments.length} kayıt{!showClosed && hasClosedTreatments ? ` (${treatments.filter((t) => t.is_closed).length} kapalı gizlendi)` : ''}</span>
-              <span>Sayfa 1 / 1</span>
-            </div>
-          </>
-        )}
-      </section>
 
       <TreatmentStatementPrint
         patient={patient}
@@ -394,39 +345,6 @@ function HesapTab({
         clinic={clinic}
         installments={installments}
       />
-    </div>
-  )
-}
-
-function FinanceSummaryCard({
-  title,
-  value,
-  description,
-  tone,
-  icon,
-}: {
-  title: string
-  value: string
-  description: string
-  tone: 'navy' | 'green' | 'red'
-  icon: React.ReactNode
-}) {
-  const toneClass = {
-    navy: 'bg-[#EEF6FB] text-[#0F2B3D]',
-    green: 'bg-[#DCFCE7] text-[#16A34A]',
-    red: 'bg-[#FEE2E2] text-[#DC2626]',
-  }[tone]
-
-  return (
-    <div className="rounded-[20px] border border-[#E7ECF2] bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${toneClass}`}>{icon}</span>
-      </div>
-      <p className="text-xs font-black uppercase tracking-wide text-slate-400">{title}</p>
-      <p className={`mt-1 text-2xl font-black ${tone === 'red' ? 'text-red-600' : tone === 'green' ? 'text-green-600' : 'text-[#0F2B3D]'}`}>
-        {value}
-      </p>
-      <p className="mt-1 text-xs font-semibold text-slate-400">{description}</p>
     </div>
   )
 }
@@ -499,76 +417,31 @@ function EmptyState({
   )
 }
 
-function TreatmentStatusBadge({ status }: { status: string }) {
-  const normalized = status.toLowerCase()
-  if (normalized === 'done' || normalized === 'completed' || normalized === 'paid') {
-    return <span className="rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-black text-green-700">Tamamlandı</span>
-  }
-  if (normalized === 'cancelled' || normalized === 'canceled') {
-    return <span className="rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-black text-red-700">İptal</span>
-  }
-  if (normalized === 'in_progress') {
-    return <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-black text-blue-700">Devam Ediyor</span>
-  }
-  return <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-black text-amber-700">Planlandı</span>
-}
-
-// ---- Ödeme Planı (Taksit) kartı ----
-function buildInstallmentPreview(
-  principalKurus: number,
-  months: number,
-  interestRate: number,
-  startDate: Date
-): { dueDate: string; amount: number }[] {
-  const total = Math.round(principalKurus * (1 + interestRate / 100))
-  const base = Math.floor(total / months)
-  const remainder = total - base * months
-  return Array.from({ length: months }, (_, i) => {
-    const d = new Date(startDate)
-    d.setMonth(d.getMonth() + i + 1)
-    return {
-      dueDate: d.toISOString().slice(0, 10),
-      amount: base + (i === months - 1 ? remainder : 0),
-    }
-  })
-}
-
+// ---- Ödeme Planı (Taksit + Hatırlatıcılar) kartı ----
 function PaymentPlanCard({
   patientId,
   installments,
+  reminders,
   balance,
   onChanged,
 }: {
   patientId: number
   installments: Installment[]
+  reminders: PatientReminder[]
   balance: number
   onChanged: () => void
 }) {
   const [pending, startTransition] = useTransition()
   const [showAdd, setShowAdd] = useState(false)
   const [showAuto, setShowAuto] = useState(false)
-  const [showSenet, setShowSenet] = useState(false)
   const [autoMonths, setAutoMonths] = useState('3')
   const [dueDate, setDueDate] = useState('')
   const [amount, setAmount] = useState('')
-
-  // Senet Robotu form state
-  const [senetTitle, setSenetTitle] = useState('Senet Planı')
-  const [senetMonths, setSenetMonths] = useState('3')
-  const [senetRate, setSenetRate] = useState('0')
-  const [senetPrincipal, setSenetPrincipal] = useState(() =>
-    balance > 0 ? String(Math.round(balance / 100)) : ''
-  )
+  const [showRemindAdd, setShowRemindAdd] = useState(false)
+  const [remDate, setRemDate] = useState('')
+  const [remNote, setRemNote] = useState('')
 
   const today = localDateValue()
-
-  const senetPreview = (() => {
-    const principal = parseFloat(senetPrincipal) * 100
-    const months = parseInt(senetMonths, 10)
-    const rate = parseFloat(senetRate)
-    if (isNaN(principal) || isNaN(months) || isNaN(rate) || principal <= 0 || months < 1) return []
-    return buildInstallmentPreview(principal, months, rate, new Date())
-  })()
 
   const run = (fn: () => Promise<{ error?: string; success?: boolean }>) => {
     startTransition(async () => {
@@ -600,16 +473,19 @@ function PaymentPlanCard({
     })
   }
 
-  const handleSenet = () => {
-    if (!senetPreview.length) {
-      toast.error('Lütfen geçerli tutar, taksit sayısı ve oran girin')
-      return
-    }
-    const rateBps = Math.round(parseFloat(senetRate) * 100)
-    const rows = senetPreview.map((r) => ({ due_date: r.dueDate, amount: r.amount }))
-    setShowSenet(false)
-    run(() => createPromissoryPlan(patientId, senetTitle, rateBps, rows))
+  const handleAddReminder = () => {
+    if (!remDate) { toast.error('Tarih seçin'); return }
+    run(async () => {
+      const res = await addReminder(patientId, remDate, remNote)
+      if (res.success) { setShowRemindAdd(false); setRemDate(''); setRemNote('') }
+      return res
+    })
   }
+
+  const overdueInstallments = installments.filter((it) => !it.paid && it.due_date < today)
+  const noPlan = balance > 0 && installments.length === 0
+  const activeReminders = reminders.filter((r) => !r.is_done)
+  const doneReminders = reminders.filter((r) => r.is_done)
 
   return (
     <section className="rounded-[24px] border border-slate-200/90 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
@@ -635,14 +511,6 @@ function PaymentPlanCard({
             title={balance <= 0 ? 'Bölünecek kalan borç yok' : ''}
           >
             Otomatik Taksitlendir
-          </button>
-          <button
-            onClick={() => setShowSenet(true)}
-            disabled={pending}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-[14px] border border-[#E9D5FF] bg-[#FAF5FF] px-4 text-xs font-black text-[#7C3AED] transition hover:bg-[#F3E8FF] disabled:opacity-50"
-          >
-            <IconRobot />
-            Senet Robotu
           </button>
         </div>
       </div>
@@ -770,191 +638,133 @@ function PaymentPlanCard({
         </div>
       )}
 
-      {showSenet && (
-        <div className="mt-4 rounded-[18px] border border-[#E9D5FF] bg-[#FAF5FF] p-5">
-          <p className="mb-4 text-sm font-black text-[#6D28D9]">Senet Robotu — Plan Oluştur</p>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black uppercase tracking-wide text-[#7C3AED]">Başlık</label>
+      {/* ── Hatırlatıcılar (aynı kart içinde) ── */}
+      <div className="mt-6 border-t border-[#EEF2F6] pt-6">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <SectionHeader
+            icon={<IconAlertTriangle />}
+            title="Hatırlatıcılar"
+            description="Finansal takip ve özel hatırlatmalar"
+            iconClassName="bg-[#FFF7E6] text-[#B45309]"
+          />
+          <button
+            onClick={() => setShowRemindAdd((v) => !v)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-[12px] border border-[#FED7AA] bg-[#FFF7E6] px-3 text-[11px] font-black text-[#B45309] transition hover:bg-[#FFEDD5]"
+          >
+            <IconPlus />
+            Hatırlatıcı Ekle
+          </button>
+        </div>
+
+        {showRemindAdd && (
+          <div className="mb-4 rounded-[16px] border border-[#FED7AA] bg-[#FFFBF5] p-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <input
+                type="date"
+                value={remDate}
+                onChange={(e) => setRemDate(e.target.value)}
+                className="h-10 rounded-[12px] border border-[#FED7AA] bg-white px-3 text-sm font-semibold text-[#142536] outline-none focus:border-[#F59E0B]"
+              />
               <input
                 type="text"
-                value={senetTitle}
-                onChange={(e) => setSenetTitle(e.target.value)}
-                className="h-10 rounded-[12px] border border-[#E9D5FF] bg-white px-3 text-sm font-semibold text-[#142536] outline-none focus:border-[#A855F7]"
+                value={remNote}
+                onChange={(e) => setRemNote(e.target.value)}
+                placeholder="Not (opsiyonel)"
+                className="h-10 rounded-[12px] border border-[#FED7AA] bg-white px-3 text-sm font-semibold text-[#142536] outline-none placeholder:text-slate-400 focus:border-[#F59E0B]"
               />
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black uppercase tracking-wide text-[#7C3AED]">Tutar (₺)</label>
-              <input
-                type="number"
-                min={1}
-                value={senetPrincipal}
-                onChange={(e) => setSenetPrincipal(e.target.value)}
-                placeholder="0"
-                className="h-10 rounded-[12px] border border-[#E9D5FF] bg-white px-3 text-sm font-semibold text-[#142536] outline-none focus:border-[#A855F7]"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black uppercase tracking-wide text-[#7C3AED]">Taksit Sayısı</label>
-              <input
-                type="number"
-                min={1}
-                max={60}
-                value={senetMonths}
-                onChange={(e) => setSenetMonths(e.target.value)}
-                className="h-10 rounded-[12px] border border-[#E9D5FF] bg-white px-3 text-sm font-semibold text-[#142536] outline-none focus:border-[#A855F7]"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black uppercase tracking-wide text-[#7C3AED]">Vade Farkı (%)</label>
-              <input
-                type="number"
-                min={0}
-                step={0.5}
-                value={senetRate}
-                onChange={(e) => setSenetRate(e.target.value)}
-                className="h-10 rounded-[12px] border border-[#E9D5FF] bg-white px-3 text-sm font-semibold text-[#142536] outline-none focus:border-[#A855F7]"
-              />
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={handleAddReminder}
+                disabled={pending}
+                className="rounded-[12px] bg-[#B45309] px-4 py-2 text-xs font-black text-white hover:bg-[#92400E] disabled:opacity-50"
+              >
+                Kaydet
+              </button>
+              <button
+                onClick={() => setShowRemindAdd(false)}
+                className="rounded-[12px] border border-[#FED7AA] bg-white px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50"
+              >
+                İptal
+              </button>
             </div>
           </div>
+        )}
 
-          {senetPreview.length > 0 && (
-            <div className="mt-4">
-              <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-[#7C3AED]">Önizleme</p>
-              <div className="overflow-x-auto rounded-[12px] border border-[#E9D5FF]">
-                <table className="w-full min-w-[360px] text-xs">
-                  <thead className="bg-[#F3E8FF]">
-                    <tr className="h-9">
-                      <th className="px-3 text-left font-black text-[#6D28D9]">#</th>
-                      <th className="px-3 text-left font-black text-[#6D28D9]">Vade Tarihi</th>
-                      <th className="px-3 text-left font-black text-[#6D28D9]">Tutar</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {senetPreview.map((row, i) => (
-                      <tr key={i} className="h-10 border-t border-[#E9D5FF]">
-                        <td className="px-3 font-black text-[#142536]">{i + 1}</td>
-                        <td className="px-3 text-slate-600">
-                          {new Date(row.dueDate).toLocaleDateString('tr-TR')}
-                        </td>
-                        <td className="px-3 font-black text-[#0F2B3D]">₺{formatAmount(row.amount)}</td>
-                      </tr>
-                    ))}
-                    <tr className="h-10 border-t-2 border-[#C4B5FD] bg-[#F3E8FF]">
-                      <td className="px-3 font-black text-[#6D28D9]" colSpan={2}>Toplam</td>
-                      <td className="px-3 font-black text-[#6D28D9]">
-                        ₺{formatAmount(senetPreview.reduce((s, r) => s + r.amount, 0))}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+        <div className="space-y-2">
+          {overdueInstallments.map((it) => (
+            <div key={`inst-${it.id}`} className="flex items-start gap-3 rounded-[14px] border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+              <IconAlertCircle />
+              <span>Gecikmiş taksit: {new Date(it.due_date).toLocaleDateString('tr-TR')} — ₺{formatAmount(it.amount)}</span>
+            </div>
+          ))}
+
+          {noPlan && (
+            <div className="flex items-start gap-3 rounded-[14px] border border-[#FED7AA] bg-[#FFF7E6] px-4 py-3 text-sm font-semibold text-[#B45309]">
+              <IconAlertTriangle />
+              <span>Kalan borç var ama henüz ödeme planı oluşturulmadı.</span>
             </div>
           )}
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              onClick={handleSenet}
-              disabled={pending || !senetPreview.length}
-              className="rounded-[12px] bg-[#7C3AED] px-5 py-2 text-xs font-black text-white hover:bg-[#6D28D9] disabled:opacity-50"
-            >
-              Planı Oluştur
-            </button>
-            <button
-              onClick={() => setShowSenet(false)}
-              className="rounded-[12px] border border-[#E9D5FF] bg-white px-4 py-2 text-xs font-bold text-slate-500 hover:bg-white/70"
-            >
-              İptal
-            </button>
-          </div>
-        </div>
-      )}
-    </section>
-  )
-}
+          {activeReminders.map((r) => (
+            <div key={r.id} className="flex items-center gap-3 rounded-[14px] border border-[#FED7AA] bg-[#FFFBF5] px-4 py-3">
+              <span className="text-[11px] font-black text-[#B45309]">
+                {new Date(r.reminder_date).toLocaleDateString('tr-TR')}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#142536]">
+                {r.note || 'Hatırlatıcı'}
+              </span>
+              <button
+                onClick={() => run(() => markReminderDone(r.id))}
+                disabled={pending}
+                className="rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-black text-green-700 transition hover:bg-green-200 disabled:opacity-50"
+              >
+                Tamam
+              </button>
+              <button
+                onClick={() => run(() => deleteReminder(r.id))}
+                disabled={pending}
+                className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+              >
+                <IconTrash />
+              </button>
+            </div>
+          ))}
 
-function calcDoctorBreakdown(treatments: Treatment[]) {
-  const map = new Map<string, { count: number; total: number }>()
-  for (const t of treatments) {
-    const name = t.doctor?.name ?? 'Atanmamış'
-    const cur = map.get(name) ?? { count: 0, total: 0 }
-    map.set(name, { count: cur.count + 1, total: cur.total + t.fee })
-  }
-  return Array.from(map.entries())
-    .map(([name, { count, total }]) => ({ name, count, total }))
-    .sort((a, b) => b.total - a.total)
-}
+          {overdueInstallments.length === 0 && !noPlan && activeReminders.length === 0 && (
+            <div className="rounded-[14px] border border-green-100 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
+              Tüm ödemeler güncel, bekleyen hatırlatıcı yok.
+            </div>
+          )}
 
-function DoctorBreakdownCard({ treatments }: { treatments: Treatment[] }) {
-  const rows = calcDoctorBreakdown(treatments)
-  const grandTotal = rows.reduce((s, r) => s + r.total, 0)
-
-  return (
-    <section className="rounded-[24px] border border-slate-200/90 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
-      <SectionHeader
-        icon={<IconStethoscope />}
-        title="Hekim Payı / Oran"
-        description="Tedavi ücretlerinin hekimlere göre dağılımı"
-        iconClassName="bg-[#EEF6FB] text-[#0369A1]"
-      />
-
-      {rows.length === 0 ? (
-        <EmptyState
-          icon={<IconStethoscopeLarge />}
-          title="Hekim bilgisi yok."
-          description="Tedavilere hekim atandığında dağılım burada görüntülenir."
-          compact
-        />
-      ) : (
-        <div className="mt-5 overflow-x-auto">
-          <table className="w-full min-w-[520px] text-xs">
-            <thead className="bg-[#FAFBFC]">
-              <tr className="h-12 border-b border-[#EEF2F6]">
-                {['Hekim', 'Tedavi', 'Net Toplam', 'Pay (%)'].map((h) => (
-                  <th key={h} className="px-5 text-left font-black uppercase tracking-wide text-slate-400">
-                    {h}
-                  </th>
+          {doneReminders.length > 0 && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-[11px] font-bold text-slate-400 hover:text-slate-600">
+                {doneReminders.length} tamamlanmış hatırlatıcı
+              </summary>
+              <div className="mt-2 space-y-1.5">
+                {doneReminders.map((r) => (
+                  <div key={r.id} className="flex items-center gap-3 rounded-[12px] border border-slate-100 bg-slate-50 px-3 py-2 opacity-60">
+                    <span className="text-[11px] font-black text-slate-400">
+                      {new Date(r.reminder_date).toLocaleDateString('tr-TR')}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-400 line-through">
+                      {r.note || 'Hatırlatıcı'}
+                    </span>
+                    <button
+                      onClick={() => run(() => deleteReminder(r.id))}
+                      disabled={pending}
+                      className="flex h-6 w-6 items-center justify-center rounded-full text-slate-300 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                    >
+                      <IconTrash />
+                    </button>
+                  </div>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const pct = grandTotal > 0 ? (row.total / grandTotal) * 100 : 0
-                return (
-                  <tr key={row.name} className="h-16 border-b border-[#EEF2F6] last:border-0 hover:bg-[#5FD3C1]/[0.04]">
-                    <td className="px-5 font-bold text-[#0F2B3D]">{row.name}</td>
-                    <td className="px-5 font-semibold text-slate-500">{row.count} kalem</td>
-                    <td className="px-5 font-black text-[#0F2B3D]">₺{formatAmount(row.total)}</td>
-                    <td className="px-5">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-24 overflow-hidden rounded-full bg-[#EEF2F6]">
-                          <div
-                            className="h-full rounded-full bg-[linear-gradient(90deg,#5FD3C1,#1EAEA0)]"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <span className="font-black text-[#0F2B3D]">
-                          %{pct.toLocaleString('tr-TR', { maximumFractionDigits: 1 })}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="h-12 border-t-2 border-[#EEF2F6] bg-[#FAFBFC]">
-                <td className="px-5 font-black text-[#142536]">Toplam</td>
-                <td className="px-5 font-semibold text-slate-500">
-                  {rows.reduce((s, r) => s + r.count, 0)} kalem
-                </td>
-                <td className="px-5 font-black text-[#0F766E]">₺{formatAmount(grandTotal)}</td>
-                <td className="px-5 font-black text-[#0F2B3D]">%100</td>
-              </tr>
-            </tfoot>
-          </table>
+              </div>
+            </details>
+          )}
         </div>
-      )}
+      </div>
     </section>
   )
 }
@@ -965,184 +775,193 @@ function InstallmentStatusBadge({ paid, overdue }: { paid: boolean; overdue: boo
   return <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-black text-amber-700">Bekliyor</span>
 }
 
-// ---- Hatırlatıcılar kartı ----
-function RemindersCard({
+// ---- Senet Robotu kartı ----
+// Kurallar: taksit tutarları tam bin TL'ye aşağı yuvarlanır, biriken küsürat
+// son taksite eklenir; vade farkı taksit sayısı kadar bileşikleşir.
+function buildInstallmentPreview(
+  principalKurus: number,
+  months: number,
+  interestRate: number,
+  startDate: Date
+): SenetRow[] {
+  const compoundTotal = Math.round(principalKurus * Math.pow(1 + interestRate / 100, months))
+  const THOUSAND = 100_000 // 1.000 TL = 100.000 kuruş
+  const base = Math.floor(compoundTotal / months / THOUSAND) * THOUSAND
+  const shortfall = compoundTotal - base * months
+  return Array.from({ length: months }, (_, i) => {
+    const d = new Date(startDate)
+    d.setMonth(d.getMonth() + i + 1)
+    return {
+      dueDate: d.toISOString().slice(0, 10),
+      amount: base + (i === months - 1 ? shortfall : 0),
+    }
+  })
+}
+
+function SenetRobotuCard({
   patientId,
-  installments,
-  reminders,
+  patient,
+  clinic,
   balance,
   onChanged,
 }: {
   patientId: number
-  installments: Installment[]
-  reminders: PatientReminder[]
+  patient: Patient
+  clinic: ClinicInfo | null
   balance: number
   onChanged: () => void
 }) {
-  const [pending, start] = useTransition()
-  const [showAdd, setShowAdd] = useState(false)
-  const [remDate, setRemDate] = useState('')
-  const [remNote, setRemNote] = useState('')
-  const today = localDateValue()
+  const [pending, startTransition] = useTransition()
+  const [senetTitle, setSenetTitle] = useState('Senet Planı')
+  const [senetMonths, setSenetMonths] = useState('3')
+  const [senetRate, setSenetRate] = useState('0')
+  const [senetPrincipal, setSenetPrincipal] = useState(() =>
+    balance > 0 ? String(Math.round(balance / 100)) : ''
+  )
 
-  const overdueInstallments = installments.filter((it) => !it.paid && it.due_date < today)
-  const noPlan = balance > 0 && installments.length === 0
-  const activeReminders = reminders.filter((r) => !r.is_done)
-  const doneReminders = reminders.filter((r) => r.is_done)
+  const senetPreview = (() => {
+    const principal = parseFloat(senetPrincipal) * 100
+    const months = parseInt(senetMonths, 10)
+    const rate = parseFloat(senetRate)
+    if (isNaN(principal) || isNaN(months) || isNaN(rate) || principal <= 0 || months < 1) return []
+    return buildInstallmentPreview(principal, months, rate, new Date())
+  })()
 
   const run = (fn: () => Promise<{ error?: string; success?: boolean }>) => {
-    start(async () => {
+    startTransition(async () => {
       const res = await fn()
       if (res.error) toast.error(res.error)
       else onChanged()
     })
   }
 
-  const handleAddReminder = () => {
-    if (!remDate) { toast.error('Tarih seçin'); return }
-    run(async () => {
-      const res = await addReminder(patientId, remDate, remNote)
-      if (res.success) { setShowAdd(false); setRemDate(''); setRemNote('') }
-      return res
-    })
+  const handleSenet = () => {
+    if (!senetPreview.length) {
+      toast.error('Lütfen geçerli tutar, taksit sayısı ve oran girin')
+      return
+    }
+    const rateBps = Math.round(parseFloat(senetRate) * 100)
+    const rows = senetPreview.map((r) => ({ due_date: r.dueDate, amount: r.amount }))
+    run(() => createPromissoryPlan(patientId, senetTitle, rateBps, rows))
+  }
+
+  const handlePrint = () => {
+    if (!senetPreview.length) {
+      toast.error('Önce geçerli bir senet planı oluşturun')
+      return
+    }
+    if (!printSenetPlan(patient.id)) toast.error('Yazdırma alanı hazırlanamadı')
   }
 
   return (
     <section className="rounded-[24px] border border-slate-200/90 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
-      <div className="mb-5 flex items-start justify-between gap-3">
-        <SectionHeader
-          icon={<IconAlertTriangle />}
-          title="Hatırlatıcılar"
-          description="Finansal takip ve özel hatırlatmalar"
-          iconClassName="bg-[#FFF7E6] text-[#B45309]"
-        />
-        <button
-          onClick={() => setShowAdd((v) => !v)}
-          className="inline-flex h-9 items-center gap-1.5 rounded-[12px] border border-[#FED7AA] bg-[#FFF7E6] px-3 text-[11px] font-black text-[#B45309] transition hover:bg-[#FFEDD5]"
-        >
-          <IconPlus />
-          Hatırlatıcı Ekle
-        </button>
+      <SectionHeader
+        icon={<IconRobot />}
+        title="Senet Robotu"
+        description="TC kanunlarına uygun, imzaya hazır senet planı oluşturun"
+        iconClassName="bg-[#F3E8FF] text-[#7C3AED]"
+      />
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase tracking-wide text-[#7C3AED]">Başlık</label>
+          <input
+            type="text"
+            value={senetTitle}
+            onChange={(e) => setSenetTitle(e.target.value)}
+            className="h-10 rounded-[12px] border border-[#E9D5FF] bg-white px-3 text-sm font-semibold text-[#142536] outline-none focus:border-[#A855F7]"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase tracking-wide text-[#7C3AED]">Tutar (₺)</label>
+          <input
+            type="number"
+            min={1}
+            value={senetPrincipal}
+            onChange={(e) => setSenetPrincipal(e.target.value)}
+            placeholder="0"
+            className="h-10 rounded-[12px] border border-[#E9D5FF] bg-white px-3 text-sm font-semibold text-[#142536] outline-none focus:border-[#A855F7]"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase tracking-wide text-[#7C3AED]">Taksit Sayısı</label>
+          <input
+            type="number"
+            min={1}
+            max={60}
+            value={senetMonths}
+            onChange={(e) => setSenetMonths(e.target.value)}
+            className="h-10 rounded-[12px] border border-[#E9D5FF] bg-white px-3 text-sm font-semibold text-[#142536] outline-none focus:border-[#A855F7]"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase tracking-wide text-[#7C3AED]">Vade Farkı (% — bileşik)</label>
+          <input
+            type="number"
+            min={0}
+            step={0.5}
+            value={senetRate}
+            onChange={(e) => setSenetRate(e.target.value)}
+            className="h-10 rounded-[12px] border border-[#E9D5FF] bg-white px-3 text-sm font-semibold text-[#142536] outline-none focus:border-[#A855F7]"
+          />
+        </div>
       </div>
 
-      {showAdd && (
-        <div className="mb-4 rounded-[16px] border border-[#FED7AA] bg-[#FFFBF5] p-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <input
-              type="date"
-              value={remDate}
-              onChange={(e) => setRemDate(e.target.value)}
-              className="h-10 rounded-[12px] border border-[#FED7AA] bg-white px-3 text-sm font-semibold text-[#142536] outline-none focus:border-[#F59E0B]"
-            />
-            <input
-              type="text"
-              value={remNote}
-              onChange={(e) => setRemNote(e.target.value)}
-              placeholder="Not (opsiyonel)"
-              className="h-10 rounded-[12px] border border-[#FED7AA] bg-white px-3 text-sm font-semibold text-[#142536] outline-none placeholder:text-slate-400 focus:border-[#F59E0B]"
-            />
-          </div>
-          <div className="mt-3 flex gap-2">
-            <button
-              onClick={handleAddReminder}
-              disabled={pending}
-              className="rounded-[12px] bg-[#B45309] px-4 py-2 text-xs font-black text-white hover:bg-[#92400E] disabled:opacity-50"
-            >
-              Kaydet
-            </button>
-            <button
-              onClick={() => setShowAdd(false)}
-              className="rounded-[12px] border border-[#FED7AA] bg-white px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50"
-            >
-              İptal
-            </button>
+      {senetPreview.length > 0 && (
+        <div className="mt-4">
+          <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-[#7C3AED]">Önizleme (her taksit tam bin TL, küsürat son taksite eklenir)</p>
+          <div className="overflow-x-auto rounded-[12px] border border-[#E9D5FF]">
+            <table className="w-full min-w-[360px] text-xs">
+              <thead className="bg-[#F3E8FF]">
+                <tr className="h-9">
+                  <th className="px-3 text-left font-black text-[#6D28D9]">#</th>
+                  <th className="px-3 text-left font-black text-[#6D28D9]">Vade Tarihi</th>
+                  <th className="px-3 text-left font-black text-[#6D28D9]">Tutar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {senetPreview.map((row, i) => (
+                  <tr key={i} className="h-10 border-t border-[#E9D5FF]">
+                    <td className="px-3 font-black text-[#142536]">{i + 1}</td>
+                    <td className="px-3 text-slate-600">
+                      {new Date(row.dueDate).toLocaleDateString('tr-TR')}
+                    </td>
+                    <td className="px-3 font-black text-[#0F2B3D]">₺{formatAmount(row.amount)}</td>
+                  </tr>
+                ))}
+                <tr className="h-10 border-t-2 border-[#C4B5FD] bg-[#F3E8FF]">
+                  <td className="px-3 font-black text-[#6D28D9]" colSpan={2}>Toplam</td>
+                  <td className="px-3 font-black text-[#6D28D9]">
+                    ₺{formatAmount(senetPreview.reduce((s, r) => s + r.amount, 0))}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      <div className="space-y-2">
-        {overdueInstallments.map((it) => (
-          <div key={`inst-${it.id}`} className="flex items-start gap-3 rounded-[14px] border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-            <IconAlertCircle />
-            <span>Gecikmiş taksit: {new Date(it.due_date).toLocaleDateString('tr-TR')} — ₺{formatAmount(it.amount)}</span>
-          </div>
-        ))}
-
-        {noPlan && (
-          <div className="flex items-start gap-3 rounded-[14px] border border-[#FED7AA] bg-[#FFF7E6] px-4 py-3 text-sm font-semibold text-[#B45309]">
-            <IconAlertTriangle />
-            <span>Kalan borç var ama henüz ödeme planı oluşturulmadı.</span>
-          </div>
-        )}
-
-        {activeReminders.map((r) => (
-          <div key={r.id} className="flex items-center gap-3 rounded-[14px] border border-[#FED7AA] bg-[#FFFBF5] px-4 py-3">
-            <span className="text-[11px] font-black text-[#B45309]">
-              {new Date(r.reminder_date).toLocaleDateString('tr-TR')}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#142536]">
-              {r.note || 'Hatırlatıcı'}
-            </span>
-            <button
-              onClick={() => run(() => markReminderDone(r.id))}
-              disabled={pending}
-              className="rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-black text-green-700 transition hover:bg-green-200 disabled:opacity-50"
-            >
-              Tamam
-            </button>
-            <button
-              onClick={() => run(() => deleteReminder(r.id))}
-              disabled={pending}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-            >
-              <IconTrash />
-            </button>
-          </div>
-        ))}
-
-        {overdueInstallments.length === 0 && !noPlan && activeReminders.length === 0 && (
-          <div className="rounded-[14px] border border-green-100 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
-            Tüm ödemeler güncel, bekleyen hatırlatıcı yok.
-          </div>
-        )}
-
-        {doneReminders.length > 0 && (
-          <details className="mt-2">
-            <summary className="cursor-pointer text-[11px] font-bold text-slate-400 hover:text-slate-600">
-              {doneReminders.length} tamamlanmış hatırlatıcı
-            </summary>
-            <div className="mt-2 space-y-1.5">
-              {doneReminders.map((r) => (
-                <div key={r.id} className="flex items-center gap-3 rounded-[12px] border border-slate-100 bg-slate-50 px-3 py-2 opacity-60">
-                  <span className="text-[11px] font-black text-slate-400">
-                    {new Date(r.reminder_date).toLocaleDateString('tr-TR')}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-400 line-through">
-                    {r.note || 'Hatırlatıcı'}
-                  </span>
-                  <button
-                    onClick={() => run(() => deleteReminder(r.id))}
-                    disabled={pending}
-                    className="flex h-6 w-6 items-center justify-center rounded-full text-slate-300 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                  >
-                    <IconTrash />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </details>
-        )}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          onClick={handleSenet}
+          disabled={pending || !senetPreview.length}
+          className="rounded-[12px] bg-[#7C3AED] px-5 py-2 text-xs font-black text-white hover:bg-[#6D28D9] disabled:opacity-50"
+        >
+          Planı Oluştur
+        </button>
+        <button
+          onClick={handlePrint}
+          disabled={!senetPreview.length}
+          className="inline-flex items-center gap-2 rounded-[12px] border border-[#E9D5FF] bg-white px-4 py-2 text-xs font-black text-[#7C3AED] hover:bg-[#FAF5FF] disabled:opacity-50"
+        >
+          <IconPrint />
+          Yazdır
+        </button>
       </div>
+
+      <SenetPrint patient={patient} clinic={clinic} title={senetTitle} rows={senetPreview} />
     </section>
   )
-}
-
-function IconReceipt() {
-  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 2v20l3-2 3 2 3-2 3 2 4-2V2z" /><path d="M8 7h8" /><path d="M8 11h8" /><path d="M8 15h5" /></svg>
-}
-
-function IconWallet() {
-  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 7V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-1" /><path d="M16 12h6v5h-6a2.5 2.5 0 0 1 0-5z" /></svg>
 }
 
 function IconAlertCircle() {
@@ -1167,14 +986,6 @@ function IconPlus() {
 
 function IconTrash() {
   return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5" /><path d="M14 11v5" /></svg>
-}
-
-function IconFileText() {
-  return <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M16 13H8" /><path d="M16 17H8" /></svg>
-}
-
-function IconFileTextLarge() {
-  return <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M16 13H8" /><path d="M16 17H8" /></svg>
 }
 
 function IconCalendar() {
@@ -1205,12 +1016,5 @@ function IconRobot() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2" /><path d="M12 11V7" /><circle cx="12" cy="5" r="2" /><path d="M7 15h.01M17 15h.01" /><path d="M9 19h6" /></svg>
 }
 
-function IconStethoscope() {
-  return <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3" /><path d="M8 15v1a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6v-4" /><circle cx="20" cy="10" r="2" /></svg>
-}
-
-function IconStethoscopeLarge() {
-  return <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3" /><path d="M8 15v1a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6v-4" /><circle cx="20" cy="10" r="2" /></svg>
-}
 
 export default HesapTab
