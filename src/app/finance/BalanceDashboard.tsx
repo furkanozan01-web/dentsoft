@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState, type ReactNode } from 'react'
+import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
 import type { FinDoctor, FinInstallment, FinPatient, FinTreatment, FinTx } from './FinanceClient'
 
 type Risk = 'low' | 'medium' | 'high' | 'overdue'
@@ -152,7 +153,7 @@ export default function BalanceDashboard({ patients, doctors, treatments, txs, i
   onPayClick: (id: number) => void
 }) {
   const today = useMemo(() => new Date().toLocaleDateString('en-CA'), [])
-  const [doctorFilter, setDoctorFilter] = useState('all')
+  const [doctorFilter, setDoctorFilter] = usePersistedPreference('dentsoft:last-doctor-filter-balance', 'all')
   const [clinicFilter, setClinicFilter] = useState('all')
   const [riskFilter, setRiskFilter] = useState<'all' | Risk>('all')
   const [sortKey, setSortKey] = useState<SortKey>('name')

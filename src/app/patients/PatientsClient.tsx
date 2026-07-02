@@ -9,6 +9,8 @@ import { createPatient, deletePatient, dismissImportantNotes, getAnamnesis } fro
 import { EMPTY_ANAMNESIS, type Anamnesis } from '@/lib/anamnesis'
 import { PATIENT_TABS as TABS } from './constants'
 import { toTitleCase } from '@/lib/format'
+import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
+import PatientSwitcher from './PatientSwitcher'
 import type {
   ClinicInfo,
   ClinicalNote,
@@ -71,6 +73,7 @@ export default function PatientsClient({
   const [patients, setPatients] = useState(initial)
   const listFilter = searchParams.get('filter')
   const [selected, setSelected] = useState<Patient | null>(null)
+  const [lastPatientId, setLastPatientId] = usePersistedPreference<number | null>('dentsoft:last-patient-id', null)
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     const tab = searchParams.get('tab') as TabId | null
     return tab && TABS.some((item) => item.id === tab) ? tab : 'liste'
@@ -268,25 +271,34 @@ export default function PatientsClient({
     setLoadingAnamnesis(false)
   }, [])
 
-  // URL'den patient_id ve tab parametrelerini oku → hasta seç ve sekmeye git
+  // URL'den patient_id ve tab parametrelerini oku → hasta seç ve sekmeye git.
+  // URL'de patient_id yoksa, tarayıcıda hatırlanan son hastaya düş.
   useEffect(() => {
-    const pid = searchParams.get('patient_id') ?? searchParams.get('id')
+    if (selected) return
+    const pid = searchParams.get('patient_id') ?? searchParams.get('id') ?? (lastPatientId ? String(lastPatientId) : null)
     const tab = searchParams.get('tab') as TabId | null
     if (!pid) return
     const p = patients.find((x) => x.id === Number(pid))
     if (!p) return
+    const fromUrl = Boolean(searchParams.get('patient_id') ?? searchParams.get('id'))
     queueMicrotask(() => {
       setSelected(p)
-      setActiveTab(tab && TABS.some((item) => item.id === tab) ? tab : 'hasta-karti')
+      setLastPatientId(p.id)
+      if (fromUrl) setActiveTab(tab && TABS.some((item) => item.id === tab) ? tab : 'hasta-karti')
       void loadFinancials(p.id, true)
       void loadAnamnesis(p.id)
       // Bakiye → "Ödeme Al" ile gelindiyse ödeme modalını aç
       if (searchParams.get('pay') === '1') setShowPaymentModal(true)
     })
-  }, [loadAnamnesis, loadFinancials, patients, searchParams])
+  }, [lastPatientId, loadAnamnesis, loadFinancials, patients, searchParams, selected, setLastPatientId])
 
   const handleTabChange = (tab: TabId) => {
-    if (tab !== 'liste' && !selected && !(tab === 'hasta-karti' && showCreateCard)) return
+    if (tab !== 'liste' && !selected && !(tab === 'hasta-karti' && showCreateCard)) {
+      // Henüz hasta seçilmediyse (ör. sayfa yeni açıldı) listedeki ilk hastaya düş.
+      const fallback = patients[0]
+      if (!fallback) return
+      loadPatientData(fallback)
+    }
     if (tab !== 'hasta-karti') setShowCreateCard(false)
     if (tab !== 'liste' && activeTab === 'liste' && selected) {
       void loadFinancials(selected.id, true)
@@ -297,6 +309,7 @@ export default function PatientsClient({
   // Sadece seç + verileri yükle (sekme değiştirmez) — listede vurgulanır.
   const loadPatientData = (p: Patient, showImportantReminder = false) => {
     setSelected(p)
+    setLastPatientId(p.id)
     loadFinancials(p.id, showImportantReminder)
     loadAnamnesis(p.id)
   }
@@ -398,8 +411,8 @@ export default function PatientsClient({
           </div>
         </div>
 
-        {/* Breadcrumb — sadece hasta seçiliyken */}
-        {selected && (
+        {/* Breadcrumb — hasta seçili olsun ya da olmasın görünür; arama ikonuyla hasta değiştirilebilir */}
+        {activeTab !== 'liste' && (
           <div className="flex items-center gap-1.5 text-xs mb-3">
             <button
               onClick={() => { setSelected(null); setActiveTab('liste') }}
@@ -411,15 +424,20 @@ export default function PatientsClient({
               <polyline points="9 18 15 12 9 6" />
             </svg>
             <span className="text-[#0F2B3D] font-semibold">
-              {selected.name} {selected.surname}
+              {selected ? `${selected.name} ${selected.surname}` : 'Hasta seçilmedi'}
             </span>
+            <PatientSwitcher
+              patients={patients}
+              currentPatientId={selected?.id ?? null}
+              onSelect={(p) => loadPatientData(p, true)}
+            />
           </div>
         )}
 
         {/* Tab bar */}
         <div className="flex items-center gap-7 overflow-x-auto border-b border-[#E7ECF2]">
           {TABS.map((tab) => {
-            const disabled = tab.id !== 'liste' && !selected && !(tab.id === 'hasta-karti' && showCreateCard)
+            const disabled = tab.id !== 'liste' && patients.length === 0 && !(tab.id === 'hasta-karti' && showCreateCard)
             return (
               <button
                 key={tab.id}
@@ -472,6 +490,7 @@ export default function PatientsClient({
             onSuccess={(patient) => {
               setShowCreateCard(false)
               setSelected(patient)
+              setLastPatientId(patient.id)
               setPatients((prev) => [patient, ...prev.filter((item) => item.id !== patient.id)])
               setActiveTab('hasta-karti')
               loadFinancials(patient.id)

@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { localDateValue } from '@/lib/format'
+import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
 import { addDoctorPayment, deleteDoctorPayment } from './actions'
 import type { DoctorPayment, FinDoctor, FinInstallment, FinPatient, FinTreatment, FinTx } from './FinanceClient'
 import { computeSummary, type DoctorSummary } from '@/lib/finance/hakedis'
@@ -57,7 +58,12 @@ export default function EarningsDashboard({ doctors, treatments, patients, txs, 
     return {...first,details:parts.flatMap(p=>p.details),gross:parts.reduce((s,p)=>s+p.gross,0),cost:parts.reduce((s,p)=>s+p.cost,0),net:parts.reduce((s,p)=>s+p.net,0),bonus:parts.reduce((s,p)=>s+p.bonus,0),entitlement:parts.reduce((s,p)=>s+p.entitlement,0),paid:parts.reduce((s,p)=>s+p.paid,0),remaining:parts.reduce((s,p)=>s+p.remaining,0),completedCount:parts.reduce((s,p)=>s+p.completedCount,0),fixedAmount:parts.reduce((s,p)=>s+p.fixedAmount,0),commissionAmount:parts.reduce((s,p)=>s+p.commissionAmount,0),guaranteeCompletion:parts.reduce((s,p)=>s+p.guaranteeCompletion,0),clinicNetProfit:parts.reduce((s,p)=>s+p.clinicNetProfit,0),profitShare:parts.reduce((s,p)=>s+p.profitShare,0)}
   }), [visibleDoctors, treatments, patients, txs, payments, profitByMonth, activeMonthKeys])
   const firstId = canSeeAll ? summaries[0]?.doctor.id ?? null : currentDoctorId
-  const [selectedId, setSelectedId] = useState<number | null>(firstId)
+  const [persistedSelectedId, setPersistedSelectedId] = usePersistedPreference<number | null>('dentsoft:last-doctor-filter-earnings', firstId)
+  const selectedId =
+    canSeeAll && persistedSelectedId !== null && summaries.some((s) => s.doctor.id === persistedSelectedId)
+      ? persistedSelectedId
+      : firstId
+  const setSelectedId = setPersistedSelectedId
   const [paying, setPaying] = useState<DoctorSummary | null>(null)
   const [showAllPayments, setShowAllPayments] = useState(false)
   const [pending, begin] = useTransition()

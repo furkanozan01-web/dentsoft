@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ConfirmModal'
 import { parseToKurus, formatAmount } from '@/lib/format'
+import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
 import {
   addTreatment,
   applyTreatmentAdjustment,
@@ -128,8 +129,12 @@ function OralTab({
     () => tariffProfiles.find((p) => p.is_default)?.id ?? tariffProfiles[0]?.id ?? null,
     [tariffProfiles]
   )
-  const [doctorId, setDoctorId] = useState<number | null>(doctors[0]?.id ?? null)
-  const [selectedProfileId, setSelectedProfileId] = useState<number | null>(defaultProfileId)
+  const [persistedDoctorId, setPersistedDoctorId] = usePersistedPreference<number | null>('dentsoft:last-doctor-id', doctors[0]?.id ?? null)
+  const doctorId = persistedDoctorId !== null && doctors.some((d) => d.id === persistedDoctorId) ? persistedDoctorId : doctors[0]?.id ?? null
+  const setDoctorId = setPersistedDoctorId
+  const [persistedProfileId, setPersistedProfileId] = usePersistedPreference<number | null>('dentsoft:last-tariff-profile-id', defaultProfileId)
+  const selectedProfileId = persistedProfileId !== null && tariffProfiles.some((p) => p.id === persistedProfileId) ? persistedProfileId : defaultProfileId
+  const setSelectedProfileId = setPersistedProfileId
   const [treatmentDate, setTreatmentDate] = useState<string>(() =>
     new Date().toISOString().slice(0, 10)
   )

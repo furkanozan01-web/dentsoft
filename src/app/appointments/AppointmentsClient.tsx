@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ConfirmModal'
+import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
 import {
   createAppointment,
   createPatientForAppointment,
@@ -220,7 +221,7 @@ export default function AppointmentsClient({
     searchParams.get('shift') === 'duty' ? 'duty' : 'work'
   )
   const [anchor, setAnchor] = useState(() => new Date())
-  const [doctorFilter, setDoctorFilter] = useState<'all' | number>('all')
+  const [doctorFilter, setDoctorFilter] = usePersistedPreference<'all' | number>('dentsoft:last-doctor-filter-appointments', 'all')
   const [branchFilter, setBranchFilter] = useState(branchName)
   const [treatmentFilter, setTreatmentFilter] = useState('all')
   const [appointments, setAppointments] = useState<Appointment[]>([])

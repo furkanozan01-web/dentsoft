@@ -20,6 +20,7 @@ import {
 } from './actions'
 import type { TariffProfile } from './actions'
 import { fmtPrice } from './helpers'
+import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
 import { BulkPriceModal, PriceHistoryModal, TariffCards, TreatmentVisual, VISUAL_SCHEMAS, inferTariffVisual } from './TariffEnhancements'
 import { SummaryLine, SettingsIconBox, UserStatCard, IconClipboard, IconCheckCircle, IconPlus, IconInfo, IconCalendar } from './SettingsSharedUI'
 import type { Branch, Tariff, TariffPriceHistory, R } from './types'
@@ -37,9 +38,16 @@ export default function TarifeTab({
   branches: Branch[]
   history: TariffPriceHistory[]
 }) {
-  const [activeProfileId, setActiveProfileId] = useState<number | null>(
-    tariffProfiles.find((p) => p.is_default)?.id ?? tariffProfiles[0]?.id ?? null
+  const defaultTariffProfileId = tariffProfiles.find((p) => p.is_default)?.id ?? tariffProfiles[0]?.id ?? null
+  const [persistedProfileId, setPersistedProfileId] = usePersistedPreference<number | null>(
+    'dentsoft:last-tariff-profile-id',
+    defaultTariffProfileId
   )
+  const activeProfileId =
+    persistedProfileId !== null && tariffProfiles.some((p) => p.id === persistedProfileId)
+      ? persistedProfileId
+      : defaultTariffProfileId
+  const setActiveProfileId = setPersistedProfileId
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'passive'>('all')
   const [editingPrice, setEditingPrice] = useState<{ id: number; val: string } | null>(null)
@@ -90,7 +98,7 @@ export default function TarifeTab({
         onChanged()
       })
     }
-  }, [delProfileState, tariffProfiles, onChanged])
+  }, [delProfileState, tariffProfiles, onChanged, setActiveProfileId])
   useEffect(() => {
     if ((renameState as R)?.success) {
       queueMicrotask(() => {
