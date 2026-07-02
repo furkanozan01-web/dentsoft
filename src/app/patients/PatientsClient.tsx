@@ -411,7 +411,7 @@ export default function PatientsClient({
           </div>
         </div>
 
-        {/* Breadcrumb — hasta seçili olsun ya da olmasın görünür; arama ikonuyla hasta değiştirilebilir */}
+        {/* Breadcrumb — hasta seçili olsun ya da olmasın görünür */}
         {activeTab !== 'liste' && (
           <div className="flex items-center gap-1.5 text-xs mb-3">
             <button
@@ -426,11 +426,6 @@ export default function PatientsClient({
             <span className="text-[#0F2B3D] font-semibold">
               {selected ? `${selected.name} ${selected.surname}` : 'Hasta seçilmedi'}
             </span>
-            <PatientSwitcher
-              patients={patients}
-              currentPatientId={selected?.id ?? null}
-              onSelect={(p) => loadPatientData(p, true)}
-            />
           </div>
         )}
 
@@ -458,6 +453,16 @@ export default function PatientsClient({
 
       {/* Content */}
       <div className="flex-1 px-8 py-5">
+        {activeTab !== 'liste' && (
+          <div className="mb-5">
+            <PatientSwitcher
+              patients={patients}
+              currentPatientId={selected?.id ?? null}
+              onSelect={(p) => loadPatientData(p, true)}
+            />
+          </div>
+        )}
+
         {activeTab === 'liste' && (
           <ListeTab
             patients={filtered}
@@ -503,8 +508,6 @@ export default function PatientsClient({
         {activeTab === 'hasta-karti' && selected && (
           <HastaKartiTab
             patient={selected}
-            patients={patients}
-            onSelectPatient={handleOpenPatient}
             treatments={treatments}
             transactions={transactions}
             loadingFinance={loadingFinance}
