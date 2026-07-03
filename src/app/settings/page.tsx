@@ -29,7 +29,7 @@ export default async function SettingsPage() {
     { data: clinic },
     { data: doctors },
     { data: profiles },
-    { data: tariffs },
+    { data: tariffs, error: tariffsError },
     { data: tariffProfiles },
     { data: branches },
     { data: tariffHistory },
@@ -86,6 +86,27 @@ export default async function SettingsPage() {
       .eq('clinic_id', clinicId),
   ])
 
+  let tariffRows = tariffs
+  if (tariffsError) {
+    const { data: compatibleTariffs } = await supabase
+      .from('tariffs')
+      .select('id, treatment_name, category, price, profile_id, is_active, currency, treatment_code')
+      .eq('clinic_id', clinicId)
+      .order('category')
+      .order('treatment_name')
+    tariffRows = (compatibleTariffs ?? []).map((item) => ({
+      ...item,
+      duration_minutes: null,
+      color: null,
+      visual_schema: null,
+      application_region: null,
+      vat_rate: 0,
+      vat_included: true,
+      branch_id: null,
+      price_updated_at: '',
+    }))
+  }
+
   // Auth bilgileri (email, son giriş, ban durumu) — service role ile.
   // auth.users PostgREST'e açık olmadığından admin API kullanılır.
   const authMap = new Map<string, { email: string | null; lastLogin: string | null; active: boolean }>()
@@ -136,6 +157,24 @@ export default async function SettingsPage() {
       is_active: a?.active ?? true,
     } as Profile
   }).concat(pendingProfiles)
+  const linkedDoctorIds = new Set(enrichedProfiles.map((item) => item.doctor_id).filter((id): id is number => id !== null))
+  for (const doctor of doctors ?? []) {
+    if (linkedDoctorIds.has(doctor.id)) continue
+    enrichedProfiles.push({
+      id: `doctor:${doctor.id}`,
+      full_name: doctor.name,
+      role: 'hekim',
+      created_at: new Date(0).toISOString(),
+      doctor_id: doctor.id,
+      email: doctor.email,
+      last_login: null,
+      is_active: doctor.status === 'active',
+      branch_id: doctor.branch_id,
+      active_branch_id: doctor.branch_id,
+      access_level: 'branch',
+      is_pending: true,
+    })
+  }
   const doctorViews = (doctors ?? []).map(({ tc_enc, ...doctor }) => ({
     ...doctor,
     tc_identity_no: tc_enc ? tryDecrypt(tc_enc) : null,
@@ -179,7 +218,7 @@ export default async function SettingsPage() {
           doctors={safeDoctors as Doctor[]}
           profiles={enrichedProfiles}
           branches={(branches ?? []) as Branch[]}
-          tariffs={(tariffs ?? []) as Tariff[]}
+          tariffs={(tariffRows ?? []) as Tariff[]}
           tariffProfiles={(tariffProfiles ?? []) as TariffProfile[]}
           tariffHistory={(tariffHistory ?? []).map((row) => ({ ...row, changed_by_name: enrichedProfiles.find((item) => item.id === row.changed_by)?.full_name ?? null })) as TariffPriceHistory[]}
           appointmentTypes={(appointmentTypes ?? []) as AppointmentType[]}

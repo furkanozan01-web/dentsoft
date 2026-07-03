@@ -167,7 +167,11 @@ export default function LedgerDashboard({
         </div>
       )}
 
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <DateField label="Başlangıç" value={start} onChange={setStart} />
+          <DateField label="Bitiş" value={end} onChange={setEnd} />
+        </div>
         <div className="flex rounded-xl bg-slate-100 p-1">
           {(Object.keys(PERIOD_LABEL) as Period[]).map((p) => (
             <button key={p} onClick={() => setPeriod(p)} className={`rounded-lg px-3 py-1.5 text-[11px] font-black ${period === p ? 'bg-white text-[#0F766E] shadow-sm' : 'text-slate-400'}`}>
@@ -178,7 +182,9 @@ export default function LedgerDashboard({
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <PeriodTableCard title="Gelir" tone="green" total={totalIncome} rows={incomeRows} />
+        <PeriodTableCard title="Gelir" tone="green" total={totalIncome} rows={incomeRows}>
+          <TransactionTable rows={income} tone="green" patientMap={patientMap} doctorMap={doctorMap} partnerMap={partnerMap} pending={pending} onPatientClick={onPatientClick} onRemove={remove} />
+        </PeriodTableCard>
         <PeriodTableCard title="Gider" tone="red" total={totalExpense} netLabel="Net Kâr" netValue={net}
           headerAction={
             <div className="flex flex-wrap gap-2">
@@ -187,37 +193,10 @@ export default function LedgerDashboard({
               <button onClick={() => setModal('doctor')} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-600">+ Hekim</button>
             </div>
           }
-          rows={expenseRows} />
+          rows={expenseRows}>
+          <TransactionTable rows={expense} tone="red" patientMap={patientMap} doctorMap={doctorMap} partnerMap={partnerMap} pending={pending} onPatientClick={onPatientClick} onRemove={remove} />
+        </PeriodTableCard>
       </div>
-
-      <section className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
-        <SectionHeader
-          title="Gelir-Gider Kayıtları"
-          subtitle={`${dateText(start)} – ${dateText(end)} arasında ${filtered.length} kayıt`}
-          action={
-            <div className="flex flex-wrap items-end gap-3">
-              <DateField label="Başlangıç" value={start} onChange={setStart} />
-              <DateField label="Bitiş" value={end} onChange={setEnd} />
-            </div>
-          }
-        />
-        <div className="max-h-[420px] overflow-auto">
-          <table className="w-full min-w-[850px] text-sm">
-            <thead className="sticky top-0 bg-slate-50 text-left text-[11px] font-black uppercase tracking-wide text-slate-400"><tr>{['Tarih', 'Tür', 'Açıklama', 'Bağlantı', 'Yöntem', 'Tutar', ''].map((h) => <th key={h} className="px-5 py-3">{h}</th>)}</tr></thead>
-            <tbody>{filtered.length === 0 ? <tr><td colSpan={7} className="p-10 text-center text-sm font-semibold text-slate-400">Bu tarih aralığında kayıt bulunmuyor.</td></tr> : filtered.map((t) => (
-              <tr key={t.id} className="border-t border-slate-100 hover:bg-slate-50/70">
-                <td className="px-5 py-4 font-semibold text-slate-500">{dateText(t.transaction_date)}</td>
-                <td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-black ${t.type === 'payment' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>{t.type === 'payment' ? 'Gelir' : 'Gider'}</span></td>
-                <td className="max-w-[260px] truncate px-5 py-4 font-bold text-[#142536]">{t.description || t.category || '—'}</td>
-                <td className="px-5 py-4 text-xs font-semibold text-slate-500">{t.patient_id ? <button className="hover:underline" onClick={() => onPatientClick(t.patient_id!)}>{patientMap.get(t.patient_id) || `Hasta #${t.patient_id}`}</button> : t.doctor_id ? `Dt. ${doctorMap.get(t.doctor_id) || t.doctor_id}` : t.partner_id ? partnerMap.get(t.partner_id) : '—'}</td>
-                <td className="px-5 py-4 text-xs font-semibold text-slate-500">{METHOD_LABEL[t.method || ''] || t.method || '—'}</td>
-                <td className={`px-5 py-4 text-right font-black ${t.type === 'payment' ? 'text-emerald-600' : 'text-red-600'}`}>{t.type === 'payment' ? '+' : '-'}{money(t.amount)}</td>
-                <td className="px-5 py-4 text-right">{t.type === 'expense' && <button disabled={pending} onClick={() => remove(t.id)} className="text-xs font-bold text-slate-400 hover:text-red-600">Sil</button>}</td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      </section>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <ChartCard title="Aylara Göre Gelir-Gider" subtitle={`${end.slice(0, 4)} yılı aylık karşılaştırması`}>
@@ -243,7 +222,7 @@ function DateField({ label, value, onChange }: { label: string; value: string; o
 }
 
 function PeriodTableCard({
-  title, tone, total, rows, netLabel, netValue, headerAction,
+  title, tone, total, rows, netLabel, netValue, headerAction, children,
 }: {
   title: string
   tone: 'green' | 'red'
@@ -252,6 +231,7 @@ function PeriodTableCard({
   netLabel?: string
   netValue?: number
   headerAction?: ReactNode
+  children?: ReactNode
 }) {
   const toneClass = tone === 'green' ? 'text-emerald-600 bg-emerald-50' : 'text-red-600 bg-red-50'
   return (
@@ -289,8 +269,37 @@ function PeriodTableCard({
           </tbody>
         </table>
       </div>
+      {children}
     </section>
   )
+}
+
+function TransactionTable({ rows, tone, patientMap, doctorMap, partnerMap, pending, onPatientClick, onRemove }: {
+  rows: FinTx[]
+  tone: 'green' | 'red'
+  patientMap: Map<number, string>
+  doctorMap: Map<number, string>
+  partnerMap: Map<number, string>
+  pending: boolean
+  onPatientClick: (id: number) => void
+  onRemove: (id: number) => void
+}) {
+  return <div className="border-t border-slate-100">
+    <div className="px-6 py-4"><h4 className="text-xs font-black uppercase tracking-wide text-slate-500">{tone === 'green' ? 'Gelir' : 'Gider'} Kayıtları</h4><p className="mt-1 text-[11px] font-semibold text-slate-400">{rows.length} kayıt</p></div>
+    <div className="max-h-[420px] overflow-auto">
+      <table className="w-full min-w-[720px] text-xs">
+        <thead className="sticky top-0 bg-slate-50 text-left text-[10px] font-black uppercase tracking-wide text-slate-400"><tr>{['Tarih', 'Açıklama', 'Bağlantı', 'Yöntem', 'Tutar', ''].map((h) => <th key={h} className="px-4 py-3">{h}</th>)}</tr></thead>
+        <tbody>{rows.length === 0 ? <tr><td colSpan={6} className="p-8 text-center font-semibold text-slate-400">Bu tarih aralığında kayıt bulunmuyor.</td></tr> : rows.map((t) => <tr key={t.id} className="border-t border-slate-100 hover:bg-slate-50/70">
+          <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-500">{dateText(t.transaction_date)}</td>
+          <td className="max-w-[220px] truncate px-4 py-3 font-bold text-[#142536]">{t.description || t.category || '—'}</td>
+          <td className="px-4 py-3 font-semibold text-slate-500">{t.patient_id ? <button className="hover:underline" onClick={() => onPatientClick(t.patient_id!)}>{patientMap.get(t.patient_id) || `Hasta #${t.patient_id}`}</button> : t.doctor_id ? `Dt. ${doctorMap.get(t.doctor_id) || t.doctor_id}` : t.partner_id ? partnerMap.get(t.partner_id) : '—'}</td>
+          <td className="px-4 py-3 font-semibold text-slate-500">{METHOD_LABEL[t.method || ''] || t.method || '—'}</td>
+          <td className={`whitespace-nowrap px-4 py-3 text-right font-black ${tone === 'green' ? 'text-emerald-600' : 'text-red-600'}`}>{tone === 'green' ? '+' : '-'}{money(t.amount)}</td>
+          <td className="px-4 py-3 text-right">{tone === 'red' && <button disabled={pending} onClick={() => onRemove(t.id)} className="font-bold text-slate-400 hover:text-red-600">Sil</button>}</td>
+        </tr>)}</tbody>
+      </table>
+    </div>
+  </div>
 }
 
 function SectionHeader({ title, subtitle, action }: { title: string; subtitle: string; action?: ReactNode }) {

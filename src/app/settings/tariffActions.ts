@@ -641,6 +641,7 @@ export async function updateTariffItemPrice(itemId: number, priceKurus: number):
     .eq('clinic_id', clinicId)
   if (error) return { error: error.message }
   revalidatePath('/settings')
+  revalidatePath('/patients')
   return { success: true }
 }
 
@@ -735,6 +736,30 @@ export async function updateTariffItemColor(itemId: number, color: string | null
   return { success: true }
 }
 
+export async function updateTariffItemDetails(itemId: number, input: { name: string; price: number; visualSchema: string }): Promise<R> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Yetkisiz erişim' }
+  const adminErr = requireAdmin(ctx)
+  if (adminErr) return adminErr
+  const name = input.name.trim()
+  if (!Number.isInteger(itemId) || itemId <= 0) return { error: 'Geçersiz tarife kalemi' }
+  if (!name) return { error: 'Tedavi adı zorunludur' }
+  if (!Number.isFinite(input.price) || input.price < 0) return { error: 'Geçerli bir fiyat girin' }
+  const validSchemas = ['exam','cleaning','filling','root-canal','crown','porcelain','zirconium','emax','extraction','surgery','implant','bone-graft','sinus-lift','whitening','orthodontics','prosthesis','removable','total-prosthesis','night-guard','smile','pedo','periodontal']
+  const selectedSchemas = input.visualSchema.split('+').filter(Boolean)
+  if (!selectedSchemas.length || selectedSchemas.some((schema) => !validSchemas.includes(schema))) return { error: 'Geçersiz tedavi şeması' }
+
+  const { error } = await ctx.supabase.from('tariffs').update({
+    treatment_name: name,
+    price: Math.round(input.price),
+    visual_schema: input.visualSchema,
+  }).eq('id', itemId).eq('clinic_id', ctx.clinicId)
+  if (error) return { error: error.message }
+  revalidatePath('/settings')
+  revalidatePath('/patients')
+  return { success: true }
+}
+
 export async function addTariffItemToProfile(_prev: R, formData: FormData): Promise<R> {
   const ctx = await getCtx()
   if (!ctx) return { error: 'Yetkisiz erişim' }
@@ -787,5 +812,6 @@ export async function addTariffItemToProfile(_prev: R, formData: FormData): Prom
   })
   if (error) return { error: error.message }
   revalidatePath('/settings')
+  revalidatePath('/patients')
   return { success: true }
 }

@@ -20,8 +20,11 @@ export interface ToothFlags {
   canal?: boolean
   filling?: boolean
   crown?: boolean
+  crownMaterial?: 'porcelain' | 'zirconium'
   implant?: boolean
   extracted?: boolean
+  graft?: boolean
+  removableProsthesis?: boolean
   // Diyagnoz sembolleri
   mineCaryo?: boolean
   dentinCaryo?: boolean
@@ -30,6 +33,7 @@ export interface ToothFlags {
   periapical?: boolean
   poorCanal?: boolean
 }
+export type ToothBooleanFlag = Exclude<keyof ToothFlags, 'crownMaterial'>
 
 // FDI kök sayıları (referans tablodan birebir)
 const ROOTS: Record<number, number> = {
@@ -58,7 +62,7 @@ const BASE_DIMS: Record<ToothType, { cw: number; vbw: number }> = {
   molar: { cw: 40, vbw: 55 },
 }
 const VBH = 100
-const TOOTH_HEIGHT = 116
+const TOOTH_HEIGHT = 78
 const J = 55 // mine-sement sınırı
 const NECK = 61
 const OCC = 92 // insizal / okluzal uç
@@ -299,6 +303,8 @@ function ToothGraphic({
 
   const baseStroke = '#AF5963'
   const detailStroke = '#C5AE78'
+  const crownColor = flags.crownMaterial === 'zirconium' ? '#5EEAD4' : '#93C5FD'
+  const crownStroke = flags.crownMaterial === 'zirconium' ? '#0F9F91' : '#3B82C4'
 
   const inner: React.ReactNode[] = []
 
@@ -340,8 +346,8 @@ function ToothGraphic({
     inner.push(
       <line key="axis" x1={cx} y1={J - 2} x2={cx} y2={apexY + 1} stroke="#7C8893" strokeWidth={0.5} strokeOpacity={0.6} />
     )
-    // Abutment (dayanak) + porselen kron
-    inner.push(
+    // Kuron ayrıca seçildiyse vida üzerine dayanak ve porselen kuron eklenir.
+    if (flags.crown) inner.push(
       <path
         key="abut"
         d={`M ${cx - cw * 0.16} ${J + 1} L ${cx - cw * 0.1} ${J - 2} L ${cx + cw * 0.1} ${J - 2} L ${cx + cw * 0.16} ${J + 1} Z`}
@@ -350,17 +356,17 @@ function ToothGraphic({
         strokeWidth={0.7}
       />
     )
-    inner.push(
-      <path key="icrown" d={crownPath(type, cx, cw, num)} fill="url(#tc-porcelain)" stroke="#A9A48F" strokeWidth={1} strokeLinejoin="round" />
+    if (flags.crown) inner.push(
+      <path key="icrown" d={crownPath(type, cx, cw, num)} fill={crownColor} stroke={crownStroke} strokeWidth={1.1} strokeLinejoin="round" />
     )
   } else {
     // ---- DOĞAL DİŞ ----
-    inner.push(
+    if (!flags.removableProsthesis) inner.push(
       ...rs.map((rt, i) => (
         <path key={`r${i}`} d={rt.path} fill="url(#tc-dentin)" stroke={baseStroke} strokeWidth={1.1} strokeLinejoin="round" />
       ))
     )
-    inner.push(
+    if (!flags.removableProsthesis) inner.push(
       ...rs.map((rt, i) => (
         <path
           key={`rh${i}`}
@@ -378,7 +384,7 @@ function ToothGraphic({
       <path
         key="crown"
         d={crownPath(type, cx, cw, num)}
-        fill={flags.crown ? 'url(#tc-porcelain)' : 'url(#tc-enamel)'}
+        fill={flags.crown ? crownColor : flags.removableProsthesis ? 'url(#tc-porcelain)' : 'url(#tc-enamel)'}
         stroke={baseStroke}
         strokeWidth={1.15}
         strokeLinejoin="round"
@@ -391,7 +397,7 @@ function ToothGraphic({
         fill="url(#tc-crown-dentin)"
         stroke="#D6BE88"
         strokeWidth={0.55}
-        fillOpacity={flags.crown ? 0.32 : 0.78}
+        fillOpacity={flags.crown ? 0 : flags.removableProsthesis ? 0.32 : 0.78}
       />
     )
     inner.push(
@@ -408,13 +414,13 @@ function ToothGraphic({
       ))
     )
     // Kanallar (belirgin kırmızı, pulpa tabanından kök ucuna)
-    inner.push(
+    if (!flags.removableProsthesis) inner.push(
       ...rs.map((rt, i) => (
         <path key={`cn${i}`} d={canalPath(rt.topX, rt.tipX, rt.tipY, cw)} fill={canalFill} stroke={canalStroke} strokeWidth={0.6} fillOpacity={1} />
       ))
     )
     // Pulpa odası
-    inner.push(<path key="pulp" d={pulpPath(type, cx, cw)} fill={canalFill} stroke={canalStroke} strokeWidth={0.6} fillOpacity={1} />)
+    if (!flags.removableProsthesis) inner.push(<path key="pulp" d={pulpPath(type, cx, cw)} fill={canalFill} stroke={canalStroke} strokeWidth={0.6} fillOpacity={1} />)
     inner.push(
       <path
         key="cej"
@@ -447,14 +453,14 @@ function ToothGraphic({
     // Kron / kaplama: yarı saydam porselen kep + altın marj çizgisi
     if (flags.crown) {
       inner.push(
-        <path key="cap" d={crownPath(type, cx, cw, num)} fill="#FCFBF6" fillOpacity={0.35} stroke="#C9A24B" strokeWidth={1.4} strokeLinejoin="round" />
+        <path key="cap" d={crownPath(type, cx, cw, num)} fill={crownColor} fillOpacity={0.96} stroke={crownStroke} strokeWidth={1.4} strokeLinejoin="round" />
       )
       inner.push(
         <path
           key="margin"
           d={`M ${cx - cw / 2 + 1} ${J + 4} Q ${cx} ${J + 7} ${cx + cw / 2 - 1} ${J + 4}`}
           fill="none"
-          stroke="#C9A24B"
+          stroke={crownStroke}
           strokeWidth={1}
           strokeOpacity={0.9}
         />
@@ -582,9 +588,22 @@ function ToothDefs() {
   )
 }
 
+export type OralTreatmentSymbolType = 'natural' | 'implant' | 'crown' | 'filling' | 'root-canal'
+
+export function OralTreatmentSymbol({ types, crownMaterial = 'porcelain', className = '' }: { types: OralTreatmentSymbolType[]; crownMaterial?: 'porcelain' | 'zirconium'; className?: string }) {
+  const flags: ToothFlags = {}
+  for (const type of types) {
+    if (type === 'implant') flags.implant = true
+    else if (type === 'crown') { flags.crown = true; flags.crownMaterial = crownMaterial }
+    else if (type === 'filling') flags.filling = true
+    else if (type === 'root-canal') flags.canal = true
+  }
+  return <div className={`relative flex items-center justify-center ${className}`}><ToothDefs /><ToothGraphic num={14} jaw="upper" flags={flags} /></div>
+}
+
 const hasTx = (f: ToothFlags) =>
   f.canal || f.filling || f.crown || f.implant || f.extracted ||
-  f.mineCaryo || f.dentinCaryo || f.kret || f.nerve || f.periapical || f.poorCanal
+  f.graft || f.removableProsthesis || f.mineCaryo || f.dentinCaryo || f.kret || f.nerve || f.periapical || f.poorCanal
 
 function NumberRow({
   teeth,
@@ -622,7 +641,7 @@ function NumberRow({
               pointerEvents: hidden ? 'none' : 'auto',
               ...(marked && markerColor ? { color: markerColor, backgroundColor: markerColor + '22' } : {}),
             }}
-            className={`rounded py-0.5 text-[12px] font-bold transition-colors ${
+            className={`shrink-0 rounded py-0.5 text-[12px] font-bold transition-colors ${
               isSel
                 ? 'bg-[#E6FFFA] text-[#0F766E]'
                 : marked
@@ -666,15 +685,19 @@ function TeethRow({
         const isSel = selected === n
         const hidden = hiddenTeeth?.has(n)
         const marked = markedTeeth?.has(n)
+        const { vbw } = toothDims(n)
+        const cellWidth = (TOOTH_HEIGHT * vbw) / VBH
         return (
           <button
             key={n}
             onClick={() => onSelect(n)}
             style={{
+              width: cellWidth,
+              minWidth: cellWidth,
               ...(hidden ? { visibility: 'hidden' as const, pointerEvents: 'none' as const } : {}),
               ...(marked && markerColor ? { boxShadow: `0 0 0 2.5px ${markerColor}`, borderRadius: '12px' } : {}),
             }}
-            className={`group flex items-center justify-center rounded-xl px-0.5 transition-[background-color,filter,box-shadow] duration-150 hover:bg-white/55 hover:drop-shadow-[0_10px_16px_rgba(15,43,61,0.10)] ${
+            className={`group flex shrink-0 items-center justify-center rounded-xl p-0 transition-[background-color,filter,box-shadow] duration-150 hover:bg-white/55 hover:drop-shadow-[0_10px_16px_rgba(15,43,61,0.10)] ${
               isSel
                 ? 'bg-[#E6FFFA]/80 ring-2 ring-[#5FD3C1] shadow-[0_8px_18px_rgba(13,148,136,0.14)]'
                 : ''
@@ -708,14 +731,20 @@ export default function ToothChart({
   markedTeeth?: Set<number>
   markerColor?: string
 }) {
+  const graftMarkers = [...states.entries()].filter(([, flags]) => flags.graft).map(([tooth]) => {
+    const row = upperTeeth.includes(tooth) ? upperTeeth : lowerTeeth
+    const index = row.indexOf(tooth)
+    return index < 0 ? null : ((index + 0.5) / row.length) * 100
+  }).filter((value): value is number => value !== null)
   return (
-    <div className="overflow-x-auto rounded-[22px] border border-[#F1E6D0] bg-[linear-gradient(180deg,#FFFDF8_0%,#FFF9EF_100%)] px-5 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+    <div className="overflow-hidden rounded-[22px] border border-[#F1E6D0] bg-[linear-gradient(180deg,#FFFDF8_0%,#FFF9EF_100%)] px-2 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] sm:px-4">
       <ToothDefs />
-      <div className="mx-auto min-w-[980px] px-3 py-2">
+      <div className="mx-auto w-full max-w-[760px] py-2">
         <NumberRow teeth={upperTeeth} selected={selected} states={states} onSelect={onSelect} hiddenTeeth={hiddenTeeth} markedTeeth={markedTeeth} markerColor={markerColor} />
         <TeethRow teeth={upperTeeth} jaw="upper" selected={selected} states={states} onSelect={onSelect} hiddenTeeth={hiddenTeeth} markedTeeth={markedTeeth} markerColor={markerColor} />
         <div className="relative my-3 h-3 overflow-hidden rounded-full border-y border-[#C0526A]/20 bg-[#F8DDE1]/45">
           <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-[#C0526A]/35" />
+          {graftMarkers.map((left, index) => <span key={`${left}-${index}`} className="absolute top-1/2 flex -translate-x-1/2 -translate-y-1/2 gap-0.5" style={{ left: `${left}%` }}><i className="h-1.5 w-1.5 rounded-full border border-slate-300 bg-white shadow-sm"/><i className="h-1 w-1 rounded-full border border-slate-300 bg-white"/><i className="h-1.5 w-1.5 rounded-full border border-slate-300 bg-white shadow-sm"/></span>)}
         </div>
         <TeethRow teeth={lowerTeeth} jaw="lower" selected={selected} states={states} onSelect={onSelect} hiddenTeeth={hiddenTeeth} markedTeeth={markedTeeth} markerColor={markerColor} />
         <NumberRow teeth={lowerTeeth} selected={selected} states={states} onSelect={onSelect} hiddenTeeth={hiddenTeeth} markedTeeth={markedTeeth} markerColor={markerColor} />
@@ -725,7 +754,7 @@ export default function ToothChart({
 }
 
 // Diyagnoz adından sembol türünü sınıflandırır
-export function classifyDiagnosis(name: string): keyof ToothFlags | null {
+export function classifyDiagnosis(name: string): ToothBooleanFlag | null {
   const s = name.toLocaleLowerCase('tr')
   if (s.includes('çekilmiş') || s.includes('cekilmis')) return 'extracted'
   if (s.startsWith('mine')) return 'mineCaryo'
@@ -738,7 +767,7 @@ export function classifyDiagnosis(name: string): keyof ToothFlags | null {
 }
 
 // Tedavi adından sembol türünü sınıflandırır
-export function classifyTreatment(name: string): keyof ToothFlags | null {
+export function classifyTreatment(name: string): ToothBooleanFlag | null {
   const s = name.toLocaleLowerCase('tr')
   if (s.includes('implant')) return 'implant'
   if (s.includes('çekim') || s.includes('cekim') || s.includes('ekstraksiyon')) return 'extracted'

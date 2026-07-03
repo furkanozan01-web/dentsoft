@@ -54,7 +54,7 @@ export default async function PatientsPage() {
       .order('name'),
     supabase
       .from('tariffs')
-      .select('id, treatment_name, category, price, profile_id, is_active')
+      .select('id, treatment_name, category, price, profile_id, is_active, visual_schema')
       .eq('clinic_id', clinicId)
       .order('category')
       .order('treatment_name'),

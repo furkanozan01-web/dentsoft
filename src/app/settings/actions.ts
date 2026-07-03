@@ -27,6 +27,7 @@ export {
 
 export {
   addUserToAllowlist,
+  syncDoctorsToUsers,
   updateUserRole,
   setUserActive,
   getRolePermissions,
@@ -58,7 +59,7 @@ export {
   updateTariffItemPrice,
   bulkUpdateTariffPrices,
   updateTariffItemDuration,
-  updateTariffItemColor,
+  updateTariffItemDetails,
   addTariffItemToProfile,
 } from './tariffActions'
 export type { TariffProfile } from './tariffActions'

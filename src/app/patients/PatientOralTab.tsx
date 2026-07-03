@@ -62,6 +62,29 @@ function tariffBranch(category: string | null) {
   return 'Diğer'
 }
 
+function treatmentFlags(schema: string | null | undefined, name: string): ToothFlags {
+  const flags: ToothFlags = {}
+  const schemas = (schema || '').split('+').filter(Boolean)
+  if (!schemas.length) {
+    const inferred = classifyTreatment(name)
+    if (inferred) flags[inferred] = true
+    return flags
+  }
+  for (const item of schemas) {
+    if (item === 'implant') flags.implant = true
+    else if (['crown', 'porcelain', 'emax', 'prosthesis'].includes(item)) { flags.crown = true; flags.crownMaterial = 'porcelain' }
+    else if (item === 'zirconium') { flags.crown = true; flags.crownMaterial = 'zirconium' }
+    else if (item === 'filling') flags.filling = true
+    else if (item === 'root-canal') flags.canal = true
+    else if (item === 'extraction') flags.extracted = true
+    else if (item === 'bone-graft') flags.graft = true
+    else if (['removable', 'total-prosthesis'].includes(item)) flags.removableProsthesis = true
+  }
+  return flags
+}
+
+function isUpperTooth(n: number) { return (n >= 11 && n <= 28) || (n >= 51 && n <= 65) }
+
 function parseTab(tab: ActivePlanTab): {
   kind: 'diyagnoz' | 'planlama' | 'faz' | 'tedavi'
   num: number
@@ -227,11 +250,11 @@ function OralTab({
     const m = new Map<number, ToothFlags>()
     for (const t of treatments) {
       if (!t.tooth) continue
-      const kind = classifyTreatment(t.treatment_name)
-      if (!kind) continue
-      const cur = m.get(t.tooth) ?? {}
-      cur[kind] = true
-      m.set(t.tooth, cur)
+      const next = treatmentFlags(t.tariff?.visual_schema, t.treatment_name)
+      if (next.removableProsthesis) {
+        const jaw = isUpperTooth(t.tooth) ? FDI.upperPermanent.slice(1, -1) : FDI.lowerPermanent.slice(1, -1)
+        for (const tooth of jaw) m.set(tooth, { ...(m.get(tooth) ?? {}), removableProsthesis: true })
+      } else m.set(t.tooth, { ...(m.get(t.tooth) ?? {}), ...next })
     }
     return m
   }, [treatments])
@@ -253,13 +276,12 @@ function OralTab({
   }, [plans])
 
   // ── Çekilen / eksik dişler (tedavi + diyagnoz) ──
-  const isUpperTooth = (n: number) => (n >= 11 && n <= 28) || (n >= 51 && n <= 65)
   const extractedTeeth = useMemo(() => {
     const set = new Set<number>()
     for (const t of treatments) {
       if (!t.tooth) continue
       const n = t.treatment_name.toLowerCase()
-      if (n.includes('çekim') || n.includes('cekim')) set.add(t.tooth)
+      if (n.includes('çekim') || n.includes('cekim') || t.tariff?.visual_schema?.split('+').includes('extraction')) set.add(t.tooth)
     }
     // Diyagnoz: çekilmiş diş
     diagToothStates.forEach((flags, tooth) => {

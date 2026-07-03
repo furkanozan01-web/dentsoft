@@ -57,6 +57,7 @@ export interface Treatment {
   status: string
   tooth: number | null
   doctor: { name: string } | null
+  tariff: { visual_schema: string | null } | null
 }
 
 export interface Installment {
@@ -110,6 +111,7 @@ export interface TariffOption {
   price: number
   profile_id: number | null
   is_active: boolean | null
+  visual_schema: string | null
 }
 
 export interface TariffProfile {

@@ -7,6 +7,59 @@ import { getCtx, requireAdmin, type R } from './actionsShared'
 // ---- Kullanıcı (allowlist) ----
 const VALID_ROLES = ['bashekim', 'responsible_manager', 'hekim', 'asistan']
 
+export async function syncDoctorsToUsers(): Promise<R & { synced?: number }> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Yetkisiz erişim' }
+  const adminErr = requireAdmin(ctx)
+  if (adminErr) return adminErr
+  const admin = createAdminClient()
+  const { data: doctors, error: doctorError } = await ctx.supabase.from('doctors').select('id, name, email, branch_id, status').eq('clinic_id', ctx.clinicId)
+  if (doctorError) return { error: doctorError.message }
+  const { data: existingInvites, error: inviteReadError } = await admin.from('admin_email_allowlist').select('email, role, access_level').eq('clinic_id', ctx.clinicId)
+  if (inviteReadError) return { error: inviteReadError.message }
+  const inviteMap = new Map((existingInvites ?? []).map((invite) => [invite.email.toLowerCase(), invite]))
+  const { data: authData } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+  const authByEmail = new Map((authData?.users ?? []).filter((user) => user.email).map((user) => [user.email!.toLowerCase(), user]))
+  let synced = 0
+
+  for (const doctor of doctors ?? []) {
+    const email = doctor.email?.trim().toLowerCase()
+    if (!email) continue
+    const existingInvite = inviteMap.get(email)
+    const preservedRole = existingInvite?.role === 'bashekim' || existingInvite?.role === 'responsible_manager' ? existingInvite.role : 'hekim'
+    const { error: inviteError } = await admin.from('admin_email_allowlist').upsert({
+      email,
+      clinic_id: ctx.clinicId,
+      role: preservedRole,
+      full_name: doctor.name,
+      doctor_id: doctor.id,
+      branch_id: doctor.branch_id,
+      access_level: existingInvite?.access_level === 'all' ? 'all' : 'branch',
+      is_active: doctor.status === 'active',
+    }, { onConflict: 'email' })
+    if (inviteError) return { error: inviteError.message }
+
+    const authUser = authByEmail.get(email)
+    if (authUser) {
+      const { data: currentProfile } = await admin.from('profiles').select('role, access_level').eq('id', authUser.id).maybeSingle()
+      const profileRole = currentProfile?.role === 'bashekim' || currentProfile?.role === 'responsible_manager' ? currentProfile.role : 'hekim'
+      const { error: profileError } = await admin.from('profiles').update({
+        clinic_id: ctx.clinicId,
+        role: profileRole,
+        doctor_id: doctor.id,
+        branch_id: doctor.branch_id,
+        active_branch_id: doctor.branch_id,
+        access_level: currentProfile?.access_level === 'all' ? 'all' : 'branch',
+        updated_at: new Date().toISOString(),
+      }).eq('id', authUser.id)
+      if (profileError) return { error: profileError.message }
+    }
+    synced += 1
+  }
+  revalidatePath('/settings')
+  return { success: true, synced }
+}
+
 export async function addUserToAllowlist(_prev: R, formData: FormData): Promise<R> {
   const ctx = await getCtx()
   if (!ctx) return { error: 'Yetkisiz erişim' }
@@ -382,4 +435,3 @@ export async function resetUserPermissions(userId: string): Promise<R> {
   revalidatePath('/settings')
   return { success: true }
 }
-

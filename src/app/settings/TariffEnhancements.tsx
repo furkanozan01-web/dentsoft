@@ -6,11 +6,13 @@ import { localDateValue } from '@/lib/format'
 import { bulkUpdateTariffPrices } from './actions'
 import { fmtPrice } from './helpers'
 import type { Branch, Tariff, TariffPriceHistory } from './types'
+import { OralTreatmentSymbol, type OralTreatmentSymbolType } from '@/app/patients/ToothChart'
 
 export const VISUAL_SCHEMAS = [
   ['exam', 'Muayene'], ['cleaning', 'Diş taşı temizliği'], ['filling', 'Dolgu'], ['root-canal', 'Kanal tedavisi'],
-  ['crown', 'Kaplama / Kron'], ['zirconium', 'Zirkonyum'], ['emax', 'E-max'], ['extraction', 'Diş çekimi'],
+  ['crown', 'Porselen Kuron'], ['zirconium', 'Zirkonyum Kuron'], ['emax', 'E-max'], ['extraction', 'Diş çekimi'],
   ['surgery', 'Cerrahi işlem'], ['implant', 'İmplant'], ['whitening', 'Beyazlatma'], ['orthodontics', 'Ortodonti'],
+  ['bone-graft', 'Greft'], ['sinus-lift', 'Sinüs lift'],
   ['prosthesis', 'Protez'], ['removable', 'Hareketli protez'], ['total-prosthesis', 'Total protez'], ['night-guard', 'Gece plağı'],
   ['smile', 'Gülüş tasarımı'], ['pedo', 'Pedodonti'], ['periodontal', 'Periodontal tedavi'],
 ] as const
@@ -21,6 +23,7 @@ const COLORS: Record<string, string> = {
   crown: 'from-sky-50 to-blue-100 text-sky-700', zirconium: 'from-slate-50 to-slate-200 text-slate-700',
   emax: 'from-fuchsia-50 to-pink-100 text-fuchsia-700', extraction: 'from-red-50 to-rose-100 text-red-700',
   surgery: 'from-rose-50 to-red-100 text-rose-700', implant: 'from-indigo-50 to-violet-100 text-indigo-700',
+  'bone-graft': 'from-orange-50 to-amber-100 text-orange-700', 'sinus-lift': 'from-cyan-50 to-blue-100 text-cyan-700',
   whitening: 'from-white to-cyan-50 text-cyan-600', orthodontics: 'from-purple-50 to-violet-100 text-purple-700',
   prosthesis: 'from-blue-50 to-indigo-100 text-blue-700', removable: 'from-pink-50 to-rose-100 text-pink-700',
   'total-prosthesis': 'from-violet-50 to-purple-100 text-violet-700', 'night-guard': 'from-slate-50 to-blue-100 text-slate-700',
@@ -34,7 +37,9 @@ export function inferTariffVisual(item: Pick<Tariff, 'visual_schema' | 'treatmen
   if (/implant|abutment|all-on/.test(text)) return 'implant'
   if (/kanal|endodont|fiber post/.test(text)) return 'root-canal'
   if (/dolgu|inley|onley|restor/.test(text)) return 'filling'
-  if (/çekim|gömülü|cerrahi|rezeksiyon|kist|greft|sinüs/.test(text)) return /çekim|gömülü/.test(text) ? 'extraction' : 'surgery'
+  if (/greft/.test(text)) return 'bone-graft'
+  if (/sinüs|sinus/.test(text)) return 'sinus-lift'
+  if (/çekim|gömülü|cerrahi|rezeksiyon|kist/.test(text)) return /çekim|gömülü/.test(text) ? 'extraction' : 'surgery'
   if (/zirkonyum/.test(text)) return 'zirconium'
   if (/e-max|emax/.test(text)) return 'emax'
   if (/protez|köprü|porselen|kron|lamina/.test(text)) return 'prosthesis'
@@ -46,7 +51,12 @@ export function inferTariffVisual(item: Pick<Tariff, 'visual_schema' | 'treatmen
 }
 
 export function TreatmentVisual({ schema, className = '' }: { schema: string | null; className?: string }) {
-  const key = schema || 'exam'
+  const schemas = (schema || 'exam').split('+').filter(Boolean)
+  const key = schemas[0] || 'exam'
+  if (key === 'bone-graft') return <div className={`relative flex items-center justify-center overflow-hidden bg-gradient-to-br ${COLORS[key]} ${className}`} aria-label="Greft"><svg viewBox="0 0 120 80" className="h-full w-full"><path d="M8 48 Q60 28 112 48 L112 68 Q60 52 8 68Z" fill="#E9C9B8" stroke="#C58E7B" strokeWidth="2"/>{[24,34,45,57,68,80,91].map((x,index)=><circle key={x} cx={x} cy={48+(index%2)*7} r={index%3===0?4:3} fill="white" stroke="#A8B2BC" strokeWidth="1.2"/>)}</svg></div>
+  if (key === 'removable' || key === 'total-prosthesis') return <div className={`relative flex items-center justify-center overflow-hidden bg-gradient-to-br ${COLORS[key]} ${className}`} aria-label="Hareketli protez"><svg viewBox="0 0 160 72" className="h-full w-full"><path d="M13 45 Q80 8 147 45" fill="none" stroke="#E9A8AF" strokeWidth="8" strokeLinecap="round"/>{Array.from({length:14},(_,index)=>{const x=19+index*9.4;const y=39-Math.sin((index/13)*Math.PI)*20;return <path key={index} d={`M${x-4} ${y} Q${x} ${y-5} ${x+4} ${y} L${x+3} ${y+10} Q${x} ${y+13} ${x-3} ${y+10}Z`} fill="#FCFBF6" stroke="#B9A982" strokeWidth="1"/>})}</svg></div>
+  const oralTypes = schemas.map((item): OralTreatmentSymbolType | null => item === 'implant' ? 'implant' : item === 'crown' || item === 'zirconium' || item === 'emax' || item === 'prosthesis' ? 'crown' : item === 'filling' ? 'filling' : item === 'root-canal' ? 'root-canal' : item === 'exam' ? 'natural' : null).filter((item): item is OralTreatmentSymbolType => item !== null)
+  if (oralTypes.length) return <div className={`relative overflow-hidden bg-gradient-to-br ${COLORS[key] ?? COLORS.exam} ${className}`} aria-label="Tedavi şeması"><OralTreatmentSymbol types={oralTypes} crownMaterial={schemas.includes('zirconium') ? 'zirconium' : 'porcelain'} className="h-full w-full" /></div>
   const implant = key === 'implant'
   const ortho = key === 'orthodontics'
   const extraction = key === 'extraction' || key === 'surgery'
@@ -59,16 +69,18 @@ export function TreatmentVisual({ schema, className = '' }: { schema: string | n
       {key === 'root-canal' && <path d="M48 32v32m0-14-10 17m10-17 10 17"/>}
       {key === 'filling' && <path d="M35 27c8 5 18 5 26 0l-4 18H39l-4-18Z" fill="currentColor" fillOpacity=".25"/>}
       {key === 'whitening' && <><path d="m72 12 2 7 7 2-7 2-2 7-2-7-7-2 7-2 2-7Z"/><path d="m19 31 1 5 5 1-5 1-1 5-1-5-5-1 5-1 1-5Z"/></>}
+      {key === 'bone-graft' && <><path d="M31 57c6-9 28-9 34 0"/><circle cx="38" cy="51" r="3"/><circle cx="48" cy="48" r="3"/><circle cx="58" cy="51" r="3"/></>}
+      {key === 'sinus-lift' && <><path d="M27 38c12-12 30-12 42 0"/><path d="M31 50c10-8 24-8 34 0"/><path d="m48 66-7-8h14l-7 8Z" fill="currentColor" fillOpacity=".22"/></>}
     </svg>
   </div>
 }
 
-export function TariffCards({ items, branches, onHistory }: { items: Tariff[]; branches: Branch[]; onHistory: (item: Tariff) => void }) {
+export function TariffCards({ items, branches, onHistory, onEdit }: { items: Tariff[]; branches: Branch[]; onHistory: (item: Tariff) => void; onEdit: (item: Tariff) => void }) {
   return <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{items.map((item) => <article key={item.id} className={`overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg ${item.is_active ? '' : 'opacity-60'}`}>
     <TreatmentVisual schema={inferTariffVisual(item)} className="h-32 w-full" />
     <div className="p-5">
       <div className="flex items-start justify-between gap-3"><div><span className="rounded-full bg-[#E8F8F5] px-2.5 py-1 text-[10px] font-black uppercase text-[#138B7E]">{item.category || 'Diğer'}</span><h3 className="mt-3 font-black text-[#142536]">{item.treatment_name}</h3><p className="mt-1 text-xs font-semibold text-slate-400">{item.treatment_code || 'Kodsuz'} · {item.application_region || 'Bölge belirtilmedi'}</p></div><span className={`h-2.5 w-2.5 rounded-full ${item.is_active ? 'bg-emerald-400' : 'bg-slate-300'}`} /></div>
-      <div className="mt-5 flex items-end justify-between"><div><p className="text-[10px] font-black uppercase text-slate-400">Güncel fiyat</p><p className="text-xl font-black text-[#142536]">{fmtPrice(item.price, item.currency)}</p><p className="text-[10px] font-bold text-slate-400">KDV %{item.vat_rate} · {item.vat_included ? 'dahil' : 'hariç'}</p></div><button onClick={() => onHistory(item)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-500 hover:border-[#5FD3C1] hover:text-[#138B7E]">Fiyat geçmişi</button></div>
+      <div className="mt-5 flex items-end justify-between gap-3"><div><p className="text-[10px] font-black uppercase text-slate-400">Güncel fiyat</p><p className="text-xl font-black text-[#142536]">{fmtPrice(item.price, item.currency)}</p><p className="text-[10px] font-bold text-slate-400">KDV %{item.vat_rate} · {item.vat_included ? 'dahil' : 'hariç'}</p></div><div className="flex gap-2"><button onClick={() => onEdit(item)} className="rounded-xl bg-[#142536] px-3 py-2 text-xs font-black text-white">Düzenle</button><button onClick={() => onHistory(item)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-500 hover:border-[#5FD3C1] hover:text-[#138B7E]">Geçmiş</button></div></div>
       <p className="mt-4 border-t border-slate-100 pt-3 text-[10px] font-semibold text-slate-400">{item.branch_id ? branches.find((b) => b.id === item.branch_id)?.name ?? 'Şube tarifesi' : 'Tüm klinik'} · {new Date(item.price_updated_at).toLocaleDateString('tr-TR')}</p>
     </div>
   </article>)}</div>

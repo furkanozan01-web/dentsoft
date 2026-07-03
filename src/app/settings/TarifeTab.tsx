@@ -15,7 +15,7 @@ import {
   toggleTariffItemActive,
   updateTariffItemPrice,
   updateTariffItemDuration,
-  updateTariffItemColor,
+  updateTariffItemDetails,
   addTariffItemToProfile,
 } from './actions'
 import type { TariffProfile } from './actions'
@@ -61,6 +61,7 @@ export default function TarifeTab({
   const [viewMode, setViewMode] = useState<'list' | 'cards'>('list')
   const [showBulk, setShowBulk] = useState(false)
   const [historyItem, setHistoryItem] = useState<Tariff | null>(null)
+  const [editingItem, setEditingItem] = useState<Tariff | null>(null)
   const [transition, startTransition] = useTransition()
   const confirm = useConfirm()
 
@@ -179,14 +180,6 @@ export default function TarifeTab({
       const res = await updateTariffItemDuration(item.id, val)
       if (res?.error) toast.error(res.error)
       else { setEditingDuration(null); onChanged() }
-    })
-  }
-
-  const handleColorSave = (item: Tariff, color: string) => {
-    startTransition(async () => {
-      const res = await updateTariffItemColor(item.id, color)
-      if (res?.error) toast.error(res.error)
-      else onChanged()
     })
   }
 
@@ -379,7 +372,7 @@ export default function TarifeTab({
             <button onClick={() => setShowBulk(true)} className="h-12 rounded-2xl bg-[#1EAEA0] px-5 text-sm font-black text-white shadow-sm hover:bg-[#178F84]">Toplu Fiyat Değiştir</button>
           </div>
 
-          {viewMode === 'cards' && <TariffCards items={filtered} branches={branches} onHistory={setHistoryItem} />}
+          {viewMode === 'cards' && <TariffCards items={filtered} branches={branches} onHistory={setHistoryItem} onEdit={setEditingItem} />}
 
           {/* Tarife grupları */}
           {grouped.size === 0 && (
@@ -404,67 +397,17 @@ export default function TarifeTab({
                   className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-[#2DD4BF] border border-[#2DD4BF]/40 rounded-lg hover:bg-[#2DD4BF]/10 transition-colors"
                 >
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  Ekle
+                  Tedavi Ekle
                 </button>
               </div>
 
-              {/* İnline ekleme formu */}
-              {showAddItem === category && (
-                <form action={addItemAction} className="flex items-end gap-2 px-5 py-3 bg-[#2DD4BF]/5 border-b border-[#2DD4BF]/20">
-                  <input type="hidden" name="profile_id" value={activeProfile.id} />
-                  <input type="hidden" name="category" value={category} />
-                  <div className="flex-1 min-w-0">
-                    <label className="block text-[10px] font-medium text-gray-400 mb-1">Tedavi Adı *</label>
-                    <input name="treatment_name" required placeholder="Örn: Dolgu" className="w-full px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2DD4BF]/30" />
-                  </div>
-                  <div className="w-28">
-                    <label className="block text-[10px] font-medium text-gray-400 mb-1">Kod</label>
-                    <input name="treatment_code" placeholder="08-999" className="w-full px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2DD4BF]/30" />
-                  </div>
-                  <div className="w-28">
-                    <label className="block text-[10px] font-medium text-gray-400 mb-1">Fiyat (KDV dahil)</label>
-                    <input name="price" required placeholder="500" className="w-full px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2DD4BF]/30" />
-                  </div>
-                  <div className="w-16">
-                    <label className="block text-[10px] font-medium text-gray-400 mb-1">Renk</label>
-                    <input name="color" type="color" defaultValue="#B5EAD7" className="h-8 w-full rounded-lg border border-gray-200 cursor-pointer" />
-                  </div>
-                  <div className="w-36">
-                    <label className="block text-[10px] font-medium text-gray-400 mb-1">Tedavi Şeması</label>
-                    <select name="visual_schema" className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs">{VISUAL_SCHEMAS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select>
-                  </div>
-                  <div className="w-28"><label className="block text-[10px] font-medium text-gray-400 mb-1">Uygulama Bölgesi</label><input name="application_region" placeholder="Tek diş" className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs" /></div>
-                  <div className="w-20"><label className="block text-[10px] font-medium text-gray-400 mb-1">KDV (%)</label><input name="vat_rate" type="number" min="0" max="100" defaultValue="0" className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs" /></div>
-                  <input type="hidden" name="vat_included" value="true" />
-                  <div className="w-28"><label className="block text-[10px] font-medium text-gray-400 mb-1">Şube</label><select name="branch_id" className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs"><option value="">Tüm klinik</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></div>
-                  <div className="w-20">
-                    <label className="block text-[10px] font-medium text-gray-400 mb-1">Para Birimi</label>
-                    <select name="currency" className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none">
-                      <option>TRY</option>
-                      <option>EUR</option>
-                      <option>USD</option>
-                    </select>
-                  </div>
-                  <button type="submit" disabled={addItemPending}
-                    className="px-3 py-1.5 bg-[#2DD4BF] text-[#0F2B3D] text-xs font-semibold rounded-lg hover:bg-[#26b8a5] transition-colors disabled:opacity-60">
-                    {addItemPending ? '…' : 'Ekle'}
-                  </button>
-                  <button type="button" onClick={() => setShowAddItem(null)}
-                    className="px-2.5 py-1.5 border border-gray-200 text-gray-500 text-xs rounded-lg hover:bg-gray-50 transition-colors">
-                    İptal
-                  </button>
-                  {(addItemState as R)?.error && (
-                    <span className="text-xs text-red-500">{(addItemState as R)!.error}</span>
-                  )}
-                </form>
-              )}
+              {showAddItem === category && <AddTreatmentModal profileId={activeProfile.id} category={category} action={addItemAction} pending={addItemPending} error={(addItemState as R)?.error} onClose={() => setShowAddItem(null)} />}
 
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
                     <th className="w-10 px-4 py-2.5" />
                     <th className="text-left px-4 py-2.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wide">Tedavi</th>
-                    <th className="text-left px-3 py-2.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wide">Renk</th>
                     <th className="text-left px-3 py-2.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wide hidden md:table-cell">Kod</th>
                     <th className="text-right px-3 py-2.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wide hidden lg:table-cell">Süre</th>
                     <th className="text-right px-4 py-2.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wide">Ücret (KDV dahil)</th>
@@ -481,22 +424,12 @@ export default function TarifeTab({
                           onClick={() => handleToggle(t.id)}
                           disabled={transition}
                           title={t.is_active ? 'Pasif yap' : 'Aktif yap'}
-                          className={`w-8 h-5 rounded-full transition-colors relative flex-shrink-0 ${t.is_active ? 'bg-[#2DD4BF]' : 'bg-gray-200'} disabled:cursor-not-allowed`}
+                          className={`relative h-6 w-10 flex-shrink-0 rounded-full transition-colors ${t.is_active ? 'bg-emerald-500' : 'bg-red-500'} disabled:cursor-not-allowed`}
                         >
-                          <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${t.is_active ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                          <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${t.is_active ? 'translate-x-4' : 'translate-x-0'}`} />
                         </button>
                       </td>
                       <td className="px-4 py-3 text-[#0F2B3D] text-sm"><div className="flex items-center gap-3"><TreatmentVisual schema={inferTariffVisual(t)} className="h-11 w-14 flex-none rounded-xl"/><div><p className="font-bold">{t.treatment_name}</p><p className="mt-0.5 text-[10px] font-semibold text-slate-400">{t.application_region || 'Bölge belirtilmedi'} · KDV %{t.vat_rate} {t.vat_included ? 'dahil' : 'hariç'}</p></div></div></td>
-                      <td className="px-3 py-3">
-                        <input
-                          type="color"
-                          value={t.color ?? '#B5EAD7'}
-                          onChange={(e) => handleColorSave(t, e.target.value)}
-                          disabled={transition}
-                          className="h-7 w-10 rounded-lg border border-gray-200 cursor-pointer disabled:opacity-50"
-                          title="Renk kodu"
-                        />
-                      </td>
                       <td className="px-3 py-3 text-xs text-gray-400 hidden md:table-cell font-mono">{t.treatment_code ?? '—'}</td>
                       {/* Süre — tıklanınca input */}
                       <td className="px-3 py-3 text-right hidden lg:table-cell">
@@ -560,6 +493,7 @@ export default function TarifeTab({
                         )}
                       </td>
                       <td className="px-3 py-3">
+                        <button type="button" onClick={() => setEditingItem(t)} className="mb-1 flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-[#E8F8F5] hover:text-[#138B7E]" title="Tedaviyi düzenle">✎</button>
                         <button type="button" onClick={() => setHistoryItem(t)} className="mb-1 flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-[#138B7E]" title="Fiyat geçmişi">↻</button>
                         <button
                           type="button"
@@ -735,6 +669,7 @@ export default function TarifeTab({
       )}
       {showBulk && activeProfile && <BulkPriceModal profileId={activeProfile.id} items={profileItems} branches={branches} onClose={() => setShowBulk(false)} onChanged={onChanged} />}
       {historyItem && <PriceHistoryModal item={historyItem} history={history} onClose={() => setHistoryItem(null)} />}
+      {editingItem && <TreatmentEditModal item={editingItem} onClose={() => setEditingItem(null)} onSaved={() => { setEditingItem(null); onChanged() }} />}
     </div>
   )
 }
@@ -742,6 +677,36 @@ export default function TarifeTab({
 
 function IconSearch() {
   return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+}
+
+function TreatmentEditModal({ item, onClose, onSaved }: { item: Tariff; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState(item.treatment_name)
+  const [price, setPrice] = useState(String(item.price / 100))
+  const [schemas, setSchemas] = useState<string[]>((item.visual_schema || inferTariffVisual(item)).split('+').filter(Boolean))
+  const [pending, start] = useTransition()
+  const save = () => {
+    const normalized = Number(price.replace(/\./g, '').replace(',', '.').replace(/[^0-9.]/g, ''))
+    if (!name.trim()) { toast.error('Tedavi adı zorunludur'); return }
+    if (!Number.isFinite(normalized) || normalized < 0) { toast.error('Geçerli bir fiyat girin'); return }
+    start(async () => {
+      const result = await updateTariffItemDetails(item.id, { name, price: Math.round(normalized * 100), visualSchema: schemas.join('+') })
+      if (result?.error) { toast.error(result.error); return }
+      toast.success('Tedavi güncellendi')
+      onSaved()
+    })
+  }
+  const field = 'mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#142536] outline-none focus:border-[#5FD3C1]'
+  const toggleSchema = (id: string) => setSchemas((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+  const schemaValue = schemas.join('+')
+  return <div className="fixed inset-0 z-50 flex items-center justify-center p-4"><button aria-label="Kapat" onClick={onClose} className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm" /><section className="relative max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-[26px] bg-white shadow-2xl"><header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-6 py-5"><div><h2 className="text-lg font-black text-[#142536]">Tedaviyi Düzenle</h2><p className="mt-1 text-xs font-semibold text-slate-400">İsim, fiyat ve Oral görünümünde kullanılacak tedavi sembolleri</p></div><button onClick={onClose} className="h-9 w-9 rounded-xl bg-slate-100 font-black">×</button></header><div className="p-6"><div className="grid gap-4 md:grid-cols-2"><label className="block text-xs font-black text-slate-500">Tedavi adı<input value={name} onChange={(e) => setName(e.target.value)} className={field} /></label><label className="block text-xs font-black text-slate-500">Fiyat ({item.currency})<input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" className={field} /></label></div><div className="mt-6"><p className="text-xs font-black text-slate-500">Hazır tedavi sembolleri</p><p className="mt-1 text-[11px] font-semibold text-slate-400">Birden fazla sembol seçilebilir. Örneğin implant + kuron aynı dişte üst üste gösterilir.</p><div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">{VISUAL_SCHEMAS.map(([id, label]) => { const selected = schemas.includes(id); return <button key={id} type="button" onClick={() => toggleSchema(id)} className={`overflow-hidden rounded-2xl border-2 text-left transition ${selected ? 'border-[#1EAEA0] bg-[#E8F8F5] shadow-md' : 'border-slate-200 bg-white hover:border-slate-300'}`}><TreatmentVisual schema={id} className="h-24 w-full" /><span className={`block px-3 py-2 text-center text-[11px] font-black ${selected ? 'text-[#0F766E]' : 'text-slate-600'}`}>{label}</span></button> })}</div></div><div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Birleşik ön izleme</p><div className="mt-3 flex items-center gap-4"><TreatmentVisual schema={schemaValue} className="h-28 w-36 rounded-2xl border border-slate-200 bg-white" /><div><p className="font-black text-[#142536]">{name || 'Tedavi adı'}</p><p className="mt-1 text-xs font-semibold text-slate-400">{schemas.map((id) => VISUAL_SCHEMAS.find(([key]) => key === id)?.[1]).filter(Boolean).join(' + ') || 'Sembol seçilmedi'}</p></div></div></div></div><footer className="sticky bottom-0 flex gap-3 border-t border-slate-100 bg-white px-6 py-5"><button onClick={onClose} className="h-11 flex-1 rounded-xl border border-slate-200 font-black text-slate-500">İptal</button><button onClick={save} disabled={pending || !schemas.length} className="h-11 flex-1 rounded-xl bg-[#142536] font-black text-white disabled:opacity-50">{pending ? 'Kaydediliyor…' : 'Kaydet'}</button></footer></section></div>
+}
+
+function AddTreatmentModal({ profileId, category, action, pending, error, onClose }: { profileId: number; category: string; action: (payload: FormData) => void; pending: boolean; error?: string; onClose: () => void }) {
+  const [schemas, setSchemas] = useState<string[]>(['exam'])
+  const toggle = (id: string) => setSchemas((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+  const schemaValue = schemas.join('+')
+  const field = 'mt-1.5 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-[#5FD3C1]'
+  return <div className="fixed inset-0 z-50 flex items-center justify-center p-4"><button type="button" aria-label="Kapat" onClick={onClose} className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm"/><form action={action} className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[24px] bg-white shadow-2xl"><input type="hidden" name="profile_id" value={profileId}/><input type="hidden" name="category" value={category}/><input type="hidden" name="visual_schema" value={schemaValue}/><header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4"><div><h2 className="font-black text-[#142536]">Tedavi Ekle</h2><p className="mt-1 text-xs font-semibold text-slate-400">{category}</p></div><button type="button" onClick={onClose} className="h-8 w-8 rounded-lg bg-slate-100">×</button></header><div className="grid gap-5 p-5 md:grid-cols-[1fr_150px]"><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-black text-slate-500 sm:col-span-2">Tedavi adı<input name="treatment_name" required className={field}/></label><label className="text-xs font-black text-slate-500">Kod<input name="treatment_code" className={field}/></label><label className="text-xs font-black text-slate-500">Fiyat<input name="price" required inputMode="decimal" className={field}/></label><label className="text-xs font-black text-slate-500">Para birimi<select name="currency" className={field}><option>TRY</option><option>EUR</option><option>USD</option></select></label><label className="text-xs font-black text-slate-500">Uygulama bölgesi<input name="application_region" placeholder="Tek diş" className={field}/></label></div><div><p className="mb-2 text-[10px] font-black uppercase text-slate-400">Ön izleme</p><TreatmentVisual schema={schemaValue} className="h-32 w-full rounded-2xl border border-slate-200"/></div></div><div className="border-t border-slate-100 px-5 py-4"><p className="text-xs font-black text-slate-500">Tedavi sembolleri</p><p className="mt-1 text-[10px] font-semibold text-slate-400">Birden fazla seçilebilir.</p><div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6">{VISUAL_SCHEMAS.map(([id,label])=>{const selected=schemas.includes(id);return <button key={id} type="button" onClick={()=>toggle(id)} className={`overflow-hidden rounded-xl border-2 ${selected?'border-[#1EAEA0] bg-[#E8F8F5]':'border-slate-200'}`}><TreatmentVisual schema={id} className="h-14 w-full"/><span className="block truncate px-1 py-1.5 text-[9px] font-black text-slate-600">{label}</span></button>})}</div></div>{error&&<p className="mx-5 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-600">{error}</p>}<footer className="sticky bottom-0 flex gap-3 border-t border-slate-100 bg-white px-5 py-4"><button type="button" onClick={onClose} className="h-10 flex-1 rounded-xl border border-slate-200 font-black text-slate-500">İptal</button><button type="submit" disabled={pending||!schemas.length} className="h-10 flex-1 rounded-xl bg-[#142536] font-black text-white disabled:opacity-50">{pending?'Ekleniyor…':'Tedaviyi Ekle'}</button></footer></form></div>
 }
 
 function TariffDateCard({ title, value, icon }: { title: string; value: string; icon: ReactNode }) {

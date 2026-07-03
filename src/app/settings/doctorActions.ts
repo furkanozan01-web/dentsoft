@@ -47,6 +47,33 @@ type DoctorPayload = {
 
 type SanitizedDoctor = Omit<DoctorPayload, 'create_user_account' | 'user_access_level' | 'tc_identity_no'> & { tc_enc: string | null }
 
+async function syncDoctorUser(input: { clinicId: number; doctorId: number; row: SanitizedDoctor; accessLevel?: string }): Promise<string | null> {
+  if (!input.row.email) return null
+  const admin = createAdminClient()
+  const normalizedEmail = input.row.email.toLowerCase()
+  const { data: existingInvite } = await admin.from('admin_email_allowlist').select('clinic_id, access_level').eq('email', normalizedEmail).maybeSingle()
+  if (existingInvite && existingInvite.clinic_id !== input.clinicId) return 'Bu e-posta başka bir kliniğe kayıtlı'
+  const accessLevel = input.accessLevel === 'all' || (!input.accessLevel && existingInvite?.access_level === 'all') ? 'all' : 'branch'
+
+  await admin.from('admin_email_allowlist').delete().eq('clinic_id', input.clinicId).eq('doctor_id', input.doctorId).neq('email', normalizedEmail)
+  const { error: inviteError } = await admin.from('admin_email_allowlist').upsert({
+    email: normalizedEmail, clinic_id: input.clinicId, role: 'hekim', full_name: input.row.name,
+    doctor_id: input.doctorId, branch_id: input.row.branch_id, access_level: accessLevel, is_active: input.row.status === 'active',
+  }, { onConflict: 'email' })
+  if (inviteError) return inviteError.message
+
+  const { data: authUsers } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+  const existingUser = authUsers.users.find((user) => user.email?.toLowerCase() === normalizedEmail)
+  if (existingUser) {
+    const { error: profileError } = await admin.from('profiles').update({
+      clinic_id: input.clinicId, role: 'hekim', doctor_id: input.doctorId, branch_id: input.row.branch_id,
+      active_branch_id: input.row.branch_id, access_level: accessLevel, updated_at: new Date().toISOString(),
+    }).eq('id', existingUser.id)
+    if (profileError) return profileError.message
+  }
+  return null
+}
+
 // Girdiyi normalize eder + doğrular (hem add hem update kullanır).
 function sanitizeDoctor(input: DoctorPayload): { error?: string; row?: SanitizedDoctor } {
   const name = input.name?.trim()
@@ -126,35 +153,10 @@ export async function addDoctor(input: DoctorPayload): Promise<R> {
   }
   const { data: doctor, error } = await supabase.from('doctors').insert({ clinic_id: clinicId, ...row }).select('id').single()
   if (error || !doctor) return { error: error?.message ?? 'Hekim oluşturulamadı' }
-  if (input.create_user_account) {
-    if (!row.email) {
-      await supabase.from('doctors').delete().eq('id', doctor.id).eq('clinic_id', clinicId)
-      return { error: 'Kullanıcı hesabı için hekim e-postası zorunludur' }
-    }
-    const admin = createAdminClient()
-    const normalizedEmail = row.email.toLowerCase()
-    const { data: existingInvite } = await admin.from('admin_email_allowlist').select('clinic_id').eq('email', normalizedEmail).maybeSingle()
-    if (existingInvite && existingInvite.clinic_id !== clinicId) {
-      await supabase.from('doctors').delete().eq('id', doctor.id).eq('clinic_id', clinicId)
-      return { error: 'Bu e-posta başka bir kliniğe kayıtlı' }
-    }
-    const { error: inviteError } = await admin.from('admin_email_allowlist').upsert({
-      email: normalizedEmail, clinic_id: clinicId, role: 'hekim', full_name: row.name,
-      doctor_id: doctor.id, branch_id: row.branch_id, access_level: input.user_access_level === 'all' ? 'all' : 'branch', is_active: row.status === 'active',
-    }, { onConflict: 'email' })
-    if (inviteError) {
-      await supabase.from('doctors').delete().eq('id', doctor.id).eq('clinic_id', clinicId)
-      return { error: inviteError.message }
-    }
-    const { data: authUsers } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
-    const existingUser = authUsers.users.find((user) => user.email?.toLowerCase() === normalizedEmail)
-    if (existingUser) {
-      await admin.from('profiles').update({
-        clinic_id: clinicId, role: 'hekim', doctor_id: doctor.id, branch_id: row.branch_id,
-        active_branch_id: row.branch_id, access_level: input.user_access_level === 'all' ? 'all' : 'branch',
-        updated_at: new Date().toISOString(),
-      }).eq('id', existingUser.id)
-    }
+  const userSyncError = await syncDoctorUser({ clinicId, doctorId: doctor.id, row, accessLevel: input.user_access_level })
+  if (userSyncError) {
+    await supabase.from('doctors').delete().eq('id', doctor.id).eq('clinic_id', clinicId)
+    return { error: userSyncError }
   }
   revalidatePath('/settings')
   return { success: true }
@@ -178,6 +180,8 @@ export async function updateDoctor(id: number, input: DoctorPayload): Promise<R>
     .eq('clinic_id', clinicId)
 
   if (error) return { error: error.message }
+  const userSyncError = await syncDoctorUser({ clinicId, doctorId: id, row, accessLevel: input.user_access_level })
+  if (userSyncError) return { error: userSyncError }
   if (row.status === 'passive') {
     const admin = createAdminClient()
     const { data: linkedProfiles } = await admin.from('profiles').select('id').eq('clinic_id', clinicId).eq('doctor_id', id)
@@ -228,4 +232,3 @@ export async function toggleMesulMudur(doctorId: number, value: boolean): Promis
   revalidatePath('/finance')
   return { success: true }
 }
-

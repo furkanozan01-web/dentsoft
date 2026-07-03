@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { SETTINGS_TABS as TABS } from './constants'
 import type { AppointmentType, ClinicSettings, Doctor, Profile, SettingsTab, Tariff, TariffPriceHistory } from './types'
@@ -13,6 +13,7 @@ import TarifeTab from './TarifeTab'
 import RandevuTab from './RandevuTab'
 export type { Branch, ClinicSettings, DayHours, Doctor, Profile, Tariff, TariffProfile } from './types'
 import type { Branch } from './types'
+import { syncDoctorsToUsers } from './actions'
 
 // ---- Main ----
 export default function SettingsClient({
@@ -44,10 +45,19 @@ export default function SettingsClient({
 }) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('klinik')
   const [showUserModal, setShowUserModal] = useState(false)
+  const usersSynced = useRef(false)
 
   const router = useRouter()
 
   const refresh = useCallback(() => router.refresh(), [router])
+
+  useEffect(() => {
+    if (activeTab !== 'kullanici' || !isAdmin || usersSynced.current) return
+    usersSynced.current = true
+    void syncDoctorsToUsers().then((result) => {
+      if (result?.success) refresh()
+    })
+  }, [activeTab, isAdmin, refresh])
 
   return (
     <div className="flex min-h-full flex-col bg-[#F6F8FB]">

@@ -169,8 +169,7 @@ export default function BalanceDashboard({ patients, doctors, treatments, txs, i
   const priority = [...rows].sort((a, b) => b.score - a.score || b.balance - a.balance).slice(0, 6)
   const overdue45 = rows.filter((r) => r.delayDays > 45)
   const totalReceivable = filtered.reduce((s, r) => s + r.balance, 0)
-  const totalPaid = filtered.reduce((s, r) => s + r.paid, 0)
-  const waiting = filtered.reduce((s, r) => s + (r.nextInstallment ? r.balance : 0), 0)
+  const overduePayments = filtered.filter((r) => r.delayDays > 0).reduce((s, r) => s + r.balance, 0)
 
   const sort = (key: SortKey) => {
     if (sortKey === key) setDirection((d) => d === 'asc' ? 'desc' : 'asc')
@@ -182,7 +181,7 @@ export default function BalanceDashboard({ patients, doctors, treatments, txs, i
 
     <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><h2 className="text-base font-black text-[#142536]">Bakiye ve Tahsilat Analizi</h2><p className="mt-1 text-xs font-semibold text-slate-400">Hekim ve klinik bazında aktif tahsilat takibi</p></div><div className="flex flex-wrap gap-3"><Filter label="Hekim" value={doctorFilter} onChange={setDoctorFilter}><option value="all">Tüm hekimler</option>{doctors.map((d) => <option key={d.id} value={d.id}>Dt. {d.name}</option>)}</Filter><Filter label="Klinik" value={clinicFilter} onChange={setClinicFilter}><option value="all">Tüm klinikler</option><option value={clinicName}>{clinicName}</option></Filter><Filter label="Risk" value={riskFilter} onChange={(v) => setRiskFilter(v as 'all' | Risk)}><option value="all">Tüm riskler</option><option value="overdue">Vadesi geçmiş</option><option value="high">Yüksek risk</option><option value="medium">Orta risk</option><option value="low">Düşük risk</option></Filter></div></div>
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Toplam hasta borcu" value={totalReceivable} tone="red" /><Metric label="Toplam tahsilat" value={totalPaid} tone="green" /><Metric label="Bekleyen ödemeler" value={waiting} tone="amber" /><Metric label="45+ gün geciken" value={overdue45.reduce((s, r) => s + r.balance, 0)} tone="red" /></div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2"><Metric label="Bakiye (Toplam Hasta Borcu)" value={totalReceivable} tone="red" /><Metric label="Gecikmiş Ödemeler" value={overduePayments} tone="amber" /></div>
     </section>
 
     <section className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.05)]">

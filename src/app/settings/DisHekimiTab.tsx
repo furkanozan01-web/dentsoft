@@ -136,7 +136,7 @@ export default function DisHekimiTab({ doctors, branches, isAdmin, onChanged }: 
         </aside>
       </div>
 
-      {mode !== 'none' && (<DoctorEditor key={mode === 'edit' ? selected?.id ?? 'edit' : 'new'} doctor={mode === 'edit' ? selected : null} branches={branches} isAdmin={isAdmin} onCancel={closeEditor} onSaved={() => { closeEditor(); onChanged() }} />)}
+      {mode !== 'none' && <div className="fixed inset-0 z-50 flex items-center justify-center p-4"><button type="button" aria-label="Düzenleyiciyi kapat" onClick={closeEditor} className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm" /><div className="relative max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl shadow-2xl"><DoctorEditor key={mode === 'edit' ? selected?.id ?? 'edit' : 'new'} doctor={mode === 'edit' ? selected : null} branches={branches} isAdmin={isAdmin} onCancel={closeEditor} onSaved={() => { closeEditor(); onChanged() }} /></div></div>}
     </div>
   )
 }
@@ -182,7 +182,6 @@ function DoctorEditor({
   const [birthDate, setBirthDate] = useState(doctor?.birth_date ?? '')
   const [status, setStatus] = useState(doctor?.status ?? 'active')
   const [branchId, setBranchId] = useState(String(doctor?.branch_id ?? branches.find((branch) => branch.is_default)?.id ?? ''))
-  const [createUserAccount, setCreateUserAccount] = useState(false)
   const [userAccessLevel, setUserAccessLevel] = useState('branch')
   const [isMesulMudur, setIsMesulMudur] = useState(doctor?.is_mesul_mudur ?? false)
   const [salaryStr, setSalaryStr] = useState(
@@ -241,8 +240,7 @@ function DoctorEditor({
       color: doctor?.color ?? '#3b82f6',
       status,
       branch_id: branchId ? Number(branchId) : null,
-      create_user_account: isNew && createUserAccount,
-      user_access_level: userAccessLevel,
+      user_access_level: isNew ? userAccessLevel : undefined,
       payment_model: null,
       monthly_salary: salaryStr ? parseToKurus(salaryStr) : 0,
       commission_rate_bps: rateBps,
@@ -377,8 +375,8 @@ function DoctorEditor({
 
       {isNew && (
         <section className="rounded-2xl border border-[#BFDBFE] bg-[#EFF6FF] p-4">
-          <label className="flex items-start gap-3 text-sm font-black text-[#1D4ED8]"><input type="checkbox" checked={createUserAccount} onChange={(e) => setCreateUserAccount(e.target.checked)} className="mt-1" /><span>Bu hekimi aynı zamanda kullanıcı olarak ekle<span className="mt-1 block text-xs font-semibold text-blue-500">Hekimin e-postası giriş izin listesine eklenir ve ilk girişinde hesabı otomatik bağlanır.</span></span></label>
-          {createUserAccount && <div className="mt-4"><label className="block text-xs font-medium text-blue-600 mb-1.5">Yetki Seviyesi</label><select value={userAccessLevel} onChange={(e) => setUserAccessLevel(e.target.value)} className={inputCls}><option value="branch">Yalnızca bağlı şube</option><option value="all">Tüm şubeler</option></select></div>}
+          <p className="text-sm font-black text-[#1D4ED8]">Kullanıcı kaydı otomatik oluşturulur</p><p className="mt-1 text-xs font-semibold text-blue-500">E-posta girildiğinde hekim Kullanıcı bölümüne eklenir ve ilk girişinde hesabı otomatik bağlanır.</p>
+          <div className="mt-4"><label className="block text-xs font-medium text-blue-600 mb-1.5">Yetki Seviyesi</label><select value={userAccessLevel} onChange={(e) => setUserAccessLevel(e.target.value)} className={inputCls}><option value="branch">Yalnızca bağlı şube</option><option value="all">Tüm şubeler</option></select></div>
         </section>
       )}
 
