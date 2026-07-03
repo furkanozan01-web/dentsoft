@@ -2,7 +2,7 @@ import 'server-only'
 
 import { createClient } from '@/lib/supabase/server'
 import type Anthropic from '@anthropic-ai/sdk'
-import { stubWrite, type PeriAgent } from './base'
+import type { PeriAgent } from './base'
 import type { ToolResult, PendingWrite } from '../types'
 import { getHekimHakedis, getClinicDebts } from '@/app/finance/actions'
 import { canSeeAllHakedis } from '@/lib/permissions'
@@ -148,17 +148,16 @@ const RANA_TOOLS: Anthropic.Tool[] = [
   {
     name: 'fatura_kes',
     description:
-      'Belirtilen tedavi/hizmet için fatura oluşturur. YAZMA işlemidir — onay gerekir. ' +
-      '[STUB — henüz aktif değil]',
+      'Hastanın henüz faturalanmamış ödemelerini tek faturada toplar. ' +
+      'Tutar faturalanmamış ödemelerin toplamından, KDV oranı ve gönderim kurumu klinik ayarlarından otomatik alınır. ' +
+      'YAZMA işlemidir — onay gerekir.',
     input_schema: {
       type: 'object',
       properties: {
         hasta_id: { type: 'number', description: 'Hastanın integer kimliği' },
-        treatment_id: { type: 'number', description: 'Tedavi kaydının integer kimliği (isteğe bağlı)' },
-        tutar_kurus: { type: 'number', description: 'Fatura tutarı (kuruş cinsinden)' },
-        kdv_orani: { type: 'number', description: 'KDV oranı (0, 10 veya 20). Diş hekimliği genellikle 0.' },
+        aciklama: { type: 'string', description: 'Fatura satır açıklaması (örn. "Diş tedavi hizmeti")' },
       },
-      required: ['hasta_id', 'tutar_kurus', 'kdv_orani'],
+      required: ['hasta_id', 'aciklama'],
     },
   },
   {
@@ -185,15 +184,17 @@ const RANA_TOOLS: Anthropic.Tool[] = [
   {
     name: 'senet_olustur',
     description:
-      'Hasta için taksitli ödeme senedi oluşturur. YAZMA işlemidir — onay gerekir. ' +
-      '[STUB — henüz aktif değil]',
+      'Hasta için taksitli ödeme senedi (senet planı) oluşturur. ' +
+      'Taksitler tam bin TL\'ye aşağı yuvarlanır, küsürat son taksite eklenir; ' +
+      'vade farkı taksit sayısı kadar bileşik uygulanır. YAZMA işlemidir — onay gerekir.',
     input_schema: {
       type: 'object',
       properties: {
         hasta_id: { type: 'number', description: 'Hastanın integer kimliği' },
-        toplam_kurus: { type: 'number', description: 'Toplam borç tutarı (kuruş cinsinden)' },
+        toplam_kurus: { type: 'number', description: 'Toplam borç tutarı (kuruş cinsinden, örn. 5000000 = 50.000 TL)' },
         taksit_sayisi: { type: 'number', description: 'Taksit adedi' },
         ilk_taksit_tarihi: { type: 'string', description: 'ISO 8601 ilk taksit tarihi: YYYY-MM-DD' },
+        vade_farki_yuzde: { type: 'number', description: 'Aylık vade farkı yüzdesi (isteğe bağlı, varsayılan 0). Örn. 2 = %2' },
       },
       required: ['hasta_id', 'toplam_kurus', 'taksit_sayisi', 'ilk_taksit_tarihi'],
     },
@@ -201,6 +202,7 @@ const RANA_TOOLS: Anthropic.Tool[] = [
 ]
 
 const RANA_WRITE_TOOLS = new Set([
+  'tahsilat_kaydet', 'odeme_kaydet', 'sabit_gider_ekle',
   'fatura_kes', 'senet_olustur',
 ])
 
@@ -680,13 +682,147 @@ async function runOdemeKaydet(input: Record<string, unknown>): Promise<ToolResul
   return { success: true, data: pendingWrite }
 }
 
+// ─── Aktif tool: senet_olustur ────────────────────────────────────────────────
+
+// Hesap sekmesindeki Senet Robotu kurallarıyla birebir aynı:
+// bileşik vade farkı, tam bin TL'ye aşağı yuvarlama, küsürat son taksitte.
+function buildSenetInstallments(
+  toplamKurus: number,
+  taksitSayisi: number,
+  vadeYuzde: number,
+  ilkTaksit: Date
+): { due_date: string; amount: number }[] {
+  const compoundTotal = Math.round(toplamKurus * Math.pow(1 + vadeYuzde / 100, taksitSayisi))
+  const THOUSAND = 100_000 // 1.000 TL = 100.000 kuruş
+  const base = Math.floor(compoundTotal / taksitSayisi / THOUSAND) * THOUSAND
+  const shortfall = compoundTotal - base * taksitSayisi
+  return Array.from({ length: taksitSayisi }, (_, i) => {
+    const d = new Date(ilkTaksit)
+    d.setMonth(d.getMonth() + i)
+    return {
+      due_date: localDateStr(d),
+      amount: base + (i === taksitSayisi - 1 ? shortfall : 0),
+    }
+  })
+}
+
+async function runSenetOlustur(input: Record<string, unknown>): Promise<ToolResult> {
+  const ctx = await getCtx()
+  if (!ctx) return { success: false, error: 'Yetkisiz erişim' }
+
+  const hastaId = input.hasta_id as number | undefined
+  const toplamKurus = input.toplam_kurus as number | undefined
+  const taksitSayisi = input.taksit_sayisi as number | undefined
+  const ilkTaksitTarihi = (input.ilk_taksit_tarihi as string | undefined) ?? ''
+  const vadeYuzde = (input.vade_farki_yuzde as number | undefined) ?? 0
+
+  if (!Number.isInteger(hastaId) || (hastaId ?? 0) <= 0)
+    return { success: false, error: 'Geçerli bir hasta_id gerekli' }
+  if (!Number.isFinite(toplamKurus) || (toplamKurus ?? 0) <= 0)
+    return { success: false, error: 'Toplam tutar sıfırdan büyük olmalıdır' }
+  if (!Number.isInteger(taksitSayisi) || (taksitSayisi ?? 0) < 1 || (taksitSayisi ?? 0) > 60)
+    return { success: false, error: 'Taksit sayısı 1-60 arasında olmalıdır' }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ilkTaksitTarihi))
+    return { success: false, error: 'İlk taksit tarihi YYYY-MM-DD formatında olmalıdır' }
+  if (!Number.isFinite(vadeYuzde) || vadeYuzde < 0 || vadeYuzde > 20)
+    return { success: false, error: 'Vade farkı yüzdesi 0-20 arasında olmalıdır' }
+  // Bin TL altındaki anaparalar tam binlik taksite bölünemez
+  if (toplamKurus! < taksitSayisi! * 100_000)
+    return { success: false, error: 'Toplam tutar, taksit başına en az 1.000 TL düşecek kadar büyük olmalıdır' }
+
+  const { data: hasta } = await ctx.supabase
+    .from('patients')
+    .select('name, surname')
+    .eq('id', hastaId!)
+    .eq('clinic_id', ctx.clinicId)
+    .maybeSingle()
+  if (!hasta) return { success: false, error: `Hasta bulunamadı (ID: ${hastaId})` }
+
+  const rows = buildSenetInstallments(toplamKurus!, taksitSayisi!, vadeYuzde, new Date(`${ilkTaksitTarihi}T12:00:00`))
+  const toplam = rows.reduce((s, r) => s + r.amount, 0)
+  const taksitOzet = rows
+    .map((r, i) => `${i + 1}. ${new Date(`${r.due_date}T12:00:00`).toLocaleDateString('tr-TR')}: ${(r.amount / 100).toLocaleString('tr-TR')} TL`)
+    .join(' • ')
+  const vadeNot = vadeYuzde > 0 ? ` (%${vadeYuzde} aylık vade farkı dahil)` : ''
+  const preview =
+    `${hasta.name} ${hasta.surname} için ${taksitSayisi} taksitli senet planı oluşturulacak${vadeNot}. ` +
+    `Toplam: ${(toplam / 100).toLocaleString('tr-TR')} TL. Taksitler: ${taksitOzet}. Onaylıyor musunuz?`
+
+  const pendingWrite: PendingWrite = {
+    action: 'senet_olustur',
+    params: {
+      hasta_id: hastaId,
+      vade_farki_yuzde: vadeYuzde,
+      installments: rows,
+    },
+    preview,
+  }
+  return { success: true, data: pendingWrite }
+}
+
+// ─── Aktif tool: fatura_kes ───────────────────────────────────────────────────
+
+async function runFaturaKes(input: Record<string, unknown>): Promise<ToolResult> {
+  const ctx = await getCtx()
+  if (!ctx) return { success: false, error: 'Yetkisiz erişim' }
+
+  const hastaId = input.hasta_id as number | undefined
+  const aciklama = (input.aciklama as string | undefined)?.trim()
+
+  if (!Number.isInteger(hastaId) || (hastaId ?? 0) <= 0)
+    return { success: false, error: 'Geçerli bir hasta_id gerekli' }
+  if (!aciklama) return { success: false, error: 'Fatura satır açıklaması zorunludur' }
+
+  const [{ data: hasta }, { data: clinic }, { data: uninvoiced, error: txError }] = await Promise.all([
+    ctx.supabase
+      .from('patients')
+      .select('name, surname')
+      .eq('id', hastaId!)
+      .eq('clinic_id', ctx.clinicId)
+      .maybeSingle(),
+    ctx.supabase
+      .from('clinic_settings')
+      .select('invoice_institution')
+      .eq('id', ctx.clinicId)
+      .single(),
+    ctx.supabase
+      .from('transactions')
+      .select('id, amount, transaction_date')
+      .eq('clinic_id', ctx.clinicId)
+      .eq('patient_id', hastaId!)
+      .eq('type', 'payment')
+      .is('invoice_no', null),
+  ])
+
+  if (!hasta) return { success: false, error: `Hasta bulunamadı (ID: ${hastaId})` }
+  if (txError) return { success: false, error: txError.message }
+  if (!clinic?.invoice_institution?.trim())
+    return { success: false, error: 'Ayarlar > Klinik bölümünde e-fatura gönderim kurumu tanımlı değil' }
+  if (!uninvoiced || uninvoiced.length === 0)
+    return { success: false, error: `${hasta.name} ${hasta.surname} için faturalanmamış ödeme bulunmuyor` }
+
+  const toplamKurus = uninvoiced.reduce((s, t) => s + (t.amount ?? 0), 0)
+  const preview =
+    `${hasta.name} ${hasta.surname} adına ${uninvoiced.length} ödeme kaydı ` +
+    `(toplam ${(toplamKurus / 100).toLocaleString('tr-TR')} TL) "${aciklama}" açıklamasıyla ` +
+    `${clinic.invoice_institution} üzerinden faturalanacak. Onaylıyor musunuz?`
+
+  const pendingWrite: PendingWrite = {
+    action: 'fatura_kes',
+    params: {
+      hasta_id: hastaId,
+      aciklama,
+      transaction_ids: uninvoiced.map((t) => t.id),
+      tutar_kurus: toplamKurus,
+    },
+    preview,
+  }
+  return { success: true, data: pendingWrite }
+}
+
 // ─── Executor dispatch ────────────────────────────────────────────────────────
 
 async function executeRanaTool(toolName: string, input: Record<string, unknown>): Promise<ToolResult> {
-  if (RANA_WRITE_TOOLS.has(toolName)) {
-    return stubWrite(toolName, input)
-  }
-
   switch (toolName) {
     case 'tahsilat_kaydet':
       return runTahsilatKaydet(input)
@@ -696,6 +832,10 @@ async function executeRanaTool(toolName: string, input: Record<string, unknown>)
       return runSabitGiderListele(input.durum as string | undefined)
     case 'sabit_gider_ekle':
       return runSabitGiderEkle(input)
+    case 'senet_olustur':
+      return runSenetOlustur(input)
+    case 'fatura_kes':
+      return runFaturaKes(input)
     case 'fatura_detay_getir':
       return runFaturaDetayGetir(input)
     case 'acik_bakiye_listele':

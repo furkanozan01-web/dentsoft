@@ -29,9 +29,10 @@ export async function getFollowupsForPatient(
     .eq('clinic_id', clinicId)
     .eq('patient_id', patientId)
     .order('created_at', { ascending: false })
+    .overrideTypes<Followup[], { merge: false }>()
 
   if (error) return { data: null, error: error.message }
-  return { data: (data ?? []) as unknown as Followup[] }
+  return { data: data ?? [] }
 }
 
 export async function createFollowup(
@@ -128,16 +129,17 @@ export async function getUpcomingFollowupSteps(days = 7): Promise<{
     .lte('scheduled_date', futureISO)
     .order('scheduled_date')
     .limit(20)
+    .overrideTypes<Array<{
+      id: number
+      title: string
+      scheduled_date: string
+      followup_id: number
+      followup: { id: number; title: string; patient_id: number; patient: { id: number; name: string; surname: string } | null } | null
+    }>, { merge: false }>()
 
   if (error) return { data: null, error: error.message }
 
-  const mapped = ((data ?? []) as unknown as Array<{
-    id: number
-    title: string
-    scheduled_date: string
-    followup_id: number
-    followup: { id: number; title: string; patient_id: number; patient: { id: number; name: string; surname: string } | null } | null
-  }>).map((row) => ({
+  const mapped = (data ?? []).map((row) => ({
     id: row.id,
     title: row.title,
     scheduled_date: row.scheduled_date,

@@ -275,7 +275,7 @@ export default function AppointmentsClient({
     if (doctorFilter !== 'all') q = q.eq('doctor_id', doctorFilter)
 
     const [{ data, error }, { data: pend, error: pendingError }] = await Promise.all([
-      q,
+      q.overrideTypes<Appointment[], { merge: false }>(),
       supabase
         .from('appointments')
         .select(
@@ -283,15 +283,16 @@ export default function AppointmentsClient({
         )
         .eq('status', 'pending')
         .order('scheduled_at')
-        .limit(50),
+        .limit(50)
+        .overrideTypes<Appointment[], { merge: false }>(),
     ])
     if (error || pendingError) {
       toast.error(error?.message ?? pendingError?.message ?? 'Randevular yüklenemedi')
       setLoading(false)
       return
     }
-    setAppointments((data ?? []) as unknown as Appointment[])
-    setPendingReqs((pend ?? []) as unknown as Appointment[])
+    setAppointments(data ?? [])
+    setPendingReqs(pend ?? [])
     setLoading(false)
   }, [supabase, rangeStart, rangeEnd, doctorFilter])
 

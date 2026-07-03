@@ -191,11 +191,12 @@ export default function PatientsClient({
               .order('transaction_date', { ascending: false }),
             supabase
               .from('treatments')
-              .select('id, treatment_date, treatment_name, fee, original_fee, is_closed, status, tooth, doctor:doctors(name)')
+              .select('id, treatment_date, treatment_name, fee, original_fee, is_closed, status, tooth, doctor:doctors(name), tariff:tariffs(visual_schema)')
               .eq('clinic_id', clinicId)
               .eq('patient_id', patientId)
               .neq('status', 'cancelled')
-              .order('treatment_date', { ascending: false }),
+              .order('treatment_date', { ascending: false })
+              .overrideTypes<Treatment[], { merge: false }>(),
             supabase
               .from('payment_plans')
               .select('id, due_date, amount, paid, group_id')
@@ -213,7 +214,8 @@ export default function PatientsClient({
               .select('id, content, created_at, doctor:doctors(name)')
               .eq('clinic_id', clinicId)
               .eq('patient_id', patientId)
-              .order('created_at', { ascending: false }),
+              .order('created_at', { ascending: false })
+              .overrideTypes<Prescription[], { merge: false }>(),
             supabase
               .from('clinical_notes')
               .select('id, content, created_at, is_important, important_dismissed')
@@ -237,10 +239,10 @@ export default function PatientsClient({
           const r = t as Record<string, unknown>
           return { ...r, partner_name: (r.partner as Record<string, string> | null)?.name ?? null }
         }) as Transaction[])
-        setTreatments((tr ?? []) as unknown as Treatment[])
+        setTreatments(tr ?? [])
         setInstallments((pp ?? []) as Installment[])
         setReminders((rem ?? []) as PatientReminder[])
-        setPrescriptions((rx ?? []) as unknown as Prescription[])
+        setPrescriptions(rx ?? [])
         const loadedNotes = (nt ?? []) as ClinicalNote[]
         setNotes(loadedNotes)
         setImages((im ?? []) as PatientImage[])

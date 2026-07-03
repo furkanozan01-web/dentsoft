@@ -23,13 +23,13 @@ export async function getLatestImageAnalysis(patientId: number, imageId: number)
   if (error) return { data: null, error: error.message }
   if (!analysis) return { data: null }
   const [findingsResult, overlaysResult, plansResult] = await Promise.all([
-    ctx.supabase.from('image_ai_findings').select('id, analysis_id, patient_id, image_id, tooth_number, finding_type, confidence, description, status, linked_diagnosis_item_id, reviewed_at').eq('clinic_id', ctx.clinicId).eq('analysis_id', analysis.id).order('id'),
-    ctx.supabase.from('image_ai_overlays').select('id, analysis_id, image_id, finding_id, overlay_type, geometry_json, color, visible_default').eq('clinic_id', ctx.clinicId).eq('analysis_id', analysis.id).order('id'),
-    ctx.supabase.from('ai_treatment_plan_suggestions').select('id, patient_id, analysis_id, title, plan_type, status, plan_items_json, linked_treatment_plan_id, created_at, accepted_at').eq('clinic_id', ctx.clinicId).eq('analysis_id', analysis.id).order('id'),
+    ctx.supabase.from('image_ai_findings').select('id, analysis_id, patient_id, image_id, tooth_number, finding_type, confidence, description, status, linked_diagnosis_item_id, reviewed_at').eq('clinic_id', ctx.clinicId).eq('analysis_id', analysis.id).order('id').overrideTypes<ImageAiFinding[], { merge: false }>(),
+    ctx.supabase.from('image_ai_overlays').select('id, analysis_id, image_id, finding_id, overlay_type, geometry_json, color, visible_default').eq('clinic_id', ctx.clinicId).eq('analysis_id', analysis.id).order('id').overrideTypes<ImageAiOverlay[], { merge: false }>(),
+    ctx.supabase.from('ai_treatment_plan_suggestions').select('id, patient_id, analysis_id, title, plan_type, status, plan_items_json, linked_treatment_plan_id, created_at, accepted_at').eq('clinic_id', ctx.clinicId).eq('analysis_id', analysis.id).order('id').overrideTypes<AiTreatmentPlanSuggestion[], { merge: false }>(),
   ])
   const firstError = findingsResult.error ?? overlaysResult.error ?? plansResult.error
   if (firstError) return { data: null, error: firstError.message }
-  return { data: { analysis: analysis as ImageAiAnalysis, findings: (findingsResult.data ?? []) as ImageAiFinding[], overlays: (overlaysResult.data ?? []) as unknown as ImageAiOverlay[], plans: (plansResult.data ?? []) as unknown as AiTreatmentPlanSuggestion[] } }
+  return { data: { analysis: analysis as ImageAiAnalysis, findings: findingsResult.data ?? [], overlays: overlaysResult.data ?? [], plans: plansResult.data ?? [] } }
 }
 
 const MOCK_FINDINGS: Array<{ tooth: number; type: ImageAiFindingType; confidence: number; description: string }> = [

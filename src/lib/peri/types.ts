@@ -41,12 +41,12 @@ export type WriteAction =
   | 'tahsilat_kaydet'
   | 'odeme_kaydet'
   | 'sabit_gider_ekle'
-  // Pınar — stub
+  // Pınar — aktif
   | 'recete_olustur'
-  // Rana — stub
+  // Rana — aktif
   | 'fatura_kes'
   | 'senet_olustur'
-  // İrem — stub
+  // İrem — stub (SMS/WhatsApp dış servis anlaşması bekliyor)
   | 'kvkk_onay_gonder'
   | 'dijital_onam_gonder'
   | 'sms_gonder'

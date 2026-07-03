@@ -189,17 +189,24 @@ export async function copyPlanItems(
     .from('treatment_plan_items')
     .select('id, tooth_no, treatment_name, tariff_item_id, fee, discount_rate, notes, order_index, treatment_plans!inner(clinic_id)')
     .in('id', sourceItemIds)
+    .overrideTypes<Array<{
+      id: number; tooth_no: number | null; treatment_name: string
+      tariff_item_id: number | null; fee: number; discount_rate: number
+      notes: string | null; order_index: number
+      // Çoktan-bire join: PostgREST nesne döner; eski sürüm uyumu için dizi de kabul edilir
+      treatment_plans: { clinic_id: number } | { clinic_id: number }[] | null
+    }>, { merge: false }>()
 
   if (fetchErr || !sourceItems) return { error: 'Kalemler getirilemedi' }
 
-  const raw = sourceItems as unknown as Array<{
-    id: number; tooth_no: number | null; treatment_name: string
-    tariff_item_id: number | null; fee: number; discount_rate: number
-    notes: string | null; order_index: number
-    treatment_plans: { clinic_id: number }[]
-  }>
+  const raw = sourceItems
 
-  if (raw.some((r) => r.treatment_plans[0]?.clinic_id !== clinicId)) {
+  // Varsayılan ret: plan bilgisi eksikse veya klinik eşleşmiyorsa kopyalama yapılmaz
+  const belongsToClinic = raw.every((r) => {
+    const plans = Array.isArray(r.treatment_plans) ? r.treatment_plans : [r.treatment_plans]
+    return plans.length > 0 && plans.every((p) => p?.clinic_id === clinicId)
+  })
+  if (!belongsToClinic) {
     return { error: 'Yetkisiz erişim' }
   }
 

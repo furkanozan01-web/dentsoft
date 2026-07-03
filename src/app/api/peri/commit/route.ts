@@ -10,8 +10,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAppointment, rescheduleAppointment, updateAppointmentStatus } from '@/app/appointments/actions'
-import { createPatientFromPeri, updatePatientFromPeri, addNoteFromPeri, updateAnamnesisFromPeri, addPaymentWithCurrency } from '@/app/patients/actions'
+import { createPatientFromPeri, updatePatientFromPeri, addNoteFromPeri, updateAnamnesisFromPeri, addPaymentWithCurrency, addPrescription, createPromissoryPlan, sendInvoiceToInstitution } from '@/app/patients/actions'
 import { addExpense, addClinicDebt } from '@/app/finance/actions'
+import { buildReceteContent } from '@/lib/peri/agents/pinar'
 import type { PendingWrite } from '@/lib/peri/types'
 
 interface CommitRequest {
@@ -172,6 +173,50 @@ export async function POST(req: NextRequest): Promise<NextResponse<CommitRespons
         birth_date: (params.dogum_tarihi as string) ?? undefined,
         address: (params.adres as string) ?? undefined,
         email: (params.eposta as string) ?? undefined,
+      })
+      if (result.error) return NextResponse.json({ success: false, error: result.error })
+      return NextResponse.json({ success: true })
+    }
+
+    if (action === 'recete_olustur') {
+      const ilaclar = params.ilac_listesi as { ilac_adi: string; doz: string; kullanim: string }[]
+      if (!Array.isArray(ilaclar) || ilaclar.length === 0) {
+        return NextResponse.json({ success: false, error: 'Reçete ilaç listesi boş.' })
+      }
+      const content = buildReceteContent(ilaclar, (params.notlar as string) ?? undefined)
+      // PERİ oturumu hekim kimliği taşımaz; reçete hekim atanmadan kaydedilir.
+      const result = await addPrescription(params.hasta_id as number, content, null)
+      if (result.error) return NextResponse.json({ success: false, error: result.error })
+      return NextResponse.json({ success: true })
+    }
+
+    if (action === 'senet_olustur') {
+      const installments = params.installments as { due_date: string; amount: number }[]
+      if (!Array.isArray(installments) || installments.length === 0) {
+        return NextResponse.json({ success: false, error: 'Senet taksit listesi boş.' })
+      }
+      const rateBps = Math.round(((params.vade_farki_yuzde as number) ?? 0) * 100)
+      const result = await createPromissoryPlan(
+        params.hasta_id as number,
+        'PERİ Senet Planı',
+        rateBps,
+        installments
+      )
+      if (result.error) return NextResponse.json({ success: false, error: result.error })
+      return NextResponse.json({ success: true })
+    }
+
+    if (action === 'fatura_kes') {
+      const transactionIds = params.transaction_ids as number[]
+      if (!Array.isArray(transactionIds) || transactionIds.length === 0) {
+        return NextResponse.json({ success: false, error: 'Faturalanacak ödeme kaydı bulunamadı.' })
+      }
+      const result = await sendInvoiceToInstitution({
+        patientId: params.hasta_id as number,
+        transactionIds,
+        invoiceNo: '', // boş → sendInvoiceToInstitution otomatik sıradaki numarayı verir
+        lineDescription: params.aciklama as string,
+        amountKurus: params.tutar_kurus as number,
       })
       if (result.error) return NextResponse.json({ success: false, error: result.error })
       return NextResponse.json({ success: true })

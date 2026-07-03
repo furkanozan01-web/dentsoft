@@ -18,6 +18,13 @@ interface AppointmentRow {
   doctor: { name: string; color: string | null } | null
 }
 
+interface OverduePlanRow {
+  id: number
+  due_date: string
+  amount: number
+  patient: { id: number; name: string; surname: string } | null
+}
+
 interface PatientRow {
   id: number
   name: string
@@ -165,7 +172,8 @@ export default async function DashboardPage() {
       .gte('scheduled_at', today.toISOString())
       .lt('scheduled_at', tomorrow.toISOString())
       .order('scheduled_at')
-      .limit(8),
+      .limit(8)
+      .overrideTypes<AppointmentRow[], { merge: false }>(),
     supabase
       .from('patients')
       .select('id, name, surname, birth_date, phone1, status')
@@ -184,7 +192,8 @@ export default async function DashboardPage() {
       .eq('paid', false)
       .lt('due_date', todayISO)
       .order('due_date')
-      .limit(10),
+      .limit(10)
+      .overrideTypes<OverduePlanRow[], { merge: false }>(),
     supabase
       .from('payment_plans')
       .select('*', { count: 'exact', head: true })
@@ -214,7 +223,7 @@ export default async function DashboardPage() {
 
   const doctors = (doctorsRaw ?? []) as DoctorRow[]
   const treatments = (treatmentsRaw ?? []) as TreatmentRow[]
-  const appointments = (todayAppts ?? []) as unknown as AppointmentRow[]
+  const appointments = todayAppts ?? []
   const patients = (recentPatients ?? []) as PatientRow[]
   const currentDoctor =
     doctors.find((d) => d.id === profile?.doctor_id) ??
@@ -282,12 +291,7 @@ export default async function DashboardPage() {
     patient_name: a.patient ? `${a.patient.name} ${a.patient.surname}` : '—',
   }))
 
-  const bellPayments = ((overdueRaw ?? []) as unknown as Array<{
-    id: number
-    due_date: string
-    amount: number
-    patient: { id: number; name: string; surname: string } | null
-  }>).map((p) => ({
+  const bellPayments = (overdueRaw ?? []).map((p) => ({
     id: p.id,
     due_date: p.due_date,
     amount: p.amount,

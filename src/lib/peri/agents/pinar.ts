@@ -1,7 +1,8 @@
 import 'server-only'
 
 import type Anthropic from '@anthropic-ai/sdk'
-import { stubRead, stubWrite, type PeriAgent } from './base'
+import { createClient } from '@/lib/supabase/server'
+import { stubRead, type PeriAgent } from './base'
 import type { ToolResult } from '../types'
 import { getPatientTreatmentHistory } from '@/app/patients/actions'
 
@@ -57,7 +58,7 @@ const PINAR_TOOLS: Anthropic.Tool[] = [
     name: 'recete_olustur',
     description:
       'Hastaya dijital reçete oluşturur. YAZMA işlemidir — hekim onayı gerekir. ' +
-      '[STUB — henüz aktif değil]',
+      'hasta_id bilinmiyorsa önce hastayı doğrulat.',
     input_schema: {
       type: 'object',
       properties: {
@@ -118,11 +119,67 @@ async function runTedaviGecmisi(
   return { success: true, data: result.data }
 }
 
+// ─── Yazma: reçete önizlemesi ─────────────────────────────────────────────────
+
+interface ReceteIlac {
+  ilac_adi: string
+  doz: string
+  kullanim: string
+}
+
+// Reçete satırlarını hem önizleme hem commit için tek biçimde metne çevirir.
+export function buildReceteContent(ilaclar: ReceteIlac[], notlar?: string): string {
+  const lines = ilaclar.map(
+    (ilac, i) => `${i + 1}. ${ilac.ilac_adi} ${ilac.doz} — ${ilac.kullanim}`
+  )
+  if (notlar?.trim()) lines.push(`Not: ${notlar.trim()}`)
+  return lines.join('\n')
+}
+
+async function buildRecetePreview(input: Record<string, unknown>): Promise<ToolResult> {
+  const hastaId = Number(input.hasta_id)
+  const ilaclar = input.ilac_listesi as ReceteIlac[] | undefined
+  if (!hastaId) return { success: false, error: 'Hasta ID gerekli' }
+  if (!Array.isArray(ilaclar) || ilaclar.length === 0) {
+    return { success: false, error: 'En az bir ilaç girilmeli' }
+  }
+  for (const ilac of ilaclar) {
+    if (!ilac?.ilac_adi?.trim() || !ilac?.doz?.trim() || !ilac?.kullanim?.trim()) {
+      return { success: false, error: 'Her ilaç için ad, doz ve kullanım talimatı zorunludur' }
+    }
+  }
+
+  let hastaAdi = `Hasta #${hastaId}`
+  const supabase = await createClient()
+  const { data: hasta } = await supabase
+    .from('patients')
+    .select('name, surname')
+    .eq('id', hastaId)
+    .maybeSingle()
+  if (hasta) hastaAdi = `${hasta.name} ${hasta.surname}`
+
+  const ilacOzet = ilaclar.map((ilac) => ilac.ilac_adi).join(', ')
+  const preview = `${hastaAdi} için ${ilaclar.length} kalemlik reçete oluşturulacak: ${ilacOzet}.`
+
+  return {
+    success: true,
+    data: {
+      action: 'recete_olustur',
+      params: {
+        hasta_id: hastaId,
+        ilac_listesi: ilaclar,
+        notlar: (input.notlar as string) ?? null,
+      },
+      preview,
+    },
+  }
+}
+
 // ─── Executor dispatch ────────────────────────────────────────────────────────
 
 async function executePinarTool(toolName: string, input: Record<string, unknown>): Promise<ToolResult> {
-  if (PINAR_WRITE_TOOLS.has(toolName)) {
-    return stubWrite(toolName, input)
+  if (toolName === 'recete_olustur') {
+    return buildRecetePreview(input)
   }
 
   switch (toolName) {
