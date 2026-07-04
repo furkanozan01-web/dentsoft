@@ -1,6 +1,10 @@
 ﻿'use client'
 
 import React from 'react'
+import { classifyDiagnosis, classifyTreatment, type ToothFlags } from './toothFlags'
+
+export { classifyDiagnosis, classifyTreatment }
+export type { ToothFlags, ToothBooleanFlag } from './toothFlags'
 
 /**
  * Anatomik FDI diş şeması — tamamen SVG (dış görsele/CDN'e bağımlılık yok).
@@ -15,25 +19,6 @@ import React from 'react'
 
 type Jaw = 'upper' | 'lower'
 type ToothType = 'incisor' | 'canine' | 'premolar' | 'molar'
-
-export interface ToothFlags {
-  canal?: boolean
-  filling?: boolean
-  crown?: boolean
-  crownMaterial?: 'porcelain' | 'zirconium'
-  implant?: boolean
-  extracted?: boolean
-  graft?: boolean
-  removableProsthesis?: boolean
-  // Diyagnoz sembolleri
-  mineCaryo?: boolean
-  dentinCaryo?: boolean
-  kret?: boolean
-  nerve?: boolean
-  periapical?: boolean
-  poorCanal?: boolean
-}
-export type ToothBooleanFlag = Exclude<keyof ToothFlags, 'crownMaterial'>
 
 // FDI kök sayıları (referans tablodan birebir)
 const ROOTS: Record<number, number> = {
@@ -799,42 +784,3 @@ export default function ToothChart({
   )
 }
 
-// Diyagnoz adından sembol türünü sınıflandırır
-export function classifyDiagnosis(name: string): ToothBooleanFlag | null {
-  const s = name.toLocaleLowerCase('tr')
-  if (s.includes('çekilmiş') || s.includes('cekilmis')) return 'extracted'
-  if (s.startsWith('mine')) return 'mineCaryo'
-  if (s.startsWith('dentin')) return 'dentinCaryo'
-  if (s === 'kret') return 'kret'
-  if (s.includes('mandibular') || (s.includes('sinir') && !s.includes('kanal'))) return 'nerve'
-  if (s.includes('periapikal')) return 'periapical'
-  if (s.includes('yetersiz')) return 'poorCanal'
-  return null
-}
-
-// Tedavi adından sembol türünü sınıflandırır
-export function classifyTreatment(name: string): ToothBooleanFlag | null {
-  const s = name.toLocaleLowerCase('tr')
-  if (s.includes('implant')) return 'implant'
-  if (s.includes('çekim') || s.includes('cekim') || s.includes('ekstraksiyon')) return 'extracted'
-  if (s.includes('kanal') || s.includes('endo')) return 'canal'
-  if (
-    s.includes('kron') ||
-    s.includes('kaplama') ||
-    s.includes('kuron') ||
-    s.includes('zirkon') ||
-    s.includes('porselen') ||
-    s.includes('veneer') ||
-    s.includes('laminate')
-  )
-    return 'crown'
-  if (
-    s.includes('dolgu') ||
-    s.includes('kompozit') ||
-    s.includes('amalgam') ||
-    s.includes('inlay') ||
-    s.includes('onlay')
-  )
-    return 'filling'
-  return null
-}

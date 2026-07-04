@@ -6,6 +6,7 @@ import { tryEncrypt, tryDecrypt } from '@/lib/crypto'
 import { EMPTY_ANAMNESIS, type Anamnesis } from '@/lib/anamnesis'
 import { localDateValue } from '@/lib/format'
 import { revalidatePath } from 'next/cache'
+import { treatmentFlags, checkTreatmentCompatibility, type ToothFlags } from './toothFlags'
 
 type CreatedPatient = {
   id: number
@@ -478,7 +479,7 @@ export async function addTreatment(input: {
   // Tarifeyi klinik kapsamında doğrula ve fiyatını al
   const { data: tariff, error: tErr } = await supabase
     .from('tariffs')
-    .select('treatment_name, category, price')
+    .select('treatment_name, category, price, visual_schema')
     .eq('id', input.tariffId)
     .eq('clinic_id', clinicId)
     .single()
@@ -501,6 +502,27 @@ export async function addTreatment(input: {
       .eq('clinic_id', clinicId)
       .single()
     if (!doctor) return { error: 'Hekim bulunamadı' }
+  }
+
+  // Diş üzerinde tedavi uyumluluğu: çekilmiş/implantlı dişe dolgu/kanal
+  // eklenemez, implant çekimin yerine geçebilir vb. (bkz. toothFlags.ts)
+  if (input.tooth) {
+    const { data: existingTreatments } = await supabase
+      .from('treatments')
+      .select('treatment_name, tariff:tariffs(visual_schema)')
+      .eq('clinic_id', clinicId)
+      .eq('patient_id', input.patientId)
+      .eq('tooth', input.tooth)
+      .neq('status', 'cancelled')
+
+    const existingFlags: ToothFlags = {}
+    for (const t of existingTreatments ?? []) {
+      const schema = Array.isArray(t.tariff) ? t.tariff[0]?.visual_schema : (t.tariff as { visual_schema: string | null } | null)?.visual_schema
+      Object.assign(existingFlags, treatmentFlags(schema, t.treatment_name))
+    }
+    const incomingFlags = treatmentFlags(tariff.visual_schema, tariff.treatment_name)
+    const compat = checkTreatmentCompatibility(existingFlags, incomingFlags)
+    if (!compat.ok) return { error: compat.error }
   }
 
   const { error } = await supabase.from('treatments').insert({

@@ -20,7 +20,8 @@ import {
   reorderPlanItem,
 } from './treatment-plan-actions'
 import { FDI } from './constants'
-import ToothChart, { classifyTreatment, classifyDiagnosis, type ToothFlags } from './ToothChart'
+import ToothChart, { classifyTreatment, classifyDiagnosis } from './ToothChart'
+import { treatmentFlags, checkTreatmentCompatibility, type ToothFlags } from './toothFlags'
 import TreatmentStatementPrint, { printTreatmentStatement } from './TreatmentStatementPrint'
 import type {
   ClinicInfo,
@@ -60,27 +61,6 @@ function tariffBranch(category: string | null) {
   if (value.includes('pedodont')) return 'Pedodonti'
   if (value.includes('muayene') || value.includes('teşhis')) return 'Muayene'
   return 'Diğer'
-}
-
-function treatmentFlags(schema: string | null | undefined, name: string): ToothFlags {
-  const flags: ToothFlags = {}
-  const schemas = (schema || '').split('+').filter(Boolean)
-  if (!schemas.length) {
-    const inferred = classifyTreatment(name)
-    if (inferred) flags[inferred] = true
-    return flags
-  }
-  for (const item of schemas) {
-    if (item === 'implant') flags.implant = true
-    else if (['crown', 'porcelain', 'emax', 'prosthesis'].includes(item)) { flags.crown = true; flags.crownMaterial = 'porcelain' }
-    else if (item === 'zirconium') { flags.crown = true; flags.crownMaterial = 'zirconium' }
-    else if (item === 'filling') flags.filling = true
-    else if (item === 'root-canal') flags.canal = true
-    else if (item === 'extraction') flags.extracted = true
-    else if (item === 'bone-graft') flags.graft = true
-    else if (['removable', 'total-prosthesis'].includes(item)) flags.removableProsthesis = true
-  }
-  return flags
 }
 
 function isUpperTooth(n: number) { return (n >= 11 && n <= 28) || (n >= 51 && n <= 65) }
@@ -396,6 +376,12 @@ function OralTab({
       return
     }
     if (parsedTab.kind === 'tedavi') {
+      const incoming = treatmentFlags(selectedTariffItem.visual_schema, selectedTariffItem.treatment_name)
+      const compat = checkTreatmentCompatibility(toothStates.get(toothNum) ?? {}, incoming)
+      if (!compat.ok) {
+        toast.error(compat.error)
+        return
+      }
       startTransition(async () => {
         const res = await addTreatment({
           patientId: patient.id,
