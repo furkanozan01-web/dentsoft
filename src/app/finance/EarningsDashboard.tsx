@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { localDateValue } from '@/lib/format'
 import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
@@ -18,7 +18,7 @@ const METHOD_LABEL: Record<string, string> = { cash: 'Nakit / Kasa', transfer: '
 function money(value: number) { return `₺${(value / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }
 function dateText(value: string | null) { return value ? new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString('tr-TR') : '—' }
 
-export default function EarningsDashboard({ doctors, doctorShares, treatments, patients, txs, payments, installments, profitByMonth, monthKey, canSeeAll, canManagePayments, currentDoctorId, onChanged, onPatientClick }: {
+export default function EarningsDashboard({ doctors, doctorShares, treatments, patients, txs, payments, installments, profitByMonth, monthKey, canSeeAll, canManagePayments, onNeedFrom, currentDoctorId, onChanged, onPatientClick }: {
   doctors: FinDoctor[]
   doctorShares: FinDoctorShare[]
   treatments: FinTreatment[]
@@ -30,6 +30,8 @@ export default function EarningsDashboard({ doctors, doctorShares, treatments, p
   monthKey: string
   canSeeAll: boolean
   canManagePayments: boolean
+  /** Seçilen dönem yüklü pencereden eskiyse eksik işlemleri getirtir. */
+  onNeedFrom: (from: string) => Promise<void>
   currentDoctorId: number | null
   onChanged: () => void
   onPatientClick: (id: number) => void
@@ -50,6 +52,10 @@ export default function EarningsDashboard({ doctors, doctorShares, treatments, p
     }
     const keys:string[]=[];const cursor=new Date(start);while(cursor<=end){keys.push(`${cursor.getFullYear()}-${String(cursor.getMonth()+1).padStart(2,'0')}`);cursor.setMonth(cursor.getMonth()+1)}return keys
   },[detailPeriod,monthKey,customStart,customEnd])
+  useEffect(() => {
+    const oldest = [...activeMonthKeys].sort()[0]
+    if (oldest) void onNeedFrom(`${oldest}-01`)
+  }, [activeMonthKeys, onNeedFrom])
   const visibleDoctors = useMemo(
     () => canSeeAll ? doctors : doctors.filter((doctor) => doctor.id === currentDoctorId),
     [canSeeAll, doctors, currentDoctorId]

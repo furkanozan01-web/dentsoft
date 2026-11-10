@@ -34,6 +34,9 @@ export default async function FinancePage() {
   if (!profile?.clinic_id) redirect('/login')
   const clinicId = profile.clinic_id
   const isAdmin = profile.role === 'bashekim'
+  // İşlem satırları son 13 ay ile sınırlıdır; daha eskisi istemciden getTransactionsRange ile yüklenir.
+  // Tüm zamanlar toplamları (Kasa, hisse kâr tabanı) satırdan değil finance_totals RPC'sinden gelir.
+  const windowStart = new Date(new Date().getFullYear(), new Date().getMonth() - 12, 1).toLocaleDateString('en-CA')
 
   const [
     { data: clinic },
@@ -52,6 +55,7 @@ export default async function FinancePage() {
     { data: partnerServices },
     { data: doctorShares },
     { data: branches },
+    { data: totalsRaw },
   ] = await Promise.all([
     supabase.from('clinic_settings').select('clinic_name').eq('id', clinicId).single(),
     getPermissions('finans_bilgi'),
@@ -61,6 +65,7 @@ export default async function FinancePage() {
       .from('transactions')
       .select('id, transaction_date, amount, method, type, description, patient_id, treatment_id, doctor_id, category, invoice_no, recurring, partner_id, partner_service_id, account_name, invoice_status, payment_status, source_type, original_currency, original_amount, exchange_rate, branch_id')
       .eq('clinic_id', clinicId)
+      .gte('transaction_date', windowStart)
       .order('transaction_date', { ascending: false }),
     supabase
       .from('treatments')
@@ -118,6 +123,7 @@ export default async function FinancePage() {
       .eq('clinic_id', clinicId)
       .eq('is_active', true)
       .order('name'),
+    supabase.rpc('finance_totals'),
   ])
 
   // Mevcut kullanıcının doktor kaydını bul, is_mesul_mudur belirle
@@ -173,17 +179,28 @@ export default async function FinancePage() {
         if (tx.patient_id != null) return myPatientIds?.has(tx.patient_id) ?? false
         return false
       })
+  // Toplamlar satırlardan değil finance_totals RPC'sinden: PostgREST satır sınırından bağımsız.
+  const totals = (totalsRaw ?? []) as { branch_id: number | null; month: string; type: string; total: number }[]
   const profitByMonth: Record<string, number> = {}
-  for (const transaction of txs ?? []) {
-    const month = transaction.transaction_date.slice(0, 7)
-    const signed = transaction.type === 'payment' ? transaction.amount : -(transaction.amount)
-    const allKey = `all:${month}`
+  const kasaTotals: Record<string, { income: number; expense: number }> = {}
+  const yearSet = new Set<number>([new Date().getFullYear()])
+  for (const row of totals) {
+    const signed = row.type === 'payment' ? row.total : -row.total
+    const allKey = `all:${row.month}`
     profitByMonth[allKey] = (profitByMonth[allKey] ?? 0) + signed
-    if (transaction.branch_id) {
-      const branchKey = `${transaction.branch_id}:${month}`
+    if (row.branch_id) {
+      const branchKey = `${row.branch_id}:${row.month}`
       profitByMonth[branchKey] = (profitByMonth[branchKey] ?? 0) + signed
+      // Kasa yalnızca hakediş yetkisi olanlara açık (satır maskeleme kuralıyla aynı)
+      if (canSeeAllHakedis) {
+        const k = (kasaTotals[row.branch_id] ??= { income: 0, expense: 0 })
+        if (row.type === 'payment') k.income += row.total
+        else if (row.type === 'expense' || row.type === 'refund') k.expense += row.total
+      }
     }
+    yearSet.add(Number(row.month.slice(0, 4)))
   }
+  const years = Array.from(yearSet).sort((a, b) => b - a)
 
   return (
     <div className="flex min-h-screen bg-[#F0F4F9]">
@@ -206,6 +223,9 @@ export default async function FinancePage() {
           clinicName={clinic?.clinic_name ?? 'Klinik'}
           partnerServices={(partnerServices ?? []) as PartnerService[]}
           profitByMonth={profitByMonth}
+          kasaTotals={kasaTotals}
+          years={years}
+          windowStart={windowStart}
         />
       </main>
     </div>

@@ -118,6 +118,8 @@ export default async function DashboardPage() {
   overdue45Date.setDate(today.getDate() - 45)
   const overdue45ISO = `${overdue45Date.getFullYear()}-${String(overdue45Date.getMonth() + 1).padStart(2, '0')}-${String(overdue45Date.getDate()).padStart(2, '0')}`
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const monthStartISO = `${monthKey}-01`
+  const nextMonthStartISO = new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocaleDateString('en-CA')
   const staleCutoff = new Date(today)
   staleCutoff.setMonth(staleCutoff.getMonth() - 6)
 
@@ -153,17 +155,20 @@ export default async function DashboardPage() {
       .from('treatments')
       .select('id, fee, cost, doctor_id, patient_id, treatment_date, status, treatment_name')
       .eq('clinic_id', clinicId)
-      .neq('status', 'cancelled'),
+      .neq('status', 'cancelled')
+      // Yalnızca bu ay (hakediş) veya açık durumdaki (devam eden hasta sayısı) tedaviler
+      .or(`status.in.(planned,in_progress),and(treatment_date.gte.${monthStartISO},treatment_date.lt.${nextMonthStartISO})`),
     supabase
       .from('doctor_payments')
       .select('doctor_id, amount, payment_date, earning_period')
-      .eq('clinic_id', clinicId),
+      .eq('clinic_id', clinicId)
+      .or(`earning_period.eq.${monthKey},and(earning_period.is.null,payment_date.gte.${monthStartISO},payment_date.lt.${nextMonthStartISO})`),
     supabase
       .from('transactions')
       .select('transaction_date, amount, type, patient_id, treatment_id, method, branch_id')
       .eq('clinic_id', clinicId)
-      .gte('transaction_date', `${monthKey}-01`)
-      .lt('transaction_date', monthKey.endsWith('-12') ? `${Number(monthKey.slice(0, 4)) + 1}-01-01` : `${monthKey.slice(0, 5)}${String(Number(monthKey.slice(5, 7)) + 1).padStart(2, '0')}-01`),
+      .gte('transaction_date', monthStartISO)
+      .lt('transaction_date', nextMonthStartISO),
     supabase
       .from('appointments')
       .select('*', { count: 'exact', head: true })

@@ -213,6 +213,61 @@ export async function deleteDoctorPayment(id: number): Promise<R> {
   return { success: true }
 }
 
+// ── Eski dönem işlemleri (Finans sayfası son 13 ayı yükler) ──────────────────
+
+const TX_RANGE_COLUMNS = 'id, transaction_date, amount, method, type, description, patient_id, treatment_id, doctor_id, category, invoice_no, recurring, partner_id, partner_service_id, account_name, invoice_status, payment_status, source_type, original_currency, original_amount, exchange_rate, branch_id'
+
+export async function getTransactionsRange(
+  from: string,
+  to: string
+): Promise<{ data?: Record<string, unknown>[]; error?: string }> {
+  const dateRe = /^\d{4}-\d{2}-\d{2}$/
+  if (!dateRe.test(from) || !dateRe.test(to) || from > to) return { error: 'Geçersiz tarih aralığı' }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Yetkisiz erişim' }
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id, role, doctor_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Klinik bulunamadı' }
+  const clinicId = profile.clinic_id as number
+
+  // finance/page.tsx ile aynı görünürlük kuralı: hakediş yetkisi yoksa yalnızca kendi hekim işlemleri
+  let isMesulMudur = false
+  if (profile.doctor_id) {
+    const { data: myDoc } = await supabase
+      .from('doctors').select('is_mesul_mudur').eq('id', profile.doctor_id).eq('clinic_id', clinicId).single()
+    isMesulMudur = myDoc?.is_mesul_mudur === true
+  }
+  const canSeeAll = profile.role === 'bashekim' || isMesulMudur || (await canSeeAllHakedis())
+
+  const { data: rows, error } = await supabase
+    .from('transactions')
+    .select(TX_RANGE_COLUMNS)
+    .eq('clinic_id', clinicId)
+    .gte('transaction_date', from)
+    .lte('transaction_date', to)
+    .order('transaction_date', { ascending: false })
+    .limit(5000)
+  if (error) return { error: error.message }
+  if (canSeeAll) return { data: rows ?? [] }
+
+  const { data: mine } = profile.doctor_id
+    ? await supabase.from('treatments').select('patient_id').eq('clinic_id', clinicId).eq('doctor_id', profile.doctor_id).not('patient_id', 'is', null)
+    : { data: [] as { patient_id: number | null }[] }
+  const myPatientIds = new Set((mine ?? []).map((t) => t.patient_id as number))
+  return {
+    data: (rows ?? []).filter((tx) => {
+      if (tx.doctor_id != null) return tx.doctor_id === profile.doctor_id
+      if (tx.patient_id != null) return myPatientIds.has(tx.patient_id)
+      return false
+    }),
+  }
+}
+
 // ── Kasa (şube kasası) ────────────────────────────────────────────────────────
 
 export async function distributeBranchProfit(input: {

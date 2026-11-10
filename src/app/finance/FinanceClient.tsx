@@ -1,11 +1,13 @@
 ﻿'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
+import { toast } from 'sonner'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { localDateValue, MONTHS_TR } from '@/lib/format'
 import { computeSummary, type HakedisDoctorShare } from '@/lib/finance/hakedis'
 import ExpenseModal from './ExpenseModal'
+import { getTransactionsRange } from './actions'
 
 // Sekmeler ayrı parçalara bölünür; recharts (Bilgi/Defter) yalnızca o sekme
 // açıldığında yüklenir, açılış paketi küçülür.
@@ -160,7 +162,7 @@ const TABS: { id: Tab; label: string }[] = [
 ]
 
 export default function FinanceClient({
-  txs,
+  txs: windowTxs,
   treatments,
   doctors,
   doctorShares,
@@ -175,6 +177,9 @@ export default function FinanceClient({
   clinicName,
   partnerServices,
   profitByMonth,
+  kasaTotals,
+  years,
+  windowStart,
   branches,
 }: {
   txs: FinTx[]
@@ -192,6 +197,9 @@ export default function FinanceClient({
   clinicName: string
   partnerServices: PartnerService[]
   profitByMonth: Record<string, number>
+  kasaTotals: Record<string, { income: number; expense: number }>
+  years: number[]
+  windowStart: string
   branches: FinBranch[]
 }) {
   const router = useRouter()
@@ -212,11 +220,29 @@ export default function FinanceClient({
     return m
   }, [patients])
 
-  const years = useMemo(() => {
-    const set = new Set<number>([now.getFullYear()])
-    txs.forEach((t) => t.transaction_date && set.add(Number(t.transaction_date.slice(0, 4))))
-    return Array.from(set).sort((a, b) => b - a)
-  }, [txs, now])
+  // Sunucu yalnızca son 13 ayın işlem satırlarını gönderir. Daha eski bir dönem
+  // seçilince (ay/yıl, Defter tarihi, Hakediş özel aralığı) eksik kısım getirilip
+  // eklenir; loadedFrom, yüklü en eski tarihi tutar.
+  const [olderTxs, setOlderTxs] = useState<FinTx[]>([])
+  const [loadedFrom, setLoadedFrom] = useState(windowStart)
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const failedFrom = useRef<string | null>(null)
+  const ensureLoaded = useCallback(async (from: string) => {
+    if (loadingOlder || from >= loadedFrom || failedFrom.current === from) return
+    setLoadingOlder(true)
+    const before = new Date(`${loadedFrom}T12:00:00`)
+    before.setDate(before.getDate() - 1)
+    const res = await getTransactionsRange(from, localDateValue(before))
+    if (res.data) {
+      setOlderTxs((prev) => [...(res.data as unknown as FinTx[]), ...prev])
+      setLoadedFrom(from)
+    } else {
+      failedFrom.current = from
+      toast.error(res.error ?? 'Eski dönem verisi yüklenemedi')
+    }
+    setLoadingOlder(false)
+  }, [loadedFrom, loadingOlder])
+  const txs = useMemo(() => (olderTxs.length ? [...windowTxs, ...olderTxs] : windowTxs), [windowTxs, olderTxs])
 
   // Dönem hesapları (kuruş)
   const monthTxs = txs.filter((t) => t.transaction_date?.startsWith(monthKey))
@@ -315,7 +341,7 @@ export default function FinanceClient({
                 <option key={i} value={i}>{m}</option>
               ))}
             </select>
-            <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="h-[42px] rounded-[14px] border border-[#E7ECF2] bg-white px-3 text-xs font-bold text-[#142536] outline-none transition hover:border-[#BFEFE8] focus:border-[#2DD4BF] focus:shadow-[0_0_0_4px_rgba(45,212,191,0.12)]">
+            <select value={year} onChange={(e) => { const y = Number(e.target.value); setYear(y); void ensureLoaded(`${y}-01-01`) }} className="h-[42px] rounded-[14px] border border-[#E7ECF2] bg-white px-3 text-xs font-bold text-[#142536] outline-none transition hover:border-[#BFEFE8] focus:border-[#2DD4BF] focus:shadow-[0_0_0_4px_rgba(45,212,191,0.12)]">
               {years.map((y) => (
                 <option key={y} value={y}>{y}</option>
               ))}
@@ -367,6 +393,8 @@ export default function FinanceClient({
             debts={initialDebts}
             initialStart={`${monthKey}-01`}
             initialEnd={localDateValue(new Date(year, month + 1, 0))}
+            onNeedFrom={ensureLoaded}
+            loadingOlder={loadingOlder}
             onPatientClick={(id) => router.push(`/patients?patient_id=${id}&tab=hesap`)}
             onChanged={() => router.refresh()}
           />
@@ -396,6 +424,7 @@ export default function FinanceClient({
             monthKey={monthKey}
             canSeeAll={canSeeAllHakedis}
             canManagePayments={canSeeAllHakedis}
+            onNeedFrom={ensureLoaded}
             currentDoctorId={currentDoctorId}
             onChanged={() => router.refresh()}
             onPatientClick={(id) => router.push(`/patients?patient_id=${id}&tab=hesap`)}
@@ -404,7 +433,8 @@ export default function FinanceClient({
         {tab === 'kasa' && (
           <KasaDashboard
             branches={branches}
-            txs={txs}
+            txs={windowTxs}
+            totals={kasaTotals}
             doctorShares={doctorShares}
             doctors={doctors}
             onChanged={() => router.refresh()}

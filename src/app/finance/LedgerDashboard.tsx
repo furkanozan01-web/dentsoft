@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from 'react'
 import {
   Bar, BarChart, CartesianGrid, Legend, Line, LineChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -69,7 +69,7 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
 
 export default function LedgerDashboard({
   txs, treatments, doctors, patients, partners, debts,
-  initialStart, initialEnd, onChanged, onPatientClick,
+  initialStart, initialEnd, onNeedFrom, loadingOlder, onChanged, onPatientClick,
 }: {
   txs: FinTx[]
   treatments: FinTreatment[]
@@ -79,12 +79,20 @@ export default function LedgerDashboard({
   debts: ClinicDebt[]
   initialStart: string
   initialEnd: string
+  /** Seçilen aralık yüklü pencereden eskiyse eksik işlemleri getirtir. */
+  onNeedFrom: (from: string) => Promise<void>
+  loadingOlder: boolean
   onChanged: () => void
   onPatientClick: (id: number) => void
 }) {
   const [start, setStart] = useState(initialStart)
   const [end, setEnd] = useState(initialEnd)
   const [period, setPeriod] = useState<Period>('monthly')
+  // Trend grafiği bitiş yılının tamamını gösterir; bu yüzden hem başlangıç hem yıl başı yüklü olmalı.
+  useEffect(() => {
+    const yearStart = `${end.slice(0, 4)}-01-01`
+    void onNeedFrom(start < yearStart ? start : yearStart)
+  }, [start, end, onNeedFrom])
   const [modal, setModal] = useState<'expense' | 'fixed' | 'company' | 'doctor' | null>(null)
   const [payDebt, setPayDebt] = useState<ClinicDebt | null>(null)
   const [pending, begin] = useTransition()
@@ -171,6 +179,7 @@ export default function LedgerDashboard({
         <div className="flex flex-wrap items-end gap-3">
           <DateField label="Başlangıç" value={start} onChange={setStart} />
           <DateField label="Bitiş" value={end} onChange={setEnd} />
+          {loadingOlder && <span className="pb-2 text-xs font-bold text-slate-400">Eski dönem yükleniyor…</span>}
         </div>
         <div className="flex rounded-xl bg-slate-100 p-1">
           {(Object.keys(PERIOD_LABEL) as Period[]).map((p) => (

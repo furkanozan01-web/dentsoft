@@ -19,10 +19,12 @@ function parseAmount(value: string) {
 }
 
 export default function KasaDashboard({
-  branches, txs, doctorShares, doctors, onChanged,
+  branches, txs, totals, doctorShares, doctors, onChanged,
 }: {
   branches: FinBranch[]
   txs: FinTx[]
+  /** Şube → tüm zamanlar gelir/gider toplamı (finance_totals RPC'si; satır sınırından bağımsız). */
+  totals: Record<string, { income: number; expense: number }>
   doctorShares: FinDoctorShare[]
   doctors: FinDoctor[]
   onChanged: () => void
@@ -33,9 +35,9 @@ export default function KasaDashboard({
   const [showPay, setShowPay] = useState(false)
 
   const branchTxs = useMemo(() => txs.filter((t) => t.branch_id === branchId), [txs, branchId])
-  const balance = useMemo(() => branchTxs.reduce((sum, t) => sum + (t.type === 'payment' ? t.amount : t.type === 'expense' || t.type === 'refund' ? -t.amount : 0), 0), [branchTxs])
-  const income = useMemo(() => branchTxs.filter((t) => t.type === 'payment').reduce((s, t) => s + t.amount, 0), [branchTxs])
-  const expense = useMemo(() => branchTxs.filter((t) => t.type === 'expense' || t.type === 'refund').reduce((s, t) => s + t.amount, 0), [branchTxs])
+  const income = branchId !== null ? totals[branchId]?.income ?? 0 : 0
+  const expense = branchId !== null ? totals[branchId]?.expense ?? 0 : 0
+  const balance = income - expense
   const recentTxs = useMemo(() => [...branchTxs].sort((a, b) => b.transaction_date.localeCompare(a.transaction_date)).slice(0, 20), [branchTxs])
 
   const doctorMap = useMemo(() => new Map(doctors.map((d) => [d.id, d])), [doctors])
@@ -88,7 +90,7 @@ export default function KasaDashboard({
         <section className="overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
           <div className="border-b border-[#EEF2F6] px-6 py-5">
             <h2 className="text-base font-black text-[#142536]">Son Hareketler</h2>
-            <p className="mt-1 text-sm font-medium text-slate-400">Bu şubeye ait tüm zamanlardan son 20 kayıt</p>
+            <p className="mt-1 text-sm font-medium text-slate-400">Bu şubeye ait son 13 aydan en yeni 20 kayıt (bakiye tüm zamanları kapsar)</p>
           </div>
           {recentTxs.length === 0 ? (
             <div className="p-8 text-center text-sm font-bold text-slate-400">Bu şubede henüz hareket yok.</div>
