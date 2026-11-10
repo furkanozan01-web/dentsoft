@@ -6,6 +6,7 @@ import { useConfirm } from '@/components/ConfirmModal'
 import { parseToKurus, formatAmount } from '@/lib/format'
 import { applyTreatmentAdjustment, closeTreatmentAccount } from './actions'
 import type { Treatment } from './types'
+import { IconPrint } from '@/components/icons'
 
 // ─── Tedavi geçmişi kartı ─────────────────────────────────────────────────────
 export function TreatmentHistoryCard({
@@ -420,6 +421,4 @@ export function IconEye() {
 export function IconRotate() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" /></svg>
 }
-export function IconPrint() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
-}
+export { IconPrint } from '@/components/icons'

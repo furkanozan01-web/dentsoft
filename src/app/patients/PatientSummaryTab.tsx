@@ -15,6 +15,7 @@ import PatientQuickActions from './PatientQuickActions'
 import { calcAge } from './formatters'
 import { toTitleCase, formatAmount } from '@/lib/format'
 import type { Patient, TabId, Transaction, Treatment } from './types'
+import { IconAlertTriangle, IconPencil } from '@/components/icons'
 
 // ---- Hasta Kartı Tab ----
 function HastaKartiTab({
@@ -544,9 +545,6 @@ ${anamnesis.notes ? `<div class="notes"><span style="font-size:10px;font-weight:
 }
 
 // ---- İkonlar ----
-function IconPencil() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18.4 2.6a2.1 2.1 0 0 1 3 3L8 19l-4 1 1-4Z" /></svg>
-}
 function IconPrint() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
 }
@@ -567,9 +565,6 @@ function IconShield() {
 }
 function IconClipboardCheck() {
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="1" /><path d="m9 12 2 2 4-4" /></svg>
-}
-function IconAlertTriangle() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
 }
 function IconHeartPulse() {
   return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19.5 12.6 12 20l-7.5-7.4A5 5 0 0 1 12 6a5 5 0 0 1 7.5 6.6Z" /><path d="M3.5 12H8l2-3 3 6 2-3h5.5" /></svg>

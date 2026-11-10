@@ -38,6 +38,7 @@ import type {
 import { ActivePlanTab, BRANCH_ORDER, tariffBranch, isUpperTooth, parseTab, DIAGNOSIS_ITEMS, PLANLAMA_COLORS, FAZ_COLORS, getMarkerColor } from './oralShared'
 import { PlanItemsCard, PlanTabBtn } from './OralPlanParts'
 import { TreatmentHistoryCard } from './OralTreatmentHistoryCard'
+import { IconAlertTriangle, IconSearch } from '@/components/icons'
 
 // ─── Ana bileşen ──────────────────────────────────────────────────────────────
 function OralTab({
@@ -901,11 +902,5 @@ function OralTab({
 // ─── İkonlar ──────────────────────────────────────────────────────────────────
 function IconUserRound() {
   return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0" /><circle cx="12" cy="7" r="4" /></svg>
-}
-function IconAlertTriangle() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
-}
-function IconSearch() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
 }
 export default OralTab
