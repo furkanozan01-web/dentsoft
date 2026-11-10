@@ -23,6 +23,8 @@ export default async function SettingsPage() {
     .single()
 
   if (!profile?.clinic_id) redirect('/login')
+  // Sidebar izinleri ana sorgularla paralel başlar
+  const navPermsPromise = Promise.all([getPermissions('finans_bilgi'), canSeeAyarlarNav()])
   const clinicId = profile.clinic_id
 
   const [
@@ -44,7 +46,7 @@ export default async function SettingsPage() {
     supabase
       .from('doctors')
       .select(
-        'id, name, specialty, phone, email, color, status, diploma_no, tc_enc, diploma_date, birth_date, payment_model, monthly_salary, commission_rate_bps, guarantee_amount, bonus_amount, per_transaction_amount, salary_day, payment_account, work_hours_json, is_mesul_mudur, branch_id, title, guarantee_active, guarantee_period, guarantee_method, guarantee_note, share_active, share_rate_bps, share_start_date, share_end_date, share_branch_id, share_period, share_note, profit_distribution_type'
+        'id, name, specialty, phone, email, color, status, diploma_no, tc_enc, diploma_date, birth_date, payment_model, monthly_salary, commission_rate_bps, guarantee_amount, bonus_amount, per_transaction_amount, salary_day, payment_account, work_hours_json, is_mesul_mudur, branch_id, title, guarantee_active, guarantee_period, guarantee_method, guarantee_note, doctor_shares(id, doctor_id, branch_id, rate_bps, start_date, end_date, period, profit_distribution_type, note, is_active)'
       )
       .eq('clinic_id', clinicId)
       .order('name'),
@@ -195,19 +197,11 @@ export default async function SettingsPage() {
       tc_identity_no: null,
       guarantee_active: false,
       guarantee_note: null,
-      share_active: false,
-      share_rate_bps: 0,
-      share_start_date: null,
-      share_end_date: null,
-      share_branch_id: null,
-      share_note: null,
+      doctor_shares: [],
     })
   )
 
-  const [{ canView: canSeeFinans }, canSeeAyarlar] = await Promise.all([
-    getPermissions('finans_bilgi'),
-    canSeeAyarlarNav(),
-  ])
+  const [{ canView: canSeeFinans }, canSeeAyarlar] = await navPermsPromise
 
   return (
     <div className="flex min-h-screen bg-[#F0F4F9]">

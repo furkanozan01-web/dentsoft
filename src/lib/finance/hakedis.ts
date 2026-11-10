@@ -26,14 +26,16 @@ export interface HakedisDoctor {
   guarantee_period: string
   guarantee_method: string
   guarantee_note: string | null
-  share_active: boolean
-  share_rate_bps: number
-  share_start_date: string | null
-  share_end_date: string | null
-  share_branch_id: number | null
-  share_period: string
-  share_note: string | null
-  profit_distribution_type: string
+}
+
+export interface HakedisDoctorShare {
+  id: number
+  doctor_id: number
+  branch_id: number
+  rate_bps: number
+  start_date: string | null
+  end_date: string | null
+  is_active: boolean
 }
 
 export interface HakedisTreatment {
@@ -117,20 +119,23 @@ export interface DoctorSummary {
 
 /**
  * @param doctor   - Hesaplama yapılacak hekim
+ * @param shares   - Kliniğin tüm hekim hisseleri (fonksiyon içinde doctor.id filtresi uygular; her satırın kendi branch_id'si var)
  * @param treatments - Kliniğin tüm tedavileri (fonksiyon içinde doctor.id + monthKey filtresi uygular)
  * @param patients - Kliniğin tüm hastaları
  * @param txs      - Kliniğin tüm işlemleri (payment tipindekiler kullanılır)
  * @param payments - Tüm hekim ödemeleri
  * @param monthKey - 'YYYY-MM' formatında ay (örn. '2026-06')
+ * @param profitByMonth - `${branch_id}:${monthKey}` anahtarlı şube net kâr tablosu (bkz. finance/page.tsx)
  */
 export function computeSummary(
   doctor: HakedisDoctor,
+  shares: HakedisDoctorShare[],
   treatments: HakedisTreatment[],
   patients: HakedisPatient[],
   txs: HakedisTx[],
   payments: HakedisDoctorPayment[],
   monthKey: string,
-  clinicNetProfitOverride?: number
+  profitByMonth: Record<string, number>
 ): DoctorSummary {
   const patientMap = new Map(patients.map((p) => [p.id, p]))
   const periodTreatments = treatments.filter(
@@ -236,20 +241,19 @@ export function computeSummary(
     ? Math.max((doctor.guarantee_amount ?? 0) - guaranteeBase, 0)
     : 0
 
-  const profitTransactions = txs.filter((tx) =>
-    tx.transaction_date.startsWith(monthKey) &&
-    (!doctor.share_branch_id || tx.branch_id === doctor.share_branch_id)
-  )
-  const clinicIncome = profitTransactions.filter((tx) => tx.type === 'payment').reduce((sum, tx) => sum + tx.amount, 0)
-  const clinicExpenses = profitTransactions.filter((tx) => tx.type === 'expense' || tx.type === 'refund').reduce((sum, tx) => sum + tx.amount, 0)
-  const clinicNetProfit = clinicNetProfitOverride ?? (clinicIncome - clinicExpenses)
   const monthStart = `${monthKey}-01`
   const monthEnd = `${monthKey}-31`
-  const shareDateValid = (!doctor.share_start_date || doctor.share_start_date <= monthEnd) &&
-    (!doctor.share_end_date || doctor.share_end_date >= monthStart)
-  const profitShare = doctor.share_active && shareDateValid && (doctor.share_rate_bps ?? 0) > 0
-    ? Math.round((Math.max(clinicNetProfit, 0) * doctor.share_rate_bps) / 10000)
-    : 0
+  const activeShares = shares.filter((s) =>
+    s.doctor_id === doctor.id && s.is_active &&
+    (!s.start_date || s.start_date <= monthEnd) && (!s.end_date || s.end_date >= monthStart)
+  )
+  let profitShare = 0
+  let clinicNetProfit = 0
+  for (const share of activeShares) {
+    const branchProfit = Math.max(profitByMonth[`${share.branch_id}:${monthKey}`] ?? 0, 0)
+    clinicNetProfit += branchProfit
+    profitShare += Math.round((branchProfit * share.rate_bps) / 10000)
+  }
   const entitlement = calculatedBeforeGuarantee + guaranteeCompletion + profitShare
 
   const paid = payments
@@ -273,6 +277,6 @@ export function computeSummary(
     guaranteeCompletion,
     clinicNetProfit,
     profitShare,
-    shareRate: doctor.share_rate_bps ?? 0,
+    shareRate: activeShares.reduce((s, sh) => s + sh.rate_bps, 0),
   }
 }

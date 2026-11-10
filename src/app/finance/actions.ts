@@ -213,6 +213,34 @@ export async function deleteDoctorPayment(id: number): Promise<R> {
   return { success: true }
 }
 
+// ── Kasa (şube kasası) ────────────────────────────────────────────────────────
+
+export async function distributeBranchProfit(input: {
+  branchId: number
+  amount: string
+  date?: string
+  note?: string
+}): Promise<{ success?: boolean; error?: string; distributed?: { doctorId: number; amount: number }[] }> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Yetkisiz erişim' }
+  const { supabase } = ctx
+
+  if (!input.branchId) return { error: 'Şube seçin' }
+  const raw = input.amount?.replace(/\./g, '').replace(',', '.').replace(/[^0-9.]/g, '')
+  const amount = Math.round(parseFloat(raw) * 100)
+  if (isNaN(amount) || amount <= 0) return { error: 'Geçerli bir tutar girin' }
+
+  const { data, error } = await supabase.rpc('distribute_branch_profit', {
+    p_branch_id: input.branchId,
+    p_total_amount: amount,
+    p_payment_date: input.date || localDateValue(),
+    p_note: input.note?.trim() || null,
+  })
+  if (error) return { error: error.message }
+  revalidatePath('/finance')
+  return { success: true, distributed: (data ?? []).map((row: { doctor_id: number; amount: number }) => ({ doctorId: row.doctor_id, amount: row.amount })) }
+}
+
 // ── İş Ortakları ─────────────────────────────────────────────────────────────
 
 export interface BusinessPartner {
@@ -587,8 +615,8 @@ export async function getHekimHakedis(input: {
 
   // Hangi doktorlar hesaplanacak
   const doctorFilter = canSeeAll && !input.hekim_id
-    ? supabase.from('doctors').select('id, name, specialty, color, commission_rate_bps, payment_model, monthly_salary, guarantee_amount, bonus_amount, per_transaction_amount, salary_day, payment_account, guarantee_active, guarantee_period, guarantee_method, guarantee_note, share_active, share_rate_bps, share_start_date, share_end_date, share_branch_id, share_period, share_note, profit_distribution_type').eq('clinic_id', clinicId).eq('status', 'active')
-    : supabase.from('doctors').select('id, name, specialty, color, commission_rate_bps, payment_model, monthly_salary, guarantee_amount, bonus_amount, per_transaction_amount, salary_day, payment_account, guarantee_active, guarantee_period, guarantee_method, guarantee_note, share_active, share_rate_bps, share_start_date, share_end_date, share_branch_id, share_period, share_note, profit_distribution_type').eq('clinic_id', clinicId).eq('id', targetId)
+    ? supabase.from('doctors').select('id, name, specialty, color, commission_rate_bps, payment_model, monthly_salary, guarantee_amount, bonus_amount, per_transaction_amount, salary_day, payment_account, guarantee_active, guarantee_period, guarantee_method, guarantee_note').eq('clinic_id', clinicId).eq('status', 'active')
+    : supabase.from('doctors').select('id, name, specialty, color, commission_rate_bps, payment_model, monthly_salary, guarantee_amount, bonus_amount, per_transaction_amount, salary_day, payment_account, guarantee_active, guarantee_period, guarantee_method, guarantee_note').eq('clinic_id', clinicId).eq('id', targetId)
 
   const [
     { data: doctors, error: docErr },
@@ -596,6 +624,7 @@ export async function getHekimHakedis(input: {
     { data: txs, error: txErr2 },
     { data: patients, error: patErr },
     { data: payments, error: payErr },
+    { data: shares, error: shareErr },
   ] = await Promise.all([
     doctorFilter,
     supabase
@@ -620,6 +649,10 @@ export async function getHekimHakedis(input: {
       .select('doctor_id, amount, payment_date, earning_period')
       .eq('clinic_id', clinicId)
       .or(`earning_period.eq.${monthKey},and(earning_period.is.null,payment_date.gte.${rangeStart},payment_date.lt.${rangeEnd})`),
+    supabase
+      .from('doctor_shares')
+      .select('id, doctor_id, branch_id, rate_bps, start_date, end_date, is_active')
+      .eq('clinic_id', clinicId),
   ])
 
   if (docErr) return { error: docErr.message }
@@ -627,9 +660,18 @@ export async function getHekimHakedis(input: {
   if (txErr2) return { error: txErr2.message }
   if (patErr) return { error: patErr.message }
   if (payErr) return { error: payErr.message }
+  if (shareErr) return { error: shareErr.message }
   if (!doctors || doctors.length === 0) return { error: 'Hekim bulunamadı.' }
 
   const fmt = (kurus: number) => Math.round(kurus) / 100
+
+  const profitByMonth: Record<string, number> = {}
+  for (const tx of txs ?? []) {
+    if (!tx.branch_id) continue
+    const signed = tx.type === 'payment' ? tx.amount : -tx.amount
+    const key = `${tx.branch_id}:${monthKey}`
+    profitByMonth[key] = (profitByMonth[key] ?? 0) + signed
+  }
 
   const results: HekimHakedisResult[] = (doctors as Array<{
     id: number; name: string; specialty: string | null; color: string | null;
@@ -638,16 +680,16 @@ export async function getHekimHakedis(input: {
     bonus_amount: number | null; per_transaction_amount: number | null;
     salary_day: number | null; payment_account: string | null;
     guarantee_active: boolean; guarantee_period: string; guarantee_method: string; guarantee_note: string | null;
-    share_active: boolean; share_rate_bps: number; share_start_date: string | null; share_end_date: string | null;
-    share_branch_id: number | null; share_period: string; share_note: string | null; profit_distribution_type: string;
   }>).map((doc) => {
     const summary = computeSummary(
       doc,
-      (treatments ?? []) as Parameters<typeof computeSummary>[1],
-      (patients ?? []) as Parameters<typeof computeSummary>[2],
-      (txs ?? []) as Parameters<typeof computeSummary>[3],
-      (payments ?? []) as Parameters<typeof computeSummary>[4],
-      monthKey
+      (shares ?? []) as Parameters<typeof computeSummary>[1],
+      (treatments ?? []) as Parameters<typeof computeSummary>[2],
+      (patients ?? []) as Parameters<typeof computeSummary>[3],
+      (txs ?? []) as Parameters<typeof computeSummary>[4],
+      (payments ?? []) as Parameters<typeof computeSummary>[5],
+      monthKey,
+      profitByMonth
     )
     return {
       hekim_id: doc.id,

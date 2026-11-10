@@ -62,6 +62,19 @@ export interface Branch {
 
 export type DayHours = { start: string; end: string; clinic: string; off: boolean }
 
+export interface DoctorShare {
+  id: number
+  doctor_id: number
+  branch_id: number
+  rate_bps: number
+  start_date: string | null
+  end_date: string | null
+  period: string
+  profit_distribution_type: string
+  note: string | null
+  is_active: boolean
+}
+
 export interface Doctor {
   id: number
   name: string
@@ -90,14 +103,7 @@ export interface Doctor {
   guarantee_period: string
   guarantee_method: string
   guarantee_note: string | null
-  share_active: boolean
-  share_rate_bps: number
-  share_start_date: string | null
-  share_end_date: string | null
-  share_branch_id: number | null
-  share_period: string
-  share_note: string | null
-  profit_distribution_type: string
+  doctor_shares: DoctorShare[]
 }
 
 export interface Profile {

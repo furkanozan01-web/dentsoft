@@ -4,11 +4,11 @@ import { useState, useTransition, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ConfirmModal'
 import { parseToKurus } from '@/lib/format'
-import { addDoctor, updateDoctor, deleteDoctor, toggleMesulMudur } from './actions'
+import { addDoctor, updateDoctor, deleteDoctor, toggleMesulMudur, addDoctorShare, updateDoctorShare, deleteDoctorShare } from './actions'
 import { PAYMENT_MODEL_LABEL, SPECIALTIES, DAYS } from './constants'
 import { emptyWorkHours } from './helpers'
 import { ErrBox, SettingsIconBox, IconAlert, IconUsers, IconCheckCircle, IconPlus, IconClipboard } from './SettingsSharedUI'
-import type { Branch, DayHours, Doctor, R } from './types'
+import type { Branch, DayHours, Doctor, DoctorShare, R } from './types'
 
 export default function DisHekimiTab({ doctors, branches, isAdmin, onChanged }: { doctors: Doctor[]; branches: Branch[]; isAdmin: boolean; onChanged: () => void }) {
   const confirm = useConfirm()
@@ -136,7 +136,7 @@ export default function DisHekimiTab({ doctors, branches, isAdmin, onChanged }: 
         </aside>
       </div>
 
-      {mode !== 'none' && <div className="fixed inset-0 z-50 flex items-center justify-center p-4"><button type="button" aria-label="Düzenleyiciyi kapat" onClick={closeEditor} className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm" /><div className="relative max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl shadow-2xl"><DoctorEditor key={mode === 'edit' ? selected?.id ?? 'edit' : 'new'} doctor={mode === 'edit' ? selected : null} branches={branches} isAdmin={isAdmin} onCancel={closeEditor} onSaved={() => { closeEditor(); onChanged() }} /></div></div>}
+      {mode !== 'none' && <div className="fixed inset-0 z-50 flex items-center justify-center p-4"><button type="button" aria-label="Düzenleyiciyi kapat" onClick={closeEditor} className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm" /><div className="relative max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl shadow-2xl"><DoctorEditor key={mode === 'edit' ? selected?.id ?? 'edit' : 'new'} doctor={mode === 'edit' ? selected : null} branches={branches} isAdmin={isAdmin} onCancel={closeEditor} onSaved={() => { closeEditor(); onChanged() }} onSharesChanged={onChanged} /></div></div>}
     </div>
   )
 }
@@ -161,12 +161,14 @@ function DoctorEditor({
   isAdmin,
   onCancel,
   onSaved,
+  onSharesChanged,
 }: {
   doctor: Doctor | null
   branches: Branch[]
   isAdmin: boolean
   onCancel: () => void
   onSaved: () => void
+  onSharesChanged: () => void
 }) {
   const isNew = !doctor
   const existingNameParts = (doctor?.name ?? '').trim().split(/\s+/).filter(Boolean)
@@ -196,14 +198,6 @@ function DoctorEditor({
   const [guaranteePeriod, setGuaranteePeriod] = useState(doctor?.guarantee_period ?? 'monthly')
   const [guaranteeMethod, setGuaranteeMethod] = useState(doctor?.guarantee_method ?? 'minimum_total')
   const [guaranteeNote, setGuaranteeNote] = useState(doctor?.guarantee_note ?? '')
-  const [shareActive, setShareActive] = useState(doctor?.share_active ?? false)
-  const [shareRateStr, setShareRateStr] = useState(doctor?.share_rate_bps ? String(doctor.share_rate_bps / 100) : '')
-  const [shareStartDate, setShareStartDate] = useState(doctor?.share_start_date ?? '')
-  const [shareEndDate, setShareEndDate] = useState(doctor?.share_end_date ?? '')
-  const [shareBranchId, setShareBranchId] = useState(String(doctor?.share_branch_id ?? ''))
-  const [sharePeriod, setSharePeriod] = useState(doctor?.share_period ?? 'monthly')
-  const [shareNote, setShareNote] = useState(doctor?.share_note ?? '')
-  const [profitDistributionType, setProfitDistributionType] = useState(doctor?.profit_distribution_type ?? 'profit_distribution')
   const [salaryDay, setSalaryDay] = useState(doctor?.salary_day ? String(doctor.salary_day) : '')
   const [paymentAccount, setPaymentAccount] = useState(doctor?.payment_account ?? '')
   const [hours, setHours] = useState<Record<string, DayHours>>(() => {
@@ -216,7 +210,6 @@ function DoctorEditor({
   const [pending, startTransition] = useTransition()
 
   const rateBps = Math.round((parseFloat(rateStr.replace(',', '.')) || 0) * 100)
-  const shareRateBps = Math.round((parseFloat(shareRateStr.replace(',', '.')) || 0) * 100)
 
   const setDay = (key: string, patch: Partial<DayHours>) =>
     setHours((h) => ({ ...h, [key]: { ...h[key], ...patch } }))
@@ -251,14 +244,6 @@ function DoctorEditor({
       guarantee_period: guaranteePeriod,
       guarantee_method: guaranteeMethod,
       guarantee_note: guaranteeNote || null,
-      share_active: shareActive,
-      share_rate_bps: shareRateBps,
-      share_start_date: shareStartDate || null,
-      share_end_date: shareEndDate || null,
-      share_branch_id: shareBranchId ? Number(shareBranchId) : null,
-      share_period: sharePeriod,
-      share_note: shareNote || null,
-      profit_distribution_type: profitDistributionType,
       salary_day: salaryDay ? Number(salaryDay) : null,
       payment_account: paymentAccount || null,
       work_hours_json: hours,
@@ -396,8 +381,15 @@ function DoctorEditor({
         </div>
 
         <div className="mt-4 rounded-2xl border border-rose-100 bg-rose-50/60 p-4">
-          <label className="flex items-center justify-between gap-3 text-sm font-black text-rose-800"><span>Hisse / Kâr Payı</span><input type="checkbox" checked={shareActive} onChange={(e) => setShareActive(e.target.checked)} /></label>
-          {shareActive && <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3"><label className="text-xs font-bold text-slate-500">Hisse oranı (%)<input value={shareRateStr} onChange={(e) => setShareRateStr(e.target.value)} className={`mt-1.5 ${inputCls}`} /></label><label className="text-xs font-bold text-slate-500">Başlangıç<input type="date" value={shareStartDate} onChange={(e) => setShareStartDate(e.target.value)} className={`mt-1.5 ${inputCls}`} /></label><label className="text-xs font-bold text-slate-500">Bitiş<input type="date" value={shareEndDate} onChange={(e) => setShareEndDate(e.target.value)} className={`mt-1.5 ${inputCls}`} /></label><label className="text-xs font-bold text-slate-500">Geçerli şube<select value={shareBranchId} onChange={(e) => setShareBranchId(e.target.value)} className={`mt-1.5 ${inputCls}`}><option value="">Tüm erişilebilir klinik</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label><label className="text-xs font-bold text-slate-500">Hesaplama dönemi<select value={sharePeriod} onChange={(e) => setSharePeriod(e.target.value)} className={`mt-1.5 ${inputCls}`}><option value="monthly">Aylık</option><option value="quarterly">3 Aylık</option><option value="yearly">Yıllık</option></select></label><label className="text-xs font-bold text-slate-500">Muhasebe sınıfı<select value={profitDistributionType} onChange={(e) => setProfitDistributionType(e.target.value)} className={`mt-1.5 ${inputCls}`}><option value="profit_distribution">Kâr dağıtımı</option><option value="expense">Gider</option><option value="partner_payment">Ortak ödeme hareketi</option></select></label><label className="text-xs font-bold text-slate-500 md:col-span-2 lg:col-span-3">Açıklama<input value={shareNote} onChange={(e) => setShareNote(e.target.value)} className={`mt-1.5 ${inputCls}`} /></label></div>}
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-black text-rose-800">Hisse / Kâr Payı (Şube Bazlı)</span>
+          </div>
+          <p className="mt-1 text-xs font-semibold text-rose-700/70">Bir hekim birden fazla şubede farklı oranlarda hisseye sahip olabilir. Kasa &gt; Kâr Payı Öde işlemi bu oranları kullanır.</p>
+          {isNew ? (
+            <p className="mt-3 text-xs font-bold text-rose-700">Hekim kaydedildikten sonra şube hissesi ekleyebilirsiniz.</p>
+          ) : (
+            <DoctorSharesEditor doctorId={doctor!.id} shares={doctor!.doctor_shares} branches={branches} onChanged={onSharesChanged} />
+          )}
         </div>
         <div className="mt-4 grid grid-cols-2 gap-4">
           <div>
@@ -461,6 +453,114 @@ function DoctorEditor({
         <button type="button" onClick={submit} disabled={pending} className="px-5 py-2.5 bg-[#2DD4BF] text-[#0F2B3D] text-sm font-semibold rounded-xl hover:bg-[#26b8a5] transition-colors disabled:opacity-60">
           {pending ? 'Kaydediliyor…' : isNew ? 'Hekim Ekle' : 'Değişiklikleri Kaydet'}
         </button>
+      </div>
+    </div>
+  )
+}
+
+const SHARE_TYPE_LABEL: Record<string, string> = {
+  profit_distribution: 'Kâr dağıtımı',
+  expense: 'Gider',
+  partner_payment: 'Ortak ödeme hareketi',
+}
+const SHARE_PERIOD_LABEL: Record<string, string> = { monthly: 'Aylık', quarterly: '3 Aylık', yearly: 'Yıllık' }
+
+function DoctorSharesEditor({ doctorId, shares, branches, onChanged }: { doctorId: number; shares: DoctorShare[]; branches: Branch[]; onChanged: () => void }) {
+  const confirm = useConfirm()
+  const [editingId, setEditingId] = useState<number | 'new' | null>(null)
+  const [delPending, startDel] = useTransition()
+  const branchName = (id: number) => branches.find((b) => b.id === id)?.name ?? `Şube #${id}`
+
+  const handleDelete = async (share: DoctorShare) => {
+    const ok = await confirm({ title: 'Hisseyi Sil', message: `${branchName(share.branch_id)} şubesindeki %${(share.rate_bps / 100).toLocaleString('tr-TR')} hissesi silinecek. Devam edilsin mi?`, confirmText: 'Evet' })
+    if (!ok) return
+    startDel(async () => {
+      const res = await deleteDoctorShare(share.id)
+      if ((res as R)?.error) toast.error((res as R)!.error!)
+      else { toast.success('Hisse silindi'); onChanged() }
+    })
+  }
+
+  return (
+    <div className="mt-3 space-y-2">
+      {shares.length === 0 && editingId !== 'new' && (
+        <p className="text-xs font-semibold text-rose-700/70">Henüz şube hissesi tanımlanmadı.</p>
+      )}
+      {shares.map((share) =>
+        editingId === share.id ? (
+          <DoctorShareRowEditor key={share.id} doctorId={doctorId} share={share} branches={branches} onCancel={() => setEditingId(null)} onSaved={() => { setEditingId(null); onChanged() }} />
+        ) : (
+          <div key={share.id} className="flex items-center justify-between gap-3 rounded-xl border border-rose-200/70 bg-white px-3 py-2.5">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-black text-[#142536]">{branchName(share.branch_id)} · %{(share.rate_bps / 100).toLocaleString('tr-TR')}</p>
+              <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-400">
+                {SHARE_PERIOD_LABEL[share.period] ?? share.period} · {SHARE_TYPE_LABEL[share.profit_distribution_type] ?? share.profit_distribution_type}
+                {(share.start_date || share.end_date) && ` · ${share.start_date ?? '…'} – ${share.end_date ?? '…'}`}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button type="button" onClick={() => setEditingId(share.id)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600" title="Düzenle"><IconPencil /></button>
+              <button type="button" onClick={() => handleDelete(share)} disabled={delPending} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40" title="Sil"><IconTrash /></button>
+            </div>
+          </div>
+        )
+      )}
+      {editingId === 'new' ? (
+        <DoctorShareRowEditor doctorId={doctorId} share={null} branches={branches} onCancel={() => setEditingId(null)} onSaved={() => { setEditingId(null); onChanged() }} />
+      ) : (
+        <button type="button" onClick={() => setEditingId('new')} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-black text-rose-700 transition hover:bg-rose-100"><IconPlus />Şube Hissesi Ekle</button>
+      )}
+    </div>
+  )
+}
+
+function DoctorShareRowEditor({ doctorId, share, branches, onCancel, onSaved }: { doctorId: number; share: DoctorShare | null; branches: Branch[]; onCancel: () => void; onSaved: () => void }) {
+  const isNew = !share
+  const [branchId, setBranchId] = useState(String(share?.branch_id ?? branches.find((b) => b.is_default)?.id ?? ''))
+  const [rateStr, setRateStr] = useState(share?.rate_bps ? String(share.rate_bps / 100) : '')
+  const [startDate, setStartDate] = useState(share?.start_date ?? '')
+  const [endDate, setEndDate] = useState(share?.end_date ?? '')
+  const [period, setPeriod] = useState(share?.period ?? 'monthly')
+  const [type, setType] = useState(share?.profit_distribution_type ?? 'profit_distribution')
+  const [note, setNote] = useState(share?.note ?? '')
+  const [error, setError] = useState<string | null>(null)
+  const [pending, startTransition] = useTransition()
+  const inputCls = 'w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#2DD4BF]/30'
+
+  const submit = () => {
+    setError(null)
+    const payload = {
+      branch_id: branchId ? Number(branchId) : 0,
+      rate_bps: Math.round((parseFloat(rateStr.replace(',', '.')) || 0) * 100),
+      start_date: startDate || null,
+      end_date: endDate || null,
+      period,
+      profit_distribution_type: type,
+      note: note || null,
+    }
+    startTransition(async () => {
+      const res = isNew ? await addDoctorShare(doctorId, payload) : await updateDoctorShare(share!.id, payload)
+      if ((res as R)?.error) { setError((res as R)!.error!); toast.error((res as R)!.error!); return }
+      toast.success(isNew ? 'Hisse eklendi' : 'Hisse güncellendi')
+      onSaved()
+    })
+  }
+
+  return (
+    <div className="rounded-xl border border-rose-200 bg-white p-3">
+      {error && <div className="mb-3"><ErrBox msg={error} /></div>}
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        <label className="text-xs font-bold text-slate-500">Şube<select value={branchId} onChange={(e) => setBranchId(e.target.value)} className={`mt-1.5 ${inputCls}`}><option value="">Seçin</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
+        <label className="text-xs font-bold text-slate-500">Hisse oranı (%)<input value={rateStr} onChange={(e) => setRateStr(e.target.value)} placeholder="0" className={`mt-1.5 ${inputCls}`} /></label>
+        <label className="text-xs font-bold text-slate-500">Hesaplama dönemi<select value={period} onChange={(e) => setPeriod(e.target.value)} className={`mt-1.5 ${inputCls}`}><option value="monthly">Aylık</option><option value="quarterly">3 Aylık</option><option value="yearly">Yıllık</option></select></label>
+        <label className="text-xs font-bold text-slate-500">Başlangıç<input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={`mt-1.5 ${inputCls}`} /></label>
+        <label className="text-xs font-bold text-slate-500">Bitiş<input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={`mt-1.5 ${inputCls}`} /></label>
+        <label className="text-xs font-bold text-slate-500">Muhasebe sınıfı<select value={type} onChange={(e) => setType(e.target.value)} className={`mt-1.5 ${inputCls}`}><option value="profit_distribution">Kâr dağıtımı</option><option value="expense">Gider</option><option value="partner_payment">Ortak ödeme hareketi</option></select></label>
+        <label className="text-xs font-bold text-slate-500 md:col-span-2 lg:col-span-3">Açıklama<input value={note} onChange={(e) => setNote(e.target.value)} className={`mt-1.5 ${inputCls}`} /></label>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <button type="button" onClick={onCancel} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50">İptal</button>
+        <button type="button" onClick={submit} disabled={pending} className="rounded-lg bg-[#2DD4BF] px-3 py-1.5 text-xs font-bold text-[#0F2B3D] hover:bg-[#26b8a5] disabled:opacity-60">{pending ? 'Kaydediliyor…' : 'Kaydet'}</button>
       </div>
     </div>
   )

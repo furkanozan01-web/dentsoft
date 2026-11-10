@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { localDateValue } from '@/lib/format'
 import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
 import { addDoctorPayment, deleteDoctorPayment } from './actions'
-import type { DoctorPayment, FinDoctor, FinInstallment, FinPatient, FinTreatment, FinTx } from './FinanceClient'
+import type { DoctorPayment, FinDoctor, FinDoctorShare, FinInstallment, FinPatient, FinTreatment, FinTx } from './FinanceClient'
 import { computeSummary, type DoctorSummary } from '@/lib/finance/hakedis'
 
 const MODEL_LABEL: Record<string, string> = {
@@ -18,8 +18,9 @@ const METHOD_LABEL: Record<string, string> = { cash: 'Nakit / Kasa', transfer: '
 function money(value: number) { return `₺${(value / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }
 function dateText(value: string | null) { return value ? new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString('tr-TR') : '—' }
 
-export default function EarningsDashboard({ doctors, treatments, patients, txs, payments, installments, profitByMonth, monthKey, canSeeAll, canManagePayments, currentDoctorId, onChanged, onPatientClick }: {
+export default function EarningsDashboard({ doctors, doctorShares, treatments, patients, txs, payments, installments, profitByMonth, monthKey, canSeeAll, canManagePayments, currentDoctorId, onChanged, onPatientClick }: {
   doctors: FinDoctor[]
+  doctorShares: FinDoctorShare[]
   treatments: FinTreatment[]
   patients: FinPatient[]
   txs: FinTx[]
@@ -54,9 +55,9 @@ export default function EarningsDashboard({ doctors, treatments, patients, txs, 
     [canSeeAll, doctors, currentDoctorId]
   )
   const summaries = useMemo(() => visibleDoctors.map((d) => {
-    const parts=activeMonthKeys.map(key=>computeSummary(d,treatments,patients,txs,payments,key,profitByMonth[`${d.share_branch_id ?? 'all'}:${key}`]));const first=parts[0]
+    const parts=activeMonthKeys.map(key=>computeSummary(d,doctorShares,treatments,patients,txs,payments,key,profitByMonth));const first=parts[0]
     return {...first,details:parts.flatMap(p=>p.details),gross:parts.reduce((s,p)=>s+p.gross,0),cost:parts.reduce((s,p)=>s+p.cost,0),net:parts.reduce((s,p)=>s+p.net,0),bonus:parts.reduce((s,p)=>s+p.bonus,0),entitlement:parts.reduce((s,p)=>s+p.entitlement,0),paid:parts.reduce((s,p)=>s+p.paid,0),remaining:parts.reduce((s,p)=>s+p.remaining,0),completedCount:parts.reduce((s,p)=>s+p.completedCount,0),fixedAmount:parts.reduce((s,p)=>s+p.fixedAmount,0),commissionAmount:parts.reduce((s,p)=>s+p.commissionAmount,0),guaranteeCompletion:parts.reduce((s,p)=>s+p.guaranteeCompletion,0),guaranteeAmount:parts.reduce((s,p)=>s+(p.doctor.guarantee_active ? (p.doctor.guarantee_amount ?? 0) : 0),0),clinicNetProfit:parts.reduce((s,p)=>s+p.clinicNetProfit,0),profitShare:parts.reduce((s,p)=>s+p.profitShare,0)}
-  }), [visibleDoctors, treatments, patients, txs, payments, profitByMonth, activeMonthKeys])
+  }), [visibleDoctors, doctorShares, treatments, patients, txs, payments, profitByMonth, activeMonthKeys])
   const firstId = canSeeAll ? summaries[0]?.doctor.id ?? null : currentDoctorId
   const [persistedSelectedId, setPersistedSelectedId] = usePersistedPreference<number | null>('dentsoft:last-doctor-filter-earnings', firstId)
   const selectedId =

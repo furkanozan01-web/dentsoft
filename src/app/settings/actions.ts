@@ -23,6 +23,9 @@ export {
   updateDoctor,
   deleteDoctor,
   toggleMesulMudur,
+  addDoctorShare,
+  updateDoctorShare,
+  deleteDoctorShare,
 } from './doctorActions'
 
 export {

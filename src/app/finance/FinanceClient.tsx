@@ -1,16 +1,21 @@
 ﻿'use client'
 
 import { useState, useMemo } from 'react'
+import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { localDateValue, MONTHS_TR } from '@/lib/format'
-import { computeSummary } from '@/lib/finance/hakedis'
-import LedgerDashboard from './LedgerDashboard'
-import BalanceDashboard from './BalanceDashboard'
-import EarningsDashboard from './EarningsDashboard'
-import PartnersDashboard from './PartnersDashboard'
-import BilgiTab from './BilgiTab'
+import { computeSummary, type HakedisDoctorShare } from '@/lib/finance/hakedis'
 import ExpenseModal from './ExpenseModal'
-import BorclarTab from './BorclarTab'
+
+// Sekmeler ayrı parçalara bölünür; recharts (Bilgi/Defter) yalnızca o sekme
+// açıldığında yüklenir, açılış paketi küçülür.
+const LedgerDashboard = dynamic(() => import('./LedgerDashboard'))
+const BalanceDashboard = dynamic(() => import('./BalanceDashboard'))
+const EarningsDashboard = dynamic(() => import('./EarningsDashboard'))
+const PartnersDashboard = dynamic(() => import('./PartnersDashboard'))
+const BilgiTab = dynamic(() => import('./BilgiTab'))
+const BorclarTab = dynamic(() => import('./BorclarTab'))
+const KasaDashboard = dynamic(() => import('./KasaDashboard'))
 
 export interface FinTx {
   id: number
@@ -64,14 +69,12 @@ export interface FinDoctor {
   guarantee_period: string
   guarantee_method: string
   guarantee_note: string | null
-  share_active: boolean
-  share_rate_bps: number
-  share_start_date: string | null
-  share_end_date: string | null
-  share_branch_id: number | null
-  share_period: string
-  share_note: string | null
-  profit_distribution_type: string
+}
+export type FinDoctorShare = HakedisDoctorShare
+export interface FinBranch {
+  id: number
+  name: string
+  is_default: boolean
 }
 export interface ClinicDebt {
   id: number
@@ -145,10 +148,11 @@ export interface DoctorPayment {
   earning_period: string | null
 }
 
-type Tab = 'bilgi' | 'defter' | 'bakiye' | 'hakedis' | 'borclar' | 'ortaklar'
+type Tab = 'bilgi' | 'defter' | 'kasa' | 'bakiye' | 'hakedis' | 'borclar' | 'ortaklar'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'bilgi', label: 'Bilgi' },
   { id: 'defter', label: 'Defter' },
+  { id: 'kasa', label: 'Kasa' },
   { id: 'bakiye', label: 'Bakiye' },
   { id: 'hakedis', label: 'Hakediş' },
   { id: 'borclar', label: 'Borçlar' },
@@ -159,6 +163,7 @@ export default function FinanceClient({
   txs,
   treatments,
   doctors,
+  doctorShares,
   patients,
   doctorPayments,
   installments,
@@ -170,10 +175,12 @@ export default function FinanceClient({
   clinicName,
   partnerServices,
   profitByMonth,
+  branches,
 }: {
   txs: FinTx[]
   treatments: FinTreatment[]
   doctors: FinDoctor[]
+  doctorShares: FinDoctorShare[]
   patients: FinPatient[]
   doctorPayments: DoctorPayment[]
   installments: FinInstallment[]
@@ -185,6 +192,7 @@ export default function FinanceClient({
   clinicName: string
   partnerServices: PartnerService[]
   profitByMonth: Record<string, number>
+  branches: FinBranch[]
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -223,7 +231,7 @@ export default function FinanceClient({
     const ciro = mine.reduce((s, t) => s + (t.fee ?? 0), 0)
     const maliyet = mine.reduce((s, t) => s + (t.cost ?? 0), 0)
     const netKar = ciro - maliyet
-    const summary = computeSummary(d, treatments, patients, txs, doctorPayments, monthKey, profitByMonth[`${d.share_branch_id ?? 'all'}:${monthKey}`])
+    const summary = computeSummary(d, doctorShares, treatments, patients, txs, doctorPayments, monthKey, profitByMonth)
     return { doctor: d, ciro, maliyet, netKar, hakedis: summary.entitlement, count: mine.length }
   })
   const totalHakedis = hakedisByDoctor.reduce((s, h) => s + h.hakedis, 0)
@@ -378,6 +386,7 @@ export default function FinanceClient({
         {tab === 'hakedis' && (
           <EarningsDashboard
             doctors={visibleKasa.map((row) => row.doctor)}
+            doctorShares={doctorShares}
             treatments={treatments}
             patients={patients}
             txs={txs}
@@ -390,6 +399,15 @@ export default function FinanceClient({
             currentDoctorId={currentDoctorId}
             onChanged={() => router.refresh()}
             onPatientClick={(id) => router.push(`/patients?patient_id=${id}&tab=hesap`)}
+          />
+        )}
+        {tab === 'kasa' && (
+          <KasaDashboard
+            branches={branches}
+            txs={txs}
+            doctorShares={doctorShares}
+            doctors={doctors}
+            onChanged={() => router.refresh()}
           />
         )}
         {tab === 'borclar' && (

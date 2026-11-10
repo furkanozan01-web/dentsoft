@@ -11,7 +11,7 @@ import DisHekimiTab from './DisHekimiTab'
 import KullaniciTab from './KullaniciTab'
 import TarifeTab from './TarifeTab'
 import RandevuTab from './RandevuTab'
-export type { Branch, ClinicSettings, DayHours, Doctor, Profile, Tariff, TariffProfile } from './types'
+export type { Branch, ClinicSettings, DayHours, Doctor, DoctorShare, Profile, Tariff, TariffProfile } from './types'
 import type { Branch } from './types'
 import { syncDoctorsToUsers } from './actions'
 

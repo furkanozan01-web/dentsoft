@@ -52,14 +52,16 @@ interface DoctorRow {
   guarantee_period: string
   guarantee_method: string
   guarantee_note: string | null
-  share_active: boolean
-  share_rate_bps: number
-  share_start_date: string | null
-  share_end_date: string | null
-  share_branch_id: number | null
-  share_period: string
-  share_note: string | null
-  profit_distribution_type: string
+}
+
+interface DoctorShareRow {
+  id: number
+  doctor_id: number
+  branch_id: number
+  rate_bps: number
+  start_date: string | null
+  end_date: string | null
+  is_active: boolean
 }
 
 interface TreatmentRow {
@@ -103,6 +105,8 @@ export default async function DashboardPage() {
 
   const clinicId = profile?.clinic_id
   if (!clinicId) redirect('/login')
+  // Sidebar izinleri ana sorgularla paralel başlar
+  const navPermsPromise = Promise.all([getPermissions('finans_bilgi'), canSeeAyarlarNav()])
 
   const now = new Date()
   const today = new Date(now)
@@ -119,6 +123,7 @@ export default async function DashboardPage() {
 
   const [
     { data: doctorsRaw },
+    { data: doctorSharesRaw },
     { data: treatmentsRaw },
     { data: doctorPaymentsRaw },
     { data: monthlyPaymentTxRaw },
@@ -135,10 +140,15 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase
       .from('doctors')
-      .select('id, name, color, specialty, commission_rate_bps, payment_model, monthly_salary, guarantee_amount, bonus_amount, per_transaction_amount, salary_day, payment_account, is_mesul_mudur, guarantee_active, guarantee_period, guarantee_method, guarantee_note, share_active, share_rate_bps, share_start_date, share_end_date, share_branch_id, share_period, share_note, profit_distribution_type')
+      .select('id, name, color, specialty, commission_rate_bps, payment_model, monthly_salary, guarantee_amount, bonus_amount, per_transaction_amount, salary_day, payment_account, is_mesul_mudur, guarantee_active, guarantee_period, guarantee_method, guarantee_note')
       .eq('clinic_id', clinicId)
       .eq('status', 'active')
       .order('name'),
+    supabase
+      .from('doctor_shares')
+      .select('id, doctor_id, branch_id, rate_bps, start_date, end_date, is_active')
+      .eq('clinic_id', clinicId)
+      .eq('is_active', true),
     supabase
       .from('treatments')
       .select('id, fee, cost, doctor_id, patient_id, treatment_date, status, treatment_name')
@@ -239,9 +249,19 @@ export default async function DashboardPage() {
       .map((t) => t.patient_id as number)
   )
 
+  const doctorShares = (doctorSharesRaw ?? []) as DoctorShareRow[]
+  const profitByMonth: Record<string, number> = {}
+  for (const tx of monthlyPaymentTxRaw ?? []) {
+    if (!tx.branch_id) continue
+    const signed = tx.type === 'payment' ? tx.amount : -tx.amount
+    const key = `${tx.branch_id}:${monthKey}`
+    profitByMonth[key] = (profitByMonth[key] ?? 0) + signed
+  }
+
   const ownSummary = currentDoctor
     ? computeSummary(
         currentDoctor,
+        doctorShares,
         scopedTreatments.map((t) => ({ ...t, fee: t.fee ?? 0, cost: t.cost ?? 0 })),
         [],
         monthlyPaymentTxRaw ?? [],
@@ -251,7 +271,8 @@ export default async function DashboardPage() {
           payment_date: payment.payment_date ?? '',
           earning_period: payment.earning_period,
         })),
-        monthKey
+        monthKey,
+        profitByMonth
       )
     : null
 
@@ -329,10 +350,7 @@ export default async function DashboardPage() {
       : []),
   ]
 
-  const [{ canView: canSeeFinans }, canSeeAyarlar] = await Promise.all([
-    getPermissions('finans_bilgi'),
-    canSeeAyarlarNav(),
-  ])
+  const [{ canView: canSeeFinans }, canSeeAyarlar] = await navPermsPromise
 
   return (
     <div className="flex min-h-screen bg-[#F0F4F9]">
