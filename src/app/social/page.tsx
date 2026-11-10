@@ -20,12 +20,11 @@ export default async function SocialPage() {
     .eq('id', user.id)
     .single()
   if (!profile?.clinic_id) redirect('/login')
+  // Sidebar izinleri ana sorgularla paralel başlar
+  const navPermsPromise = Promise.all([getPermissions('finans_bilgi'), canSeeAyarlarNav()])
 
   const data = await loadSocialPageData(supabase, Number(profile.clinic_id))
-  const [{ canView: canSeeFinans }, canSeeAyarlar] = await Promise.all([
-    getPermissions('finans_bilgi'),
-    canSeeAyarlarNav(),
-  ])
+  const [{ canView: canSeeFinans }, canSeeAyarlar] = await navPermsPromise
 
   return (
     <div className="flex min-h-screen bg-[#F0F4F9]">

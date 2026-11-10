@@ -22,6 +22,8 @@ export default async function ResearchPage() {
     .eq('id', user.id)
     .single()
   if (!profile?.clinic_id) redirect('/login')
+  // Sidebar izinleri ana sorgularla paralel başlar
+  const navPermsPromise = Promise.all([getPermissions('finans_bilgi'), canSeeAyarlarNav()])
 
   const clinicId = Number(profile.clinic_id)
   const [{ data: saved }, { data: tags }, { data: doctors }, initialResults] = await Promise.all([
@@ -43,10 +45,7 @@ export default async function ResearchPage() {
       .order('name'),
     searchPatients(supabase, clinicId, DEFAULT_RESEARCH_FILTERS),
   ])
-  const [{ canView: canSeeFinans }, canSeeAyarlar] = await Promise.all([
-    getPermissions('finans_bilgi'),
-    canSeeAyarlarNav(),
-  ])
+  const [{ canView: canSeeFinans }, canSeeAyarlar] = await navPermsPromise
 
   return (
     <div className="flex min-h-screen bg-[#F0F4F9]">

@@ -20,6 +20,8 @@ export default async function AppointmentsPage() {
     .eq('id', user.id)
     .single()
   if (!profile?.clinic_id) redirect('/login')
+  // Sidebar izinleri ana sorgularla paralel başlar
+  const navPermsPromise = Promise.all([getPermissions('finans_bilgi'), canSeeAyarlarNav()])
   const clinicId = profile.clinic_id
 
   const [{ data: doctors }, { data: patients }, { data: clinic }, { data: tariffs }, { data: appointmentTypes }] = await Promise.all([
@@ -49,10 +51,7 @@ export default async function AppointmentsPage() {
       .order('treatment_name'),
     supabase.from('appointment_types').select('id, name, default_duration, color, description, branch_id, doctor_ids').eq('clinic_id', clinicId).eq('is_active', true).order('name'),
   ])
-  const [{ canView: canSeeFinans }, canSeeAyarlar] = await Promise.all([
-    getPermissions('finans_bilgi'),
-    canSeeAyarlarNav(),
-  ])
+  const [{ canView: canSeeFinans }, canSeeAyarlar] = await navPermsPromise
 
   return (
     <div className="flex min-h-screen bg-[#F0F4F9]">

@@ -28,6 +28,8 @@ export default async function PatientsPage() {
     .single()
 
   if (!profile?.clinic_id) redirect('/login')
+  // Sidebar izinleri ana sorgularla paralel başlar
+  const navPermsPromise = Promise.all([getPermissions('finans_bilgi'), canSeeAyarlarNav()])
   const clinicId = profile.clinic_id
 
   const [
@@ -80,10 +82,7 @@ export default async function PatientsPage() {
       .eq('clinic_id', clinicId)
       .neq('status', 'cancelled'),
   ])
-  const [{ canView: canSeeFinans }, canSeeAyarlar] = await Promise.all([
-    getPermissions('finans_bilgi'),
-    canSeeAyarlarNav(),
-  ])
+  const [{ canView: canSeeFinans }, canSeeAyarlar] = await navPermsPromise
 
   return (
     <div className="flex min-h-screen bg-[#F0F4F9]">
