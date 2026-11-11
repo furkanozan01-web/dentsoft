@@ -1,20 +1,26 @@
 ﻿'use client'
 
-import React from 'react'
+import React, { useId } from 'react'
 import { classifyDiagnosis, classifyTreatment, type ToothFlags } from './toothFlags'
 
 export { classifyDiagnosis, classifyTreatment }
 export type { ToothFlags, ToothBooleanFlag } from './toothFlags'
 
 /**
- * Anatomik FDI diş şeması — tamamen SVG (dış görsele/CDN'e bağımlılık yok).
- * Her diş, FDI numarasına göre tip + kök sayısıyla vektörel çizilir; kökler,
- * pulpa ve kanallar gösterilir. Tedaviler dişin üzerine sembolik işlenir:
- *   - kanal tedavisi → kanal kırmızıdan beyaza döner
- *   - dolgu          → kron üzerinde sembolik dolgu
- *   - kron/kaplama   → kron üzerine porselen kep + altın marj çizgisi
- *   - implant        → kök yerine vida şeması
- *   - çekim          → diş soluk + kırmızı çarpı
+ * Anatomik FDI dentogram — tamamen SVG (dış görsele/CDN'e bağımlılık yok).
+ *
+ * Dişler bukkal (yanak/dudak) yüzden görünür ve anatomik ortalama ölçülerle
+ * (genişlik, kron boyu, kök boyu) çizilir; okluzal/insizal uçlar aynı düzlemde
+ * hizalanır, mine-sement sınırı ve kök uçları dişe göre değişir. Azılarda kök
+ * gövdesi + furkasyon, üst azılarda arkada palatinal kök vardır. Diş eti satır
+ * boyunca tek parça çizilir ve köklere doğru saydamlaşır (kanal/lezyon görünür kalsın).
+ *
+ * Tedaviler dişin üzerine işlenir:
+ *   - kanal tedavisi → pulpa/kanal kırmızıdan beyaza döner
+ *   - dolgu          → kron üzerinde gri restorasyon
+ *   - kron/kaplama   → kron porselen (mavi) / zirkonyum (turkuaz) renginde
+ *   - implant        → kök yerine vida
+ *   - çekim          → diş çizilmez, diş eti düz devam eder
  */
 
 type Jaw = 'upper' | 'lower'
@@ -30,6 +36,30 @@ const ROOTS: Record<number, number> = {
   85: 2, 84: 2, 83: 1, 82: 1, 81: 1, 71: 1, 72: 1, 73: 1, 74: 2, 75: 2,
 }
 
+// Anatomik ortalama ölçüler (mm): [mesio-distal kron genişliği, kron boyu, kök boyu]
+type Dim = [number, number, number]
+const PERM_UPPER: Record<number, Dim> = {
+  1: [8.5, 10.5, 13], 2: [6.5, 9.5, 13], 3: [7.5, 10, 17], 4: [7, 8.5, 14],
+  5: [6.5, 8.5, 14], 6: [10, 7.5, 12.5], 7: [9, 7, 11.5], 8: [8.5, 6.5, 10.5],
+}
+const PERM_LOWER: Record<number, Dim> = {
+  1: [5, 9, 12.5], 2: [5.5, 9.5, 14], 3: [7, 11, 16], 4: [7, 8.5, 14],
+  5: [7, 8, 14.5], 6: [11, 7.5, 14], 7: [10.5, 7, 13], 8: [10, 7, 11],
+}
+const PRIM_UPPER: Record<number, Dim> = {
+  1: [6.5, 6, 10], 2: [5.1, 5.6, 11.4], 3: [7, 6.5, 13.5], 4: [7.3, 5.1, 10], 5: [8.2, 5.7, 11.7],
+}
+const PRIM_LOWER: Record<number, Dim> = {
+  1: [4.2, 5, 9], 2: [4.1, 5.2, 10], 3: [5, 6, 11.5], 4: [7.7, 6, 9.8], 5: [9.9, 5.5, 11.3],
+}
+
+const VBH = 100
+const TOOTH_HEIGHT = 132 // px
+const K = TOOTH_HEIGHT / VBH // px / birim
+const S = 3.3 // birim / mm
+const OCC = 96 // insizal / okluzal uç (tüm dişlerde ortak düzlem)
+const PAD = 1.1 // hücre içinde kronun iki yanındaki pay (komşu kronlar neredeyse değer)
+
 function toothType(num: number): ToothType {
   const d = num % 10
   const primary = num >= 51
@@ -40,541 +70,383 @@ function toothType(num: number): ToothType {
   return 'molar'
 }
 
-const BASE_DIMS: Record<ToothType, { cw: number; vbw: number }> = {
-  incisor: { cw: 23, vbw: 36 },
-  canine: { cw: 25, vbw: 39 },
-  premolar: { cw: 30, vbw: 45 },
-  molar: { cw: 40, vbw: 55 },
-}
-const VBH = 100
-const TOOTH_HEIGHT = 78
-const J = 55 // mine-sement sınırı
-const OCC = 92 // insizal / okluzal uç
-const TIP = 4
-const PULP_FLOOR = 67
-
-function toothDigit(num: number): number {
-  return num % 10
-}
-
-function isPrimaryTooth(num: number): boolean {
-  return num >= 51
+interface Geo {
+  num: number
+  type: ToothType
+  digit: number
+  upper: boolean
+  primary: boolean
+  /** Mezial yönün x işareti (+1: sağa, -1: sola) */
+  ms: 1 | -1
+  cw: number
+  nw: number
+  vbw: number
+  cx: number
+  J: number
+  H: number
+  L: number
+  nRoots: number
 }
 
-function archDirection(num: number): -1 | 1 {
+function geo(num: number): Geo {
   const quadrant = Math.floor(num / 10)
-  return [1, 4, 5, 8].includes(quadrant) ? -1 : 1
+  const digit = num % 10
+  const upper = [1, 2, 5, 6].includes(quadrant)
+  const primary = quadrant >= 5
+  const table = primary ? (upper ? PRIM_UPPER : PRIM_LOWER) : upper ? PERM_UPPER : PERM_LOWER
+  const [wmm, hmm, rmm] = table[digit] ?? [7, 8, 13]
+  const type = toothType(num)
+  const cw = wmm * S
+  const H = hmm * S
+  const neckFactor = type === 'molar' ? 0.8 : type === 'premolar' ? 0.7 : type === 'canine' ? 0.7 : upper ? 0.72 : 0.68
+  const vbw = cw + PAD * 2
+  return {
+    num, type, digit, upper, primary,
+    // 1. ve 4. (5., 8.) kadranlar ekranda solda çizilir → mezial sağa bakar
+    ms: [1, 4, 5, 8].includes(quadrant) ? 1 : -1,
+    cw, nw: cw * neckFactor, vbw, cx: vbw / 2,
+    J: OCC - H, H, L: rmm * S,
+    nRoots: ROOTS[num] ?? 1,
+  }
 }
 
-function toothDims(num: number): { cw: number; vbw: number } {
-  const type = toothType(num)
-  const digit = toothDigit(num)
-  const upper = [1, 2, 5, 6].includes(Math.floor(num / 10))
-  let scale = 1
+const n2 = (v: number) => Number(v.toFixed(2))
+
+// ─── Kron (bukkal görünüm) ──────────────────────────────────────────────────
+
+function crownPath(g: Geo): string {
+  const { cx, cw, J, H, ms, type, digit, upper, primary } = g
+  const hw = cw / 2
+  const hn = g.nw / 2
+  // u > 0 mezial, u < 0 distal
+  const P = (u: number, f: number) => `${n2(cx + ms * u)} ${n2(J + f * H)}`
+  const cej = type === 'molar' ? 0.07 : 0.1
 
   if (type === 'incisor') {
-    scale = digit === 1 ? (upper ? 1.12 : 0.82) : (upper ? 0.94 : 0.76)
-  } else if (type === 'canine') {
-    scale = upper ? 1.05 : 0.92
-  } else if (type === 'premolar') {
-    scale = digit === 4 ? 1 : 0.94
-  } else if (isPrimaryTooth(num)) {
-    scale = digit === 4 ? 0.9 : 0.96
-  } else {
-    scale = digit === 6 ? 1.08 : digit === 7 ? 1 : 0.86
+    const lateral = digit === 2 && upper
+    const rm = (upper ? (lateral ? 0.17 : 0.11) : 0.15) * cw
+    const rd = (upper ? (lateral ? 0.32 : 0.22) : 0.18) * cw
+    const distalDrop = lateral ? 0.06 : upper ? 0.02 : 0
+    return `M ${P(hn, 0)}
+      C ${P(hn + 0.03 * cw, 0.3)} ${P(hw, 0.5)} ${P(hw, 0.76)}
+      C ${P(hw, 0.92)} ${P(hw - rm * 0.2, 1)} ${P(hw - rm, 1)}
+      Q ${P(0, 1.012)} ${P(-(hw - rd), 1 - distalDrop)}
+      C ${P(-(hw - rd * 0.25), 1 - distalDrop)} ${P(-hw, 0.9 - distalDrop)} ${P(-hw, 0.68)}
+      C ${P(-hw, 0.46)} ${P(-(hn + 0.03 * cw), 0.28)} ${P(-hn, 0)}
+      Q ${P(0, -cej)} ${P(hn, 0)} Z`
   }
-
-  const base = BASE_DIMS[type]
-  const cw = base.cw * scale
-  return { cw, vbw: Math.max(base.vbw * scale, cw + 14) }
+  if (type === 'canine') {
+    return `M ${P(hn, 0)}
+      C ${P(hn + 0.03 * cw, 0.26)} ${P(hw, 0.38)} ${P(hw, 0.57)}
+      C ${P(hw, 0.72)} ${P(hw - 0.03 * cw, 0.8)} ${P(hw - 0.1 * cw, 0.855)}
+      Q ${P(0.17 * cw, 0.965)} ${P(0.03 * cw, 1)}
+      Q ${P(-0.15 * cw, 0.95)} ${P(-(hw - 0.09 * cw), 0.8)}
+      C ${P(-(hw - 0.03 * cw), 0.74)} ${P(-hw, 0.67)} ${P(-hw, 0.52)}
+      C ${P(-hw, 0.35)} ${P(-(hn + 0.03 * cw), 0.25)} ${P(-hn, 0)}
+      Q ${P(0, -cej)} ${P(hn, 0)} Z`
+  }
+  if (type === 'premolar') {
+    return `M ${P(hn, 0)}
+      C ${P(hn + 0.04 * cw, 0.25)} ${P(hw, 0.36)} ${P(hw, 0.55)}
+      C ${P(hw, 0.74)} ${P(hw - 0.04 * cw, 0.84)} ${P(hw - 0.13 * cw, 0.9)}
+      Q ${P(0.14 * cw, 0.995)} ${P(0.01 * cw, 1)}
+      Q ${P(-0.13 * cw, 0.995)} ${P(-(hw - 0.13 * cw), 0.9)}
+      C ${P(-(hw - 0.04 * cw), 0.84)} ${P(-hw, 0.74)} ${P(-hw, 0.55)}
+      C ${P(-hw, 0.36)} ${P(-(hn + 0.04 * cw), 0.25)} ${P(-hn, 0)}
+      Q ${P(0, -cej)} ${P(hn, 0)} Z`
+  }
+  // Azı: alt 1. azıda (ve alt süt 2. azısında) üç bukkal tüberkül, diğerlerinde iki
+  const three = !upper && ((!primary && digit === 6) || (primary && digit === 5))
+  const occlusal = three
+    ? `Q ${P(0.365 * cw, 0.985)} ${P(0.3 * cw, 1)}
+       Q ${P(0.22 * cw, 0.99)} ${P(0.155 * cw, 0.94)}
+       Q ${P(0.08 * cw, 0.995)} ${P(0, 0.995)}
+       Q ${P(-0.09 * cw, 0.99)} ${P(-0.165 * cw, 0.945)}
+       Q ${P(-0.24 * cw, 0.985)} ${P(-0.3 * cw, 0.975)}
+       Q ${P(-0.38 * cw, 0.965)} ${P(-0.41 * cw, 0.89)}`
+    : `Q ${P(0.33 * cw, 0.99)} ${P(0.24 * cw, 1)}
+       Q ${P(0.12 * cw, 0.99)} ${P(-0.01 * cw, 0.935)}
+       Q ${P(-0.13 * cw, 0.985)} ${P(-0.24 * cw, 0.985)}
+       Q ${P(-0.35 * cw, 0.98)} ${P(-0.4 * cw, 0.9)}`
+  return `M ${P(hn, 0)}
+    C ${P(hn + 0.05 * cw, 0.22)} ${P(hw, 0.32)} ${P(hw, 0.54)}
+    C ${P(hw, 0.74)} ${P(hw - 0.04 * cw, 0.84)} ${P(0.4 * cw, 0.91)}
+    ${occlusal}
+    C ${P(-(hw - 0.04 * cw), 0.82)} ${P(-hw, 0.72)} ${P(-hw, 0.53)}
+    C ${P(-hw, 0.32)} ${P(-(hn + 0.05 * cw), 0.22)} ${P(-hn, 0)}
+    Q ${P(0, -cej)} ${P(hn, 0)} Z`
 }
 
-function crownPath(t: ToothType, cx: number, cw: number, num: number): string {
-  const half = cw / 2
-  const l = cx - half
-  const r = cx + half
-  const digit = toothDigit(num)
-  const dir = archDirection(num)
-
-  if (t === 'incisor') {
-    const lateral = digit === 2
-    // Anatomik kural: mesial köşe keskine yakın, distal köşe daha yuvarlaktır.
-    const mesDrop = lateral ? 1.6 : 0.7
-    const disDrop = lateral ? 4.2 : 2.4
-    const leftDrop = dir > 0 ? mesDrop : disDrop
-    const rightDrop = dir > 0 ? disDrop : mesDrop
-    return `M ${l + 2.4} ${J}
-      C ${l - 1.2} ${J + 11} ${l - 0.8} ${OCC - 15} ${l + 1.6} ${OCC - 6 - leftDrop}
-      Q ${l + 2.2} ${OCC - leftDrop} ${l + half * 0.42} ${OCC - leftDrop + 1.6}
-      Q ${cx} ${OCC + (lateral ? 2.6 : 1.6)} ${r - half * 0.42} ${OCC - rightDrop + 1.6}
-      Q ${r - 2.2} ${OCC - rightDrop} ${r - 1.6} ${OCC - 6 - rightDrop}
-      C ${r + 0.8} ${OCC - 15} ${r + 1.2} ${J + 11} ${r - 2.4} ${J}
-      Q ${cx} ${J + 4.4} ${l + 2.4} ${J} Z`
-  }
-  if (t === 'canine') {
-    // Tüberkül hafif mesialde; mesial yamaç kısa, distal yamaç uzundur.
-    const cuspX = cx - dir * half * 0.1
-    const mesY = OCC - 6
-    const disY = OCC - 9.5
-    const leftY = dir > 0 ? mesY : disY
-    const rightY = dir > 0 ? disY : mesY
-    return `M ${l + 2} ${J}
-      C ${l - 1.4} ${J + 10} ${l - 1} ${OCC - 16} ${l + 2.6} ${leftY - 2}
-      Q ${l + 3.4} ${leftY} ${l + half * 0.34} ${leftY + 1.6}
-      Q ${cuspX - half * 0.28} ${OCC - 2.2} ${cuspX} ${OCC + 5.2}
-      Q ${cuspX + half * 0.3} ${OCC - 2.6} ${r - half * 0.34} ${rightY + 1.6}
-      Q ${r - 3.4} ${rightY} ${r - 2.6} ${rightY - 2}
-      C ${r + 1} ${OCC - 16} ${r + 1.4} ${J + 10} ${r - 2} ${J}
-      Q ${cx} ${J + 4.2} ${l + 2} ${J} Z`
-  }
-  if (t === 'premolar') {
-    // İki tüberkül: bukkal tüberkül daha belirgin, aralarında fissür çentiği.
-    const first = digit === 4
-    const cuspL = cx - half * 0.42
-    const cuspR = cx + half * 0.42
-    const cuspLY = OCC + (first ? 3.6 : 2.8)
-    const cuspRY = OCC + (first ? 2.2 : 3)
-    return `M ${l + 2} ${J}
-      C ${l - 1.6} ${J + 10} ${l - 1.2} ${OCC - 14} ${l + 2.6} ${OCC - 6}
-      Q ${cuspL - half * 0.16} ${OCC - 1.6} ${cuspL} ${cuspLY}
-      Q ${cx - half * 0.1} ${OCC - 4.8} ${cx} ${OCC - 6.6}
-      Q ${cx + half * 0.1} ${OCC - 4.8} ${cuspR} ${cuspRY}
-      Q ${cuspR + half * 0.16} ${OCC - 1.6} ${r - 2.6} ${OCC - 6}
-      C ${r + 1.2} ${OCC - 14} ${r + 1.6} ${J + 10} ${r - 2} ${J}
-      Q ${cx} ${J + 4.6} ${l + 2} ${J} Z`
-  }
-
-  // Molar: dört tüberkül, derin fissürler, kontak noktalarında geniş gövde.
-  const firstMolar = digit === 6
-  const cusp = firstMolar ? 3.8 : 3
-  const notch = 5.2
-  return `M ${l + 2.6} ${J}
-    C ${l - 2} ${J + 9} ${l - 1.8} ${OCC - 13} ${l + 2.8} ${OCC - 6.5}
-    Q ${l + cw * 0.1} ${OCC - 1.2} ${l + cw * 0.18} ${OCC + cusp}
-    Q ${l + cw * 0.29} ${OCC - notch} ${l + cw * 0.4} ${OCC + cusp * 0.8}
-    Q ${cx} ${OCC - notch + 1.6} ${l + cw * 0.6} ${OCC + cusp * 0.85}
-    Q ${l + cw * 0.71} ${OCC - notch} ${l + cw * 0.82} ${OCC + cusp}
-    Q ${r - cw * 0.1} ${OCC - 1.2} ${r - 2.8} ${OCC - 6.5}
-    C ${r + 1.8} ${OCC - 13} ${r + 2} ${J + 9} ${r - 2.6} ${J}
-    Q ${cx} ${J + 4.8} ${l + 2.6} ${J} Z`
-}
-
-function crownDetailPaths(t: ToothType, cx: number, cw: number, num: number): string[] {
-  const digit = toothDigit(num)
-  const dir = archDirection(num)
-  if (t === 'incisor') {
-    // İnsizal üçlüde iki mamelon oluğu + servikal kavis
+/** Kron yüzeyindeki gelişimsel oluklar / sırtlar (ince, yumuşak çizgiler) */
+function crownGrooves(g: Geo): string[] {
+  const { cx, cw, J, H, ms, type, digit, upper, primary } = g
+  const P = (u: number, f: number) => `${n2(cx + ms * u)} ${n2(J + f * H)}`
+  if (type === 'incisor') {
     return [
-      `M ${cx - cw * 0.13} ${OCC - 14} Q ${cx - cw * 0.15} ${OCC - 6} ${cx - cw * 0.1} ${OCC - 1.5}`,
-      `M ${cx + cw * 0.13} ${OCC - 14} Q ${cx + cw * 0.15} ${OCC - 6} ${cx + cw * 0.1} ${OCC - 1.5}`,
-      `M ${cx - cw * 0.28} ${J + 9} Q ${cx} ${J + (digit === 2 ? 12.5 : 13.5)} ${cx + cw * 0.28} ${J + 9}`,
+      `M ${P(0.17 * cw, 0.42)} Q ${P(0.19 * cw, 0.7)} ${P(0.16 * cw, 0.95)}`,
+      `M ${P(-0.17 * cw, 0.42)} Q ${P(-0.19 * cw, 0.7)} ${P(-0.16 * cw, 0.95)}`,
     ]
   }
-  if (t === 'canine') {
-    // Labial kret (tüberküle inen dikey sırt) + servikal kavis
-    return [
-      `M ${cx - dir * cw * 0.02} ${J + 9} C ${cx - dir * cw * 0.04} ${J + 20} ${cx - dir * cw * 0.05} ${OCC - 8} ${cx - dir * cw * 0.05} ${OCC + 1}`,
-      `M ${cx - cw * 0.28} ${J + 9} Q ${cx} ${J + 13} ${cx + cw * 0.28} ${J + 9}`,
-    ]
-  }
-  if (t === 'premolar') {
-    // Merkez fissür + mesial/distal pit çentikleri
-    return [
-      `M ${cx - cw * 0.3} ${OCC - 4.4} Q ${cx} ${OCC - (digit === 4 ? 10 : 9)} ${cx + cw * 0.3} ${OCC - 4.4}`,
-      `M ${cx - cw * 0.36} ${OCC - 7} Q ${cx - cw * 0.32} ${OCC - 5.2} ${cx - cw * 0.29} ${OCC - 6.8}`,
-      `M ${cx + cw * 0.36} ${OCC - 7} Q ${cx + cw * 0.32} ${OCC - 5.2} ${cx + cw * 0.29} ${OCC - 6.8}`,
-      `M ${cx - cw * 0.26} ${J + 9} Q ${cx} ${J + 13} ${cx + cw * 0.26} ${J + 9}`,
-    ]
-  }
-  // Molar: H-desenli fissür sistemi + bukkal oluklar + servikal kavis
-  return [
-    `M ${cx - cw * 0.3} ${OCC - 4} Q ${cx - cw * 0.16} ${OCC - 9} ${cx - cw * 0.02} ${OCC - 5.2}`,
-    `M ${cx + cw * 0.02} ${OCC - 5.2} Q ${cx + cw * 0.16} ${OCC - 9} ${cx + cw * 0.3} ${OCC - 4}`,
-    `M ${cx - cw * 0.02} ${OCC - 5.2} L ${cx + cw * 0.02} ${OCC - 5.2}`,
-    `M ${cx - cw * 0.22} ${J + 10} C ${cx - cw * 0.28} ${J + 20} ${cx - cw * 0.25} ${OCC - 12} ${cx - cw * 0.33} ${OCC - 7}`,
-    `M ${cx + cw * 0.22} ${J + 10} C ${cx + cw * 0.28} ${J + 20} ${cx + cw * 0.25} ${OCC - 12} ${cx + cw * 0.33} ${OCC - 7}`,
-    `M ${cx - cw * 0.28} ${J + 9} Q ${cx} ${J + 13.5} ${cx + cw * 0.28} ${J + 9}`,
-  ]
+  if (type === 'canine') return [`M ${P(0.2 * cw, 0.45)} Q ${P(0.18 * cw, 0.68)} ${P(0.12 * cw, 0.86)}`, `M ${P(-0.2 * cw, 0.45)} Q ${P(-0.19 * cw, 0.64)} ${P(-0.14 * cw, 0.8)}`]
+  if (type === 'premolar') return [`M ${P(0.22 * cw, 0.5)} Q ${P(0.2 * cw, 0.7)} ${P(0.14 * cw, 0.88)}`, `M ${P(-0.22 * cw, 0.5)} Q ${P(-0.2 * cw, 0.7)} ${P(-0.14 * cw, 0.88)}`]
+  const three = !upper && ((!primary && digit === 6) || (primary && digit === 5))
+  return three
+    ? [
+        `M ${P(0.155 * cw, 0.94)} Q ${P(0.17 * cw, 0.7)} ${P(0.15 * cw, 0.48)}`,
+        `M ${P(-0.165 * cw, 0.945)} Q ${P(-0.18 * cw, 0.76)} ${P(-0.165 * cw, 0.58)}`,
+      ]
+    : [`M ${P(-0.01 * cw, 0.935)} Q ${P(0.01, 0.68)} ${P(-0.01 * cw, 0.44)}`]
 }
 
-interface RootGeom {
-  path: string
-  topX: number
-  tipX: number
-  tipY: number
+// ─── Kökler ─────────────────────────────────────────────────────────────────
+
+interface Canal { topX: number; tipX: number; tipY: number }
+interface RootSet { back: string[]; front: string[]; canals: Canal[] }
+
+function singleRootPath(xl: number, xr: number, topY: number, tipX: number, tipY: number): string {
+  const L = topY - tipY
+  const half = (xr - xl) / 2
+  return `M ${n2(xl)} ${n2(topY)}
+    C ${n2(xl + 0.4)} ${n2(topY - 0.34 * L)} ${n2(tipX - half * 0.6)} ${n2(tipY + 0.36 * L)} ${n2(tipX - 1.25)} ${n2(tipY + 3)}
+    Q ${n2(tipX)} ${n2(tipY - 0.7)} ${n2(tipX + 1.25)} ${n2(tipY + 3)}
+    C ${n2(tipX + half * 0.6)} ${n2(tipY + 0.36 * L)} ${n2(xr - 0.4)} ${n2(topY - 0.34 * L)} ${n2(xr)} ${n2(topY)} Z`
 }
 
-function roots(cx: number, cw: number, n: number, num: number, type: ToothType): RootGeom[] {
-  const digit = toothDigit(num)
-  const dir = archDirection(num)
-  const primary = isPrimaryTooth(num)
-  const make = (topX: number, topW: number, tipX: number, tipY: number, belly = 1): RootGeom => {
-    const l = topX - topW / 2
-    const r = topX + topW / 2
-    const mid = (J + tipY) / 2
-    // Apekse doğru belirgin sivrilme, yuvarlak kök ucu
+/** Ortak gövdeden ayrılan iki kök (furkasyon kemeri yF yüksekliğinde) */
+function twoRootPath(xl: number, xr: number, topY: number, yF: number, a: { x: number; y: number; w: number }, b: { x: number; y: number; w: number }, fw: number): string {
+  const fx = (a.x + b.x) / 2
+  const La = topY - a.y
+  const Lb = topY - b.y
+  return `M ${n2(xl)} ${n2(topY)}
+    C ${n2(xl - 0.3)} ${n2(topY - 0.32 * La)} ${n2(a.x - a.w)} ${n2(a.y + 0.5 * La)} ${n2(a.x - 1.2)} ${n2(a.y + 3)}
+    Q ${n2(a.x)} ${n2(a.y - 0.7)} ${n2(a.x + 1.2)} ${n2(a.y + 3)}
+    C ${n2(a.x + a.w)} ${n2(a.y + 0.5 * (yF - a.y))} ${n2(fx - fw)} ${n2(yF)} ${n2(fx)} ${n2(yF)}
+    C ${n2(fx + fw)} ${n2(yF)} ${n2(b.x - b.w)} ${n2(b.y + 0.5 * (yF - b.y))} ${n2(b.x - 1.2)} ${n2(b.y + 3)}
+    Q ${n2(b.x)} ${n2(b.y - 0.7)} ${n2(b.x + 1.2)} ${n2(b.y + 3)}
+    C ${n2(b.x + b.w)} ${n2(b.y + 0.5 * Lb)} ${n2(xr + 0.3)} ${n2(topY - 0.32 * Lb)} ${n2(xr)} ${n2(topY)} Z`
+}
+
+function buildRoots(g: Geo): RootSet {
+  const { cx, cw, J, L, ms, type, digit, upper, primary, nRoots } = g
+  const hn = g.nw / 2
+  const xl = cx - hn + 0.3
+  const xr = cx + hn - 0.3
+  const topY = J + 2.5
+  const ds = -ms // distal yön
+  const order = <T extends { x: number }>(p: T, q: T): [T, T] => (p.x <= q.x ? [p, q] : [q, p])
+
+  if (nRoots <= 1) {
+    const bend = type === 'canine' ? 2.2 : type === 'premolar' ? 1.7 : 1.2
+    const tipX = cx + ds * bend
+    return { back: [], front: [singleRootPath(xl, xr, topY, tipX, J - L)], canals: [{ topX: cx, tipX, tipY: J - L }] }
+  }
+
+  if (type === 'premolar') {
+    // Üst 1. küçük azı: bukkal + palatinal kök, bukkalden apikal üçlüde çatallı görünür
+    const [a, b] = order({ x: cx + ms * 0.13 * cw + ds * 1, y: J - L, w: 0.13 * cw }, { x: cx + ds * 0.15 * cw + ds * 1, y: J - 0.94 * L, w: 0.12 * cw })
     return {
-      path: `M ${l} ${J + 1}
-        C ${l - 1 * belly} ${J - 6} ${tipX - topW * 0.32} ${mid} ${tipX - 0.9} ${tipY + 4}
-        Q ${tipX} ${tipY - 1.8} ${tipX + 0.9} ${tipY + 4}
-        C ${tipX + topW * 0.28} ${mid} ${r + 0.8 * belly} ${J - 6} ${r} ${J + 1}
-        Q ${topX} ${J + 4.2} ${l} ${J + 1} Z`,
-      topX,
-      tipX,
-      tipY,
+      back: [], front: [twoRootPath(xl, xr, topY, J - 0.56 * L, a, b, 0.05 * cw)],
+      canals: [{ topX: cx - 1.1, tipX: a.x, tipY: a.y }, { topX: cx + 1.1, tipX: b.x, tipY: b.y }],
     }
   }
-  if (n <= 1) {
-    const widthFactor = type === 'canine' ? 0.52 : type === 'incisor' ? 0.46 : 0.48
-    const rootWidth = Math.min(cw * widthFactor, 14)
-    const tipY = type === 'canine' ? TIP : type === 'incisor' ? TIP + 4 : TIP + 3
-    const curve = type === 'canine' ? 2.8 : digit === 2 ? 2.1 : 1.4
-    return [make(cx, rootWidth, cx + dir * curve, tipY, type === 'canine' ? 1.25 : 1.1)]
+
+  const third = !primary && digit === 8
+  const spread = (primary ? 1.28 : third ? 0.62 : 1)
+  const trunk = third ? 0.5 : primary ? 0.16 : upper ? 0.3 : 0.25
+
+  if (nRoots === 2 || !upper) {
+    // Alt azı: mezial kök geniş ve distale kıvrık, distal kök daha düz
+    const mes = { x: cx + ms * 0.27 * cw * spread + ds * 1.2, y: J - L, w: 0.18 * cw }
+    const dis = { x: cx + ds * 0.31 * cw * spread, y: J - 0.93 * L, w: 0.15 * cw }
+    const [a, b] = order(mes, dis)
+    return {
+      back: [], front: [twoRootPath(xl, xr, topY, J - trunk * L, a, b, 0.09 * cw)],
+      canals: [{ topX: cx - 0.15 * cw, tipX: a.x, tipY: a.y }, { topX: cx + 0.15 * cw, tipX: b.x, tipY: b.y }],
+    }
   }
-  if (n === 2) {
-    const molar = type === 'molar'
-    const rootWidth = cw * (molar ? 0.36 : 0.29)
-    const off = cw * (molar ? 0.18 : 0.12)
-    const flare = cw * (molar ? (primary ? 0.43 : 0.34) : 0.24)
-    const tipY = molar ? TIP + (primary ? 10 : 7) : TIP + 4
-    return [
-      make(cx - off, rootWidth, cx - flare + dir * 0.8, tipY, 1.15),
-      make(cx + off, rootWidth, cx + flare + dir * 0.8, tipY + 1.5, 1.05),
-    ]
+
+  // Üst azı: mezio-bukkal + disto-bukkal önde, palatinal kök arkada ve daha uzun
+  const mb = { x: cx + ms * 0.26 * cw * spread + ds * 1, y: J - 0.93 * L, w: 0.14 * cw }
+  const db = { x: cx + ds * 0.28 * cw * spread, y: J - 0.86 * L, w: 0.12 * cw }
+  const [a, b] = order(mb, db)
+  const palX = cx + ds * 0.02 * cw
+  return {
+    back: [singleRootPath(cx - 0.27 * cw, cx + 0.27 * cw, topY - 0.12 * L, palX, J - L)],
+    front: [twoRootPath(xl, xr, topY, J - trunk * L, a, b, 0.08 * cw)],
+    canals: [{ topX: cx, tipX: palX, tipY: J - L }, { topX: cx - 0.15 * cw, tipX: a.x, tipY: a.y }, { topX: cx + 0.15 * cw, tipX: b.x, tipY: b.y }],
   }
-  const rootWidth = cw * (primary ? 0.25 : 0.27)
-  const off = cw * 0.22
-  const flare = cw * (primary ? 0.46 : 0.38)
-  return [
-    make(cx, rootWidth * 1.25, cx + dir * 1.2, TIP + 2, 1.2),
-    make(cx - off, rootWidth, cx - flare, TIP + (primary ? 11 : 8), 1.05),
-    make(cx + off, rootWidth, cx + flare, TIP + (primary ? 12 : 9), 1.05),
-  ]
 }
 
-function dentinCorePath(type: ToothType, cx: number, cw: number): string {
-  const half = cw * (type === 'molar' ? 0.36 : type === 'premolar' ? 0.31 : 0.28)
-  const topY = J + 3
-  const endY = type === 'canine' ? OCC - 5 : OCC - 7
-  return `M ${cx - half * 0.68} ${topY}
-    C ${cx - half} ${J + 14} ${cx - half} ${endY - 5} ${cx - half * 0.54} ${endY}
-    Q ${cx} ${endY + (type === 'canine' ? 4 : 1.5)} ${cx + half * 0.54} ${endY}
-    C ${cx + half} ${endY - 5} ${cx + half} ${J + 14} ${cx + half * 0.68} ${topY}
-    Q ${cx} ${topY + 3} ${cx - half * 0.68} ${topY} Z`
+// ─── Pulpa ──────────────────────────────────────────────────────────────────
+
+function pulpGeom(g: Geo) {
+  const { cw, J, H, type, nRoots } = g
+  const pw = cw * (type === 'molar' ? 0.27 : type === 'premolar' ? 0.15 : type === 'canine' ? 0.13 : 0.16)
+  const roof = J + 0.36 * H
+  const horn = H * (type === 'incisor' ? 0.09 : 0.14)
+  const floor = nRoots > 1 && type === 'molar' ? J - 1.5 : J - 4
+  return { pw, roof, horn, floor }
 }
 
-// Pulpa odası, diş grubuna göre farklı genişlik ve pulpa boynuzları taşır.
-function pulpPath(type: ToothType, cx: number, cw: number): string {
-  const pw = Math.min(cw * (type === 'molar' ? 0.22 : type === 'premolar' ? 0.18 : 0.15), 8.5)
-  const chamberTop = type === 'molar' ? OCC - 13 : type === 'premolar' ? OCC - 11 : OCC - 9
-  return `M ${cx - pw} ${chamberTop}
-    C ${cx - pw * 1.1} ${chamberTop - 5} ${cx - pw * 0.75} ${PULP_FLOOR + 2} ${cx - pw * 0.34} ${PULP_FLOOR}
-    Q ${cx} ${PULP_FLOOR - 1.5} ${cx + pw * 0.34} ${PULP_FLOOR}
-    C ${cx + pw * 0.75} ${PULP_FLOOR + 2} ${cx + pw * 1.1} ${chamberTop - 5} ${cx + pw} ${chamberTop}
-    Q ${cx + pw * 0.45} ${chamberTop - 2.5} ${cx} ${chamberTop + 1.5}
-    Q ${cx - pw * 0.45} ${chamberTop - 2.5} ${cx - pw} ${chamberTop} Z`
+function pulpChamberPath(g: Geo): string {
+  const { cx } = g
+  const { pw, roof, horn, floor } = pulpGeom(g)
+  const mid = floor + (roof - floor) * 0.4
+  return `M ${n2(cx - pw * 0.7)} ${n2(floor)}
+    C ${n2(cx - pw)} ${n2(mid)} ${n2(cx - pw)} ${n2(roof - 1)} ${n2(cx - pw * 0.82)} ${n2(roof + horn)}
+    Q ${n2(cx - pw * 0.42)} ${n2(roof + horn * 0.15)} ${n2(cx)} ${n2(roof)}
+    Q ${n2(cx + pw * 0.42)} ${n2(roof + horn * 0.15)} ${n2(cx + pw * 0.82)} ${n2(roof + horn)}
+    C ${n2(cx + pw)} ${n2(roof - 1)} ${n2(cx + pw)} ${n2(mid)} ${n2(cx + pw * 0.7)} ${n2(floor)} Z`
 }
 
-// Tek kanal (pulpa tabanından kök ucuna ince mekik)
-function canalPath(topX: number, tipX: number, tipY: number, cw: number): string {
-  const w = Math.max(cw * 0.1, 1.7)
-  const mid = (PULP_FLOOR + tipY) / 2
-  return `M ${topX - w} ${PULP_FLOOR}
-    C ${topX - w * 0.6} ${mid} ${tipX - 0.8} ${tipY + 8} ${tipX} ${tipY + 2.5}
-    C ${tipX + 0.8} ${tipY + 8} ${topX + w * 0.6} ${mid} ${topX + w} ${PULP_FLOOR} Z`
+function canalPath(g: Geo, c: Canal): string {
+  const { pw, floor } = pulpGeom(g)
+  const w = g.nRoots > 1 ? Math.max(g.cw * 0.045, 1.15) : Math.max(pw * 0.62, 1.2)
+  const y0 = floor + 2.5
+  const mid = y0 - (y0 - c.tipY) * 0.5
+  return `M ${n2(c.topX - w)} ${n2(y0)}
+    C ${n2(c.topX - w * 0.8)} ${n2(mid)} ${n2(c.tipX - 0.45)} ${n2(c.tipY + 7)} ${n2(c.tipX)} ${n2(c.tipY + 2.2)}
+    C ${n2(c.tipX + 0.45)} ${n2(c.tipY + 7)} ${n2(c.topX + w * 0.8)} ${n2(mid)} ${n2(c.topX + w)} ${n2(y0)} Z`
 }
 
-function ToothGraphic({
-  num,
-  jaw,
-  flags,
-}: {
-  num: number
-  jaw: Jaw
-  flags: ToothFlags
-  }) {
-  const type = toothType(num)
-  const { cw, vbw } = toothDims(num)
-  const cx = vbw / 2
-  const n = ROOTS[num] ?? 1
-  const rs = roots(cx, cw, n, num, type)
-  const h = TOOTH_HEIGHT
-  const w = (h * vbw) / VBH
+// ─── Tek diş ────────────────────────────────────────────────────────────────
+
+function ToothGraphic({ num, jaw, flags, fit = false }: { num: number; jaw: Jaw; flags: ToothFlags; /** true: kapsayıcıya sığacak şekilde ölçeklenir (tarife simgeleri) */ fit?: boolean }) {
+  const height = TOOTH_HEIGHT
+  const g = geo(num)
+  const { cx, cw, J, H, L, vbw, type } = g
+  const w = (height * vbw) / VBH
   const extracted = flags.extracted && !flags.implant
 
-  // Çekilmiş/eksik diş → boş slot (çarpı yok)
+  // Çekilmiş/eksik diş → boş slot
   if (extracted) {
-    return <svg width={w} height={h} viewBox={`0 0 ${vbw} ${VBH}`} style={{ overflow: 'visible' }} />
+    return <svg width={w} height={height} viewBox={`0 0 ${n2(vbw)} ${VBH}`} style={{ overflow: 'visible' }} />
   }
 
-  // Kanal rengi: kanal tedavisi → beyaz (gütaperka), normalde kırmızı
-  const canalFill = flags.canal ? '#F7F4EC' : '#C2434E'
-  const canalStroke = flags.canal ? '#B9AC8E' : '#8A2730'
-
-  // Doğal diş hattı: pembemsi yerine sıcak kahve-gri (anatomik atlas görünümü)
-  const baseStroke = '#9A7B5C'
-  const detailStroke = '#C2A672'
+  const crownD = crownPath(g)
+  const clipId = `tc-clip-${num}`
   const crownColor = flags.crownMaterial === 'zirconium' ? '#5EEAD4' : '#93C5FD'
   const crownStroke = flags.crownMaterial === 'zirconium' ? '#0F9F91' : '#3B82C4'
-
+  const outline = '#B3A183'
   const inner: React.ReactNode[] = []
+
+  const gloss = (key: string, opacity: number) => (
+    <ellipse key={key} cx={n2(cx + g.ms * cw * 0.16)} cy={n2(J + H * 0.45)} rx={n2(cw * 0.2)} ry={n2(H * 0.3)} fill="url(#tc-gloss)" opacity={opacity} clipPath={`url(#${clipId})`} />
+  )
+  inner.push(<clipPath key="clip" id={clipId}><path d={crownD} /></clipPath>)
 
   if (flags.implant) {
     // ---- İMPLANT: kök yerine titanyum vida ----
-    const postTop = cw * 0.24 // neck (geniş)
-    const postApex = cw * 0.1 // uç (dar)
-    const apexY = TIP + 4
-    const lTop = cx - postTop, rTop = cx + postTop
-    const lApex = cx - postApex, rApex = cx + postApex
+    const top = Math.min(Math.max(cw * 0.2, 2.8), 5.4)
+    const apex = top * 0.55
+    const topY = J - 1.5
+    const apexY = J - Math.min(L * 0.84, 42)
     inner.push(
       <path
         key="post"
-        d={`M ${lTop} ${J} L ${lApex} ${apexY} Q ${cx} ${apexY - 2.5} ${rApex} ${apexY} L ${rTop} ${J} Z`}
-        fill="url(#tc-metal)"
-        stroke="#6E7A84"
-        strokeWidth={1}
-        strokeLinejoin="round"
+        d={`M ${n2(cx - top)} ${n2(topY)} L ${n2(cx - apex)} ${n2(apexY + 2)} Q ${n2(cx)} ${n2(apexY - 1.5)} ${n2(cx + apex)} ${n2(apexY + 2)} L ${n2(cx + top)} ${n2(topY)} Z`}
+        fill="url(#tc-metal)" stroke="#6E7A84" strokeWidth={0.7} strokeLinejoin="round"
       />
     )
-    // Vida dişleri (chevron)
     const threads: React.ReactNode[] = []
-    for (let y = J - 4; y > apexY + 2; y -= 3.4) {
-      const f = (J - y) / (J - apexY)
-      const hw = postTop - (postTop - postApex) * f
-      threads.push(
-        <path
-          key={`t${y}`}
-          d={`M ${cx - hw} ${y} L ${cx + hw} ${y - 1.8}`}
-          stroke="#5B6770"
-          strokeWidth={0.7}
-          strokeOpacity={0.8}
-          fill="none"
-        />
-      )
+    for (let y = topY - 3; y > apexY + 3; y -= 2.9) {
+      const f = (topY - y) / (topY - apexY)
+      const hw = top - (top - apex) * f
+      threads.push(<path key={`t${n2(y)}`} d={`M ${n2(cx - hw - 0.7)} ${n2(y + 0.7)} L ${n2(cx + hw + 0.7)} ${n2(y - 0.7)}`} stroke="#5B6770" strokeWidth={0.75} strokeLinecap="round" strokeOpacity={0.85} fill="none" />)
     }
     inner.push(<g key="threads">{threads}</g>)
-    // Uzun eksen çizgisi
-    inner.push(
-      <line key="axis" x1={cx} y1={J - 2} x2={cx} y2={apexY + 1} stroke="#7C8893" strokeWidth={0.5} strokeOpacity={0.6} />
-    )
-    // Kuron ayrıca seçildiyse vida üzerine dayanak ve porselen kuron eklenir.
-    if (flags.crown) inner.push(
-      <path
-        key="abut"
-        d={`M ${cx - cw * 0.16} ${J + 1} L ${cx - cw * 0.1} ${J - 2} L ${cx + cw * 0.1} ${J - 2} L ${cx + cw * 0.16} ${J + 1} Z`}
-        fill="#C8CED3"
-        stroke="#7C8893"
-        strokeWidth={0.7}
-      />
-    )
-    if (flags.crown) inner.push(
-      <path key="icrown" d={crownPath(type, cx, cw, num)} fill={crownColor} stroke={crownStroke} strokeWidth={1.1} strokeLinejoin="round" />
-    )
-  } else {
-    // ---- DOĞAL DİŞ ----
-    if (!flags.removableProsthesis) inner.push(
-      ...rs.map((rt, i) => (
-        <path key={`r${i}`} d={rt.path} fill="url(#tc-dentin)" stroke={baseStroke} strokeWidth={1.1} strokeLinejoin="round" />
-      ))
-    )
-    if (!flags.removableProsthesis) inner.push(
-      ...rs.map((rt, i) => (
-        <path
-          key={`rh${i}`}
-          d={`M ${rt.topX - 1.2} ${J - 1} C ${rt.topX - 2} ${J - 14} ${rt.tipX - 1.4} ${rt.tipY + 12} ${rt.tipX - 0.4} ${rt.tipY + 5}`}
-          fill="none"
-          stroke="#F7EACB"
-          strokeWidth={1.05}
-          strokeLinecap="round"
-          strokeOpacity={0.58}
-        />
-      ))
-    )
-    // Kron minesi (kaplama varsa porselen)
-    inner.push(
-      <path
-        key="crown"
-        d={crownPath(type, cx, cw, num)}
-        fill={flags.crown ? crownColor : flags.removableProsthesis ? 'url(#tc-porcelain)' : 'url(#tc-enamel)'}
-        stroke={baseStroke}
-        strokeWidth={1.15}
-        strokeLinejoin="round"
-      />
-    )
-    inner.push(
-      <path
-        key="dentin-core"
-        d={dentinCorePath(type, cx, cw)}
-        fill="url(#tc-crown-dentin)"
-        stroke="#D6BE88"
-        strokeWidth={0.55}
-        fillOpacity={flags.crown ? 0 : flags.removableProsthesis ? 0.32 : 0.78}
-      />
-    )
-    inner.push(
-      ...crownDetailPaths(type, cx, cw, num).map((d, i) => (
-        <path
-          key={`cd${i}`}
-          d={d}
-          fill="none"
-          stroke={detailStroke}
-          strokeWidth={0.65}
-          strokeLinecap="round"
-          strokeOpacity={0.72}
-        />
-      ))
-    )
-    // Mine parlaklığı: kronun üst-mesial bölümünde yumuşak ışık lekesi
-    if (!flags.crown) inner.push(
-      <ellipse
-        key="gloss"
-        cx={cx - cw * 0.16}
-        cy={J + 13}
-        rx={cw * 0.15}
-        ry={6.5}
-        fill="#FFFFFF"
-        opacity={flags.removableProsthesis ? 0.28 : 0.4}
-      />
-    )
-    // Kanallar (belirgin kırmızı, pulpa tabanından kök ucuna)
-    if (!flags.removableProsthesis) inner.push(
-      ...rs.map((rt, i) => (
-        <path key={`cn${i}`} d={canalPath(rt.topX, rt.tipX, rt.tipY, cw)} fill={canalFill} stroke={canalStroke} strokeWidth={0.6} fillOpacity={1} />
-      ))
-    )
-    // Pulpa odası
-    if (!flags.removableProsthesis) inner.push(<path key="pulp" d={pulpPath(type, cx, cw)} fill={canalFill} stroke={canalStroke} strokeWidth={0.6} fillOpacity={1} />)
-    inner.push(
-      <path
-        key="cej"
-        d={`M ${cx - cw * 0.39} ${J + 1.4} Q ${cx} ${J + 5.2} ${cx + cw * 0.39} ${J + 1.4}`}
-        fill="none"
-        stroke="#B79568"
-        strokeWidth={0.8}
-        strokeOpacity={0.78}
-      />
-    )
-
-    // ---- Tedavi sembolleri ----
-    // Dolgu (okluzal yüzeyde sembolik)
-    if (flags.filling) {
-      const fw = cw * 0.3
-      inner.push(
-        <rect
-          key="fill"
-          x={cx - fw}
-          y={OCC - 11}
-          width={fw * 2}
-          height={6}
-          rx={2}
-          fill="#9AA6B0"
-          stroke="#6B7680"
-          strokeWidth={0.5}
-        />
-      )
-    }
-    // Kron / kaplama: yarı saydam porselen kep + altın marj çizgisi
     if (flags.crown) {
       inner.push(
-        <path key="cap" d={crownPath(type, cx, cw, num)} fill={crownColor} fillOpacity={0.96} stroke={crownStroke} strokeWidth={1.4} strokeLinejoin="round" />
+        <path key="abut" d={`M ${n2(cx - top * 0.9)} ${n2(topY)} L ${n2(cx - top * 0.6)} ${n2(J + H * 0.3)} L ${n2(cx + top * 0.6)} ${n2(J + H * 0.3)} L ${n2(cx + top * 0.9)} ${n2(topY)} Z`} fill="#C8CED3" stroke="#7C8893" strokeWidth={0.6} />,
+        <path key="icrown" d={crownD} fill={crownColor} stroke={crownStroke} strokeWidth={0.9} strokeLinejoin="round" />,
+        gloss('igloss', 0.75)
       )
+    } else {
+      inner.push(<rect key="cap" x={n2(cx - top * 1.05)} y={n2(topY)} width={n2(top * 2.1)} height={3.4} rx={1.4} fill="#D5DADF" stroke="#7C8893" strokeWidth={0.6} />)
+    }
+  } else {
+    // ---- DOĞAL DİŞ ----
+    const roots = buildRoots(g)
+    if (!flags.removableProsthesis) {
       inner.push(
-        <path
-          key="margin"
-          d={`M ${cx - cw / 2 + 1} ${J + 4} Q ${cx} ${J + 7} ${cx + cw / 2 - 1} ${J + 4}`}
-          fill="none"
-          stroke={crownStroke}
-          strokeWidth={1}
-          strokeOpacity={0.9}
-        />
+        ...roots.back.map((d, i) => <path key={`rb${i}`} d={d} fill="url(#tc-root-back)" stroke="#A98B62" strokeWidth={0.6} strokeLinejoin="round" />),
+        ...roots.front.map((d, i) => <path key={`rf${i}`} d={d} fill="url(#tc-root)" stroke="#AE8F64" strokeWidth={0.7} strokeLinejoin="round" />)
       )
+      // Pulpa + kanallar: sağlıklı dişte dişin içinden hafifçe seçilir; kanal tedavisinde dolgu olarak belirginleşir
+      const treated = flags.canal || flags.poorCanal
+      const pulpFill = flags.poorCanal ? '#1A1A1A' : flags.canal ? '#FFFBF0' : '#CF5565'
+      const pulpStroke = flags.poorCanal ? '#000000' : flags.canal ? '#A39574' : 'none'
+      inner.push(
+        <g key="pulp-root" opacity={flags.poorCanal ? 0.85 : flags.canal ? 1 : 0.5}>
+          {roots.canals.map((c, i) => <path key={`cn${i}`} d={canalPath(g, c)} fill={pulpFill} stroke={pulpStroke} strokeWidth={treated ? 0.5 : 0} />)}
+        </g>
+      )
+    }
+    // Kron: mine (silindirik gölge) + servikal sıcaklık / insizal saydamlık bindirmesi
+    inner.push(
+      <path key="crown" d={crownD} fill={flags.crown ? crownColor : flags.removableProsthesis ? 'url(#tc-porcelain)' : 'url(#tc-enamel)'} stroke={flags.crown ? crownStroke : outline} strokeWidth={flags.crown ? 1 : 0.8} strokeLinejoin="round" />
+    )
+    if (!flags.crown) {
+      inner.push(<path key="tint" d={crownD} fill="url(#tc-enamel-tint)" stroke="none" />)
+      if (!flags.removableProsthesis) {
+        const treated = flags.canal || flags.poorCanal
+        inner.push(
+          <path
+            key="pulp-crown" d={pulpChamberPath(g)} clipPath={`url(#${clipId})`}
+            fill={flags.poorCanal ? '#1A1A1A' : flags.canal ? '#FFFBF0' : '#CF5565'}
+            stroke={flags.poorCanal ? '#000000' : flags.canal ? '#A39574' : 'none'} strokeWidth={treated ? 0.5 : 0}
+            opacity={flags.poorCanal ? 0.8 : flags.canal ? 0.95 : 0.13}
+          />
+        )
+      }
+      inner.push(
+        ...crownGrooves(g).map((d, i) => <path key={`gr${i}`} d={d} fill="none" stroke="#9C8B6B" strokeWidth={0.55} strokeLinecap="round" strokeOpacity={0.24} />)
+      )
+    }
+    inner.push(gloss('gloss', flags.crown ? 0.7 : 0.95))
+
+    // ---- Tedavi sembolleri ----
+    if (flags.filling) {
+      inner.push(
+        <ellipse key="fill" cx={n2(cx - g.ms * cw * 0.04)} cy={n2(J + H * (type === 'molar' || type === 'premolar' ? 0.8 : 0.72))} rx={n2(cw * 0.27)} ry={n2(H * 0.16)} fill="url(#tc-amalgam)" stroke="#69747E" strokeWidth={0.5} clipPath={`url(#${clipId})`} />
+      )
+    }
+    if (flags.crown) {
+      inner.push(<path key="margin" d={`M ${n2(cx - g.nw / 2 - 0.6)} ${n2(J + H * 0.1)} Q ${n2(cx)} ${n2(J + H * 0.02)} ${n2(cx + g.nw / 2 + 0.6)} ${n2(J + H * 0.1)}`} fill="none" stroke={crownStroke} strokeWidth={0.9} strokeOpacity={0.9} />)
     }
 
     // ── Diyagnoz sembolleri ──
-    // Mine çürüğü: dişin mesio-okluzal köşesinde küçük siyah-kahverengi leke
+    const sx = cx + g.ms * cw * 0.3
+    const sy = J + H * 0.82
     if (flags.mineCaryo) {
-      const sx = cx - cw * 0.28
-      const sy = OCC - 5
-      inner.push(
-        <path
-          key="mineCaryo"
-          d={`M ${sx} ${sy} Q ${sx + 2} ${sy - 4} ${sx + cw * 0.18} ${sy - 2} Q ${sx + cw * 0.2} ${sy + 2} ${sx + cw * 0.1} ${sy + 3} Q ${sx - 1} ${sy + 2} ${sx} ${sy} Z`}
-          fill="#1C0A00"
-          fillOpacity={0.82}
-          stroke="none"
-        />
-      )
+      inner.push(<ellipse key="mineCaryo" cx={n2(sx)} cy={n2(sy)} rx={n2(cw * 0.13)} ry={n2(H * 0.09)} fill="#2A1203" fillOpacity={0.85} clipPath={`url(#${clipId})`} />)
     }
-    // Dentin çürüğü: aynı leke kanalın içine kadar uzanır
     if (flags.dentinCaryo) {
-      const sx = cx - cw * 0.28
-      const sy = OCC - 5
+      const { roof } = pulpGeom(g)
       inner.push(
         <path
-          key="dentinCaryo"
-          d={`M ${sx} ${sy} Q ${sx + 2} ${sy - 5} ${sx + cw * 0.22} ${sy - 3} Q ${sx + cw * 0.28} ${sy + 6} ${cx - 1} ${PULP_FLOOR + 3} Q ${cx - cw * 0.15} ${PULP_FLOOR + 5} ${sx - 2} ${PULP_FLOOR + 2} Q ${sx - 3} ${sy + 4} ${sx} ${sy} Z`}
-          fill="#1C0A00"
-          fillOpacity={0.72}
-          stroke="#2D1000"
-          strokeWidth={0.35}
+          key="dentinCaryo" clipPath={`url(#${clipId})`}
+          d={`M ${n2(sx + g.ms * cw * 0.14)} ${n2(sy + H * 0.1)} Q ${n2(sx + g.ms * cw * 0.2)} ${n2(sy - H * 0.12)} ${n2(sx)} ${n2(sy - H * 0.16)} Q ${n2(cx + g.ms * cw * 0.08)} ${n2(sy - H * 0.2)} ${n2(cx)} ${n2(roof + 1)} Q ${n2(cx + g.ms * cw * 0.1)} ${n2(sy)} ${n2(sx - g.ms * cw * 0.1)} ${n2(sy + H * 0.12)} Z`}
+          fill="#2A1203" fillOpacity={0.78} stroke="#3A1804" strokeWidth={0.3}
         />
       )
     }
-    // Yetersiz kanal: siyah kanal dolgusu
-    if (flags.poorCanal) {
-      inner.push(
-        <g key="poorCanal">
-          {rs.map((rt, i) => (
-            <path key={`pc${i}`} d={canalPath(rt.topX, rt.tipX, rt.tipY, cw)} fill="#1a1a1a" fillOpacity={0.82} stroke="#000" strokeWidth={0.5} />
-          ))}
-          <path d={pulpPath(type, cx, cw)} fill="#1a1a1a" fillOpacity={0.82} stroke="#000" strokeWidth={0.5} />
-        </g>
-      )
-    }
-    // Periapikal lezyon: kök ucunda mor hale
-    if (flags.periapical) {
+    if (flags.periapical && !flags.removableProsthesis) {
       inner.push(
         <g key="periapical">
-          {rs.map((rt, index) => (
-            <circle
-              key={`lesion-${index}`}
-              cx={rt.tipX}
-              cy={rt.tipY - 1}
-              r={Math.min(cw * 0.2, 7)}
-              fill="#7C3AED"
-              fillOpacity={0.15}
-              stroke="#7C3AED"
-              strokeWidth={1.2}
-            />
-          ))}
+          {roots.canals.map((c, i) => <circle key={`ls${i}`} cx={n2(c.tipX)} cy={n2(c.tipY)} r={n2(Math.min(cw * 0.2, 6))} fill="#7C3AED" fillOpacity={0.16} stroke="#7C3AED" strokeWidth={1.1} />)}
         </g>
       )
     }
-    // Kret: diş gizlendiği için render gerekmez
-    // Mandibular sinir: kökte yatay kesik çizgi
     if (flags.nerve) {
-      const nervY = Math.round((TIP + PULP_FLOOR) / 2)
-      inner.push(
-        <line
-          key="nerve"
-          x1={0} y1={nervY} x2={vbw} y2={nervY}
-          stroke="#D97706" strokeWidth={1.3} strokeDasharray="5,2.5" strokeLinecap="round"
-        />
-      )
+      const nervY = n2(J - L * 0.62)
+      inner.push(<line key="nerve" x1={0} y1={nervY} x2={n2(vbw)} y2={nervY} stroke="#D97706" strokeWidth={1.3} strokeDasharray="5,2.5" strokeLinecap="round" />)
     }
   }
 
   return (
-    <svg
-      width={w}
-      height={h}
-      viewBox={`0 0 ${vbw} ${VBH}`}
-      className="drop-shadow-[0_8px_12px_rgba(120,96,57,0.10)] transition-transform duration-150 group-hover:-translate-y-0.5"
-      style={{ overflow: 'visible' }}
-    >
-      <g transform={jaw === 'lower' ? `translate(0 ${VBH}) scale(1 -1)` : undefined}>
-        {inner}
-      </g>
+    <svg width={fit ? '100%' : w} height={fit ? '100%' : height} viewBox={fit ? `-3 -2 ${n2(vbw + 6)} ${VBH + 4}` : `0 0 ${n2(vbw)} ${VBH}`} className="drop-shadow-[0_3px_4px_rgba(90,70,40,0.16)]" style={{ overflow: 'visible' }}>
+      <g transform={jaw === 'lower' ? `translate(0 ${VBH}) scale(1 -1)` : undefined}>{inner}</g>
     </svg>
   )
 }
@@ -583,28 +455,51 @@ function ToothDefs() {
   return (
     <svg width="0" height="0" className="absolute" aria-hidden="true">
       <defs>
-        <linearGradient id="tc-enamel" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#FFFFFF" />
-          <stop offset="0.5" stopColor="#F7F1E2" />
-          <stop offset="1" stopColor="#E4D4B0" />
+        {/* Mine: mezio-distal silindirik gölgelendirme */}
+        <linearGradient id="tc-enamel" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#DDD3BC" />
+          <stop offset="0.14" stopColor="#F4EFE2" />
+          <stop offset="0.4" stopColor="#FFFFFF" />
+          <stop offset="0.7" stopColor="#F6F1E4" />
+          <stop offset="1" stopColor="#D3C7AC" />
         </linearGradient>
-        <linearGradient id="tc-porcelain" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#FEFEFB" />
-          <stop offset="1" stopColor="#E7E2D2" />
+        {/* Servikalde sıcak ton, insizal/okluzal kenarda mavimsi saydamlık */}
+        <linearGradient id="tc-enamel-tint" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#E3BF7C" stopOpacity="0.6" />
+          <stop offset="0.38" stopColor="#EAD3A0" stopOpacity="0.1" />
+          <stop offset="0.76" stopColor="#FFFFFF" stopOpacity="0" />
+          <stop offset="1" stopColor="#8FA9C2" stopOpacity="0.45" />
         </linearGradient>
-        <linearGradient id="tc-dentin" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#F1DDAE" />
-          <stop offset="0.56" stopColor="#DCBE80" />
-          <stop offset="1" stopColor="#CDA96B" />
+        <radialGradient id="tc-gloss" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#FFFFFF" stopOpacity="0.9" />
+          <stop offset="0.55" stopColor="#FFFFFF" stopOpacity="0.28" />
+          <stop offset="1" stopColor="#FFFFFF" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="tc-porcelain" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#E2DDCF" />
+          <stop offset="0.4" stopColor="#FEFEFB" />
+          <stop offset="1" stopColor="#DAD4C3" />
         </linearGradient>
-        <linearGradient id="tc-crown-dentin" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#E3C98F" />
-          <stop offset="1" stopColor="#F1DDA9" />
+        {/* Kök (sement): daha sarı, kenarlarda koyulaşır */}
+        <linearGradient id="tc-root" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#C9A672" />
+          <stop offset="0.3" stopColor="#F1DDB0" />
+          <stop offset="0.58" stopColor="#EACF9C" />
+          <stop offset="1" stopColor="#BD9864" />
+        </linearGradient>
+        <linearGradient id="tc-root-back" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#B8935F" />
+          <stop offset="0.5" stopColor="#DCC08C" />
+          <stop offset="1" stopColor="#AE8955" />
         </linearGradient>
         <linearGradient id="tc-metal" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#AEB7BF" />
-          <stop offset="0.5" stopColor="#E6EAEE" />
-          <stop offset="1" stopColor="#9BA6AF" />
+          <stop offset="0" stopColor="#9BA6AF" />
+          <stop offset="0.45" stopColor="#EEF1F4" />
+          <stop offset="1" stopColor="#8E99A3" />
+        </linearGradient>
+        <linearGradient id="tc-amalgam" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#C3CCD3" />
+          <stop offset="1" stopColor="#838F9A" />
         </linearGradient>
       </defs>
     </svg>
@@ -621,21 +516,24 @@ export function OralTreatmentSymbol({ types, crownMaterial = 'porcelain', classN
     else if (type === 'filling') flags.filling = true
     else if (type === 'root-canal') flags.canal = true
   }
-  return <div className={`relative flex items-center justify-center ${className}`}><ToothDefs /><ToothGraphic num={14} jaw="upper" flags={flags} /></div>
+  return <div className={`relative flex items-center justify-center ${className}`}><ToothDefs /><ToothGraphic num={14} jaw="upper" flags={flags} fit /></div>
 }
 
 const hasTx = (f: ToothFlags) =>
   f.canal || f.filling || f.crown || f.implant || f.extracted ||
   f.graft || f.removableProsthesis || f.mineCaryo || f.dentinCaryo || f.kret || f.nerve || f.periapical || f.poorCanal
 
+const cellWidth = (n: number) => geo(n).vbw * K
+
+/** Gülüş hattı: ön dişler okluzal düzleme doğru hafifçe uzanır (px) */
+function smileOffset(index: number, count: number): number {
+  const half = (count - 1) / 2
+  const t = half === 0 ? 0 : (index - half) / half
+  return (1 - Math.pow(Math.abs(t), 1.7)) * 4
+}
+
 function NumberRow({
-  teeth,
-  selected,
-  states,
-  onSelect,
-  hiddenTeeth,
-  markedTeeth,
-  markerColor,
+  teeth, selected, states, onSelect, hiddenTeeth, markedTeeth, markerColor,
 }: {
   teeth: number[]
   selected: number | null
@@ -646,21 +544,19 @@ function NumberRow({
   markerColor?: string
 }) {
   return (
-    <div className="flex justify-center gap-0.5">
+    <div className="flex justify-center">
       {teeth.map((n) => {
         const isSel = selected === n
         const tr = hasTx(states.get(n) ?? {})
         // Çekilmiş dişte yalnız diş görseli gizlenir; numara sabit kalır (soluk).
         const hidden = hiddenTeeth?.has(n)
         const marked = markedTeeth?.has(n)
-        const { vbw } = toothDims(n)
-        const w = (TOOTH_HEIGHT * vbw) / VBH
         return (
           <button
             key={n}
             onClick={() => onSelect(n)}
             style={{
-              width: w,
+              width: cellWidth(n),
               ...(marked && markerColor ? { color: markerColor, backgroundColor: markerColor + '22' } : {}),
             }}
             className={`shrink-0 rounded py-0.5 text-[12px] font-bold transition-colors ${
@@ -684,15 +580,88 @@ function NumberRow({
   )
 }
 
+/**
+ * Satır boyunca tek parça diş eti: her dişin boynunda kavis, dişler arasında
+ * papil; eksik dişlerde düz kret. Üst çene koordinatlarında hesaplanır, alt
+ * çene için dikey çevrilir.
+ */
+function GingivaOverlay({ teeth, jaw, states, hiddenTeeth, uid }: { teeth: number[]; jaw: Jaw; states: Map<number, ToothFlags>; hiddenTeeth?: Set<number>; uid: string }) {
+  const cells = teeth.reduce<{ g: Geo; x: number; w: number; sm: number; missing: boolean }[]>((acc, n, i) => {
+    const g = geo(n)
+    const prev = acc[acc.length - 1]
+    const flags = states.get(n) ?? {}
+    acc.push({
+      g, x: prev ? prev.x + prev.w : 0, w: g.vbw * K, sm: smileOffset(i, teeth.length),
+      missing: Boolean(hiddenTeeth?.has(n) || (flags.extracted && !flags.implant) || flags.kret),
+    })
+    return acc
+  }, [])
+  if (cells.length === 0) return null
+  const total = cells[cells.length - 1].x + cells[cells.length - 1].w
+  const END = 16 // satır uçlarında diş etinin taşma payı (px)
+
+  // Papil uçları (hücre sınırları) ve serbest diş eti kenarı (diş ortası)
+  const papY = (i: number, j: number) => {
+    const a = cells[i], b = cells[j]
+    return ((a.g.J + b.g.J) / 2 + Math.min(a.g.H, b.g.H) * 0.36) * K + (a.sm + b.sm) / 2
+  }
+  const pap: { x: number; y: number }[] = [{ x: -END, y: papY(0, 0) - 3 }]
+  for (let i = 1; i < cells.length; i++) pap.push({ x: cells[i].x, y: papY(i - 1, i) })
+  pap.push({ x: total + END, y: papY(cells.length - 1, cells.length - 1) - 3 })
+  pap[0].x = -END
+  // İlk ve son hücrede papil, hücre kenarında başlar; uç pay düz devam eder
+  const edge: string[] = []
+  cells.forEach((c, i) => {
+    const l = i === 0 ? { x: 0, y: pap[0].y } : pap[i]
+    const r = i === cells.length - 1 ? { x: total, y: pap[i + 1].y } : pap[i + 1]
+    const mid = c.x + c.w / 2
+    const hw = c.w / 2
+    const my = c.missing ? Math.min(l.y, r.y) - 4 : (c.g.J + 1.4) * K + c.sm
+    if (i === 0) edge.push(`M ${n2(-END)} ${n2(l.y)} L ${n2(l.x)} ${n2(l.y)}`)
+    edge.push(`C ${n2(l.x + hw * 0.3)} ${n2(l.y)} ${n2(mid - hw * 0.66)} ${n2(my)} ${n2(mid)} ${n2(my)} C ${n2(mid + hw * 0.66)} ${n2(my)} ${n2(r.x - hw * 0.3)} ${n2(r.y)} ${n2(r.x)} ${n2(r.y)}`)
+    if (i === cells.length - 1) edge.push(`L ${n2(total + END)} ${n2(r.y)}`)
+  })
+  const line = edge.join(' ')
+  const area = `${line} L ${n2(total + END)} -8 L ${n2(-END)} -8 Z`
+  const fillId = `tc-gum-${uid}`
+  const maskGradId = `tc-gum-fade-${uid}`
+  const maskId = `tc-gum-mask-${uid}`
+  return (
+    <svg
+      className="pointer-events-none absolute left-0 top-0"
+      width={total} height={TOOTH_HEIGHT} viewBox={`0 0 ${n2(total)} ${TOOTH_HEIGHT}`}
+      style={{ overflow: 'visible' }} aria-hidden="true"
+    >
+      <defs>
+        {/* Kök ucuna doğru saydamlaşır: kanal dolgusu ve periapikal lezyon görünür kalır */}
+        <linearGradient id={fillId} gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2={TOOTH_HEIGHT}>
+          <stop offset="0.2" stopColor="#E0808F" stopOpacity="0" />
+          <stop offset="0.42" stopColor="#E58796" stopOpacity="0.2" />
+          <stop offset="0.54" stopColor="#EC95A2" stopOpacity="0.6" />
+          <stop offset="0.61" stopColor="#F1A2AD" stopOpacity="0.95" />
+          <stop offset="1" stopColor="#F5AFB8" stopOpacity="0.97" />
+        </linearGradient>
+        <linearGradient id={maskGradId} gradientUnits="userSpaceOnUse" x1={-END} y1="0" x2={total + END} y2="0">
+          <stop offset="0" stopColor="#000" />
+          <stop offset={n2(END / (total + END * 2))} stopColor="#fff" />
+          <stop offset={n2(1 - END / (total + END * 2))} stopColor="#fff" />
+          <stop offset="1" stopColor="#000" />
+        </linearGradient>
+        <mask id={maskId} maskUnits="userSpaceOnUse" x={-END} y={-10} width={total + END * 2} height={TOOTH_HEIGHT + 20}>
+          <rect x={-END} y={-10} width={total + END * 2} height={TOOTH_HEIGHT + 20} fill={`url(#${maskGradId})`} />
+        </mask>
+      </defs>
+      <g transform={jaw === 'lower' ? `translate(0 ${TOOTH_HEIGHT}) scale(1 -1)` : undefined} mask={`url(#${maskId})`}>
+        <path d={area} fill={`url(#${fillId})`} />
+        <path d={line} fill="none" stroke="#FBD3D8" strokeWidth={2.2} strokeOpacity={0.75} strokeLinecap="round" transform="translate(0 -1.2)" />
+        <path d={line} fill="none" stroke="#D0667A" strokeWidth={0.9} strokeOpacity={0.7} strokeLinecap="round" />
+      </g>
+    </svg>
+  )
+}
+
 function TeethRow({
-  teeth,
-  jaw,
-  selected,
-  states,
-  onSelect,
-  hiddenTeeth,
-  markedTeeth,
-  markerColor,
+  teeth, jaw, selected, states, onSelect, hiddenTeeth, markedTeeth, markerColor, uid,
 }: {
   teeth: number[]
   jaw: Jaw
@@ -702,55 +671,46 @@ function TeethRow({
   hiddenTeeth?: Set<number>
   markedTeeth?: Set<number>
   markerColor?: string
+  uid: string
 }) {
   return (
-    <div className={`flex justify-center gap-0.5 ${jaw === 'upper' ? 'items-end' : 'items-start'}`}>
-      {teeth.map((n, i) => {
-        const flags = states.get(n) ?? {}
-        const isSel = selected === n
-        const hidden = hiddenTeeth?.has(n)
-        const marked = markedTeeth?.has(n)
-        const { vbw } = toothDims(n)
-        const cellWidth = (TOOTH_HEIGHT * vbw) / VBH
-        // Gülüş hattı: ön dişler okluzal düzleme doğru hafifçe uzanır (doğal ark kavisi)
-        const halfIdx = (teeth.length - 1) / 2
-        const tPos = halfIdx === 0 ? 0 : (i - halfIdx) / halfIdx
-        const smile = (1 - Math.pow(Math.abs(tPos), 1.7)) * 6
-        return (
-          <button
-            key={n}
-            onClick={() => onSelect(n)}
-            style={{
-              width: cellWidth,
-              minWidth: cellWidth,
-              transform: `translateY(${jaw === 'upper' ? smile : -smile}px)`,
-              ...(hidden ? { visibility: 'hidden' as const, pointerEvents: 'none' as const } : {}),
-              ...(marked && markerColor ? { boxShadow: `0 0 0 2.5px ${markerColor}`, borderRadius: '12px' } : {}),
-            }}
-            className={`group flex shrink-0 items-center justify-center rounded-xl p-0 transition-[background-color,filter,box-shadow] duration-150 hover:bg-white/55 hover:drop-shadow-[0_10px_16px_rgba(15,43,61,0.10)] ${
-              isSel
-                ? 'bg-[#E6FFFA]/80 ring-2 ring-[#5FD3C1] shadow-[0_8px_18px_rgba(13,148,136,0.14)]'
-                : ''
-            }`}
-            title={`Diş ${n}${hasTx(flags) ? ' • işlem var' : ''}`}
-          >
-            <ToothGraphic num={n} jaw={jaw} flags={flags} />
-          </button>
-        )
-      })}
+    <div className="flex justify-center">
+      <div className={`relative flex ${jaw === 'upper' ? 'items-end' : 'items-start'}`}>
+        {teeth.map((n, i) => {
+          const flags = states.get(n) ?? {}
+          const isSel = selected === n
+          const hidden = hiddenTeeth?.has(n)
+          const marked = markedTeeth?.has(n)
+          const width = cellWidth(n)
+          const smile = smileOffset(i, teeth.length)
+          return (
+            <button
+              key={n}
+              onClick={() => onSelect(n)}
+              style={{
+                width,
+                minWidth: width,
+                transform: `translateY(${jaw === 'upper' ? smile : -smile}px)`,
+                ...(hidden ? { visibility: 'hidden' as const, pointerEvents: 'none' as const } : {}),
+                ...(marked && markerColor ? { boxShadow: `0 0 0 2.5px ${markerColor}`, borderRadius: '12px' } : {}),
+              }}
+              className={`group flex shrink-0 items-center justify-center rounded-xl p-0 transition-[background-color,box-shadow] duration-150 hover:bg-[#E6FFFA]/60 ${
+                isSel ? 'bg-[#E6FFFA]/80 ring-2 ring-[#5FD3C1] shadow-[0_8px_18px_rgba(13,148,136,0.14)]' : ''
+              }`}
+              title={`Diş ${n}${hasTx(flags) ? ' • işlem var' : ''}`}
+            >
+              <ToothGraphic num={n} jaw={jaw} flags={flags} />
+            </button>
+          )
+        })}
+        <GingivaOverlay teeth={teeth} jaw={jaw} states={states} hiddenTeeth={hiddenTeeth} uid={uid} />
+      </div>
     </div>
   )
 }
 
 export default function ToothChart({
-  upperTeeth,
-  lowerTeeth,
-  selected,
-  states,
-  onSelect,
-  hiddenTeeth,
-  markedTeeth,
-  markerColor,
+  upperTeeth, lowerTeeth, selected, states, onSelect, hiddenTeeth, markedTeeth, markerColor,
 }: {
   upperTeeth: number[]
   lowerTeeth: number[]
@@ -761,6 +721,7 @@ export default function ToothChart({
   markedTeeth?: Set<number>
   markerColor?: string
 }) {
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, '')
   const graftMarkers = [...states.entries()].filter(([, flags]) => flags.graft).map(([tooth]) => {
     const row = upperTeeth.includes(tooth) ? upperTeeth : lowerTeeth
     const index = row.indexOf(tooth)
@@ -771,16 +732,13 @@ export default function ToothChart({
       <ToothDefs />
       <div className="mx-auto w-full max-w-[760px] py-2">
         <NumberRow teeth={upperTeeth} selected={selected} states={states} onSelect={onSelect} hiddenTeeth={hiddenTeeth} markedTeeth={markedTeeth} markerColor={markerColor} />
-        <TeethRow teeth={upperTeeth} jaw="upper" selected={selected} states={states} onSelect={onSelect} hiddenTeeth={hiddenTeeth} markedTeeth={markedTeeth} markerColor={markerColor} />
-        <div className="relative my-4 h-3">
-          <span className="absolute inset-x-8 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-[linear-gradient(90deg,transparent_0%,#EBB7BF_18%,#DE93A0_50%,#EBB7BF_82%,transparent_100%)]" />
-          <span className="absolute inset-x-16 top-1/2 h-px translate-y-[2px] rounded-full bg-[#C0526A]/25" />
+        <TeethRow teeth={upperTeeth} jaw="upper" selected={selected} states={states} onSelect={onSelect} hiddenTeeth={hiddenTeeth} markedTeeth={markedTeeth} markerColor={markerColor} uid={`${uid}u`} />
+        <div className="relative my-3 h-3">
           {graftMarkers.map((left, index) => <span key={`${left}-${index}`} className="absolute top-1/2 flex -translate-x-1/2 -translate-y-1/2 gap-0.5" style={{ left: `${left}%` }}><i className="h-1.5 w-1.5 rounded-full border border-slate-300 bg-white shadow-sm"/><i className="h-1 w-1 rounded-full border border-slate-300 bg-white"/><i className="h-1.5 w-1.5 rounded-full border border-slate-300 bg-white shadow-sm"/></span>)}
         </div>
-        <TeethRow teeth={lowerTeeth} jaw="lower" selected={selected} states={states} onSelect={onSelect} hiddenTeeth={hiddenTeeth} markedTeeth={markedTeeth} markerColor={markerColor} />
+        <TeethRow teeth={lowerTeeth} jaw="lower" selected={selected} states={states} onSelect={onSelect} hiddenTeeth={hiddenTeeth} markedTeeth={markedTeeth} markerColor={markerColor} uid={`${uid}l`} />
         <NumberRow teeth={lowerTeeth} selected={selected} states={states} onSelect={onSelect} hiddenTeeth={hiddenTeeth} markedTeeth={markedTeeth} markerColor={markerColor} />
       </div>
     </div>
   )
 }
-
