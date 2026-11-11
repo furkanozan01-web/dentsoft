@@ -314,7 +314,7 @@ export async function syncTdbProfile(_prev: R, formData: FormData): Promise<R> {
     .single()
   if (!prof) return { error: 'Profil bulunamadı' }
 
-  // Atomik: delete + insert tek transaction içinde (sync_tdb_tariffs RPC)
+  // Atomik upsert (sync_tdb_tariffs RPC): mevcut kalemler yerinde güncellenir, tedavi/plan bağlantıları korunur
   const items = TDB_2024.flatMap(({ category, items }) =>
     items.map(({ treatment_name, price }) => ({
       category,
