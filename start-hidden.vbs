@@ -1,4 +1,9 @@
-Dim shell
+' DentSoft bekci betigini pencere acmadan calistirir.
+' Klasor, bu dosyanin kendi konumundan bulunur (Turkce karakterli sabit yol yok).
+Dim shell, fso, folder
 Set shell = CreateObject("WScript.Shell")
-shell.Run "cmd /c ""C:\Users\furkan\OneDrive\Masaüstü\Ozanoğlu Poliklinik\dentsoft\start-dentsoft.bat""", 0, False
+Set fso = CreateObject("Scripting.FileSystemObject")
+folder = fso.GetParentFolderName(WScript.ScriptFullName)
+shell.Run "cmd /c """ & folder & "\start-dentsoft.bat""", 0, False
 Set shell = Nothing
+Set fso = Nothing
