@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { getPatientTc } from './actions'
+import { getDoctorTc, getPatientTc, updateAnamnesis } from './actions'
 import { toTitleCase } from '@/lib/format'
 import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
 import type { Anamnesis } from '@/lib/anamnesis'
@@ -24,13 +24,13 @@ const ANAM: { key: string; label: string; from: string[] }[] = [
   { key: 'epi', label: 'Epilepsi / nörolojik hastalık', from: ['Nörolojik'] },
   { key: 'bob', label: 'Böbrek veya karaciğer hastalığı', from: ['Böbrek Yetmezliği'] },
   { key: 'tir', label: 'Tiroid hastalığı', from: ['Tiroid'] },
-  { key: 'bis', label: 'Kemik erimesi ilacı (bisfosfonat vb.)', from: [] },
-  { key: 'rad', label: 'Kanser tedavisi / baş-boyun radyoterapisi', from: [] },
+  { key: 'bis', label: 'Kemik erimesi ilacı (bisfosfonat vb.)', from: ['Bisfosfonat Kullanımı'] },
+  { key: 'rad', label: 'Kanser tedavisi / baş-boyun radyoterapisi', from: ['Radyoterapi / Kanser Tedavisi'] },
   { key: 'alj', label: 'İlaç, lateks veya anestezik alerjisi', from: ['Alerji'] },
-  { key: 'ane', label: 'Lokal anesteziye kötü tepki öyküsü', from: [] },
+  { key: 'ane', label: 'Lokal anesteziye kötü tepki öyküsü', from: ['Anestezi Reaksiyonu'] },
   { key: 'geb', label: 'Gebelik veya emzirme', from: ['Hamilelik'] },
-  { key: 'sig', label: 'Sigara / tütün kullanımı', from: [] },
-  { key: 'ope', label: 'Son 1 yılda ameliyat / hastane yatışı', from: [] },
+  { key: 'sig', label: 'Sigara / tütün kullanımı', from: ['Sigara / Tütün'] },
+  { key: 'ope', label: 'Son 1 yılda ameliyat / hastane yatışı', from: ['Yakın Zamanda Ameliyat'] },
 ]
 
 type Kept = { k_hekim: string; k_tel: string; k_lehtar: string; k_ltc: string; k_sehir: string; pg_anam: boolean; pg_genel: boolean; pg_cerrahi: boolean; pg_resto: boolean; pg_senet: boolean }
@@ -131,7 +131,17 @@ function anamPage(s: S, child: boolean, a: number | null) {
   <p class="t">${child ? 'Çocuğumun sağlık bilgilerini' : 'Yukarıdaki sağlık bilgilerimi'} eksiksiz ve doğru verdiğimi, sağlık durumunda değişiklik olursa hekime bildireceğimi beyan ederim.</p></div>
  ${sigBlock(s, child, false)}`
 }
-function senetPage(s: S) {
+type Acct = {
+  rows: { date: string; tooth: string; name: string; doctor: string; fee: number }[]
+  owed: number
+  paid: number
+  balance: number
+  extra: number
+}
+const money = (kurus: number) => tl(kurus / 100)
+
+/** Bono (kompakt) + altında hastanın hesap özeti ve tedavi dökümü: tek A4 sayfa */
+function senetPage(s: S, acct: Acct) {
   const top = parseFloat(str(s, 'p_toplam')) || 0, pes = parseFloat(str(s, 'p_pesin')) || 0, sen = Math.max(0, top - pes)
   const y = s.p_borclu === 'yakin'
   const b = y ? { ad: s.v_ad, tc: s.v_tc, adres: s.v_adres || s.h_adres, tel: s.v_tel } : { ad: s.h_ad, tc: s.h_tc, adres: s.h_adres, tel: s.h_tel }
@@ -139,7 +149,7 @@ function senetPage(s: S) {
   const k = !!s.p_kefilvar
   const leh = str(s, 'k_lehtar') || str(s, 'k_hekim')
   const lead = top ? `#${tutarYazi(sen)}#` : '<span class="blank" style="min-width:60mm"></span>'
-  return `<div class="senet">
+  const bono = `<div class="senet">
   <div class="sn-top"><div><b>Ödeme tarihi</b><span>${vade || '&nbsp;'}</span></div><div><b>Türk Lirası</b><span>${top ? lira.toLocaleString('tr-TR') : '&nbsp;'}</span></div><div><b>Kuruş</b><span>${top ? String(kr).padStart(2, '0') : '&nbsp;'}</span></div><div><b>No</b><span>${s.p_no ? esc(s.p_no) : '&nbsp;'}</span></div></div>
   <div class="sn-h"><h3 class="dt">BONO</h3><span class="nama">NAMA YAZILIDIR</span></div>
   <p class="t">İşbu nama muharrer bonomun mukabilinde <b>${V(vade, '22mm')}</b> tarihinde Sayın <b>${V(leh, '45mm')}</b>${leh ? dative(leh) : ''}${s.k_ltc ? ` (T.C. <span class="mono">${esc(s.k_ltc)}</span>)` : ''} yukarıda yazılı yalnız <b>${lead}</b> kayıtsız ve şartsız ödeyeceğim. İşbu bono emre değildir; ciro yoluyla başkasına devredilemez.</p>
@@ -149,9 +159,23 @@ function senetPage(s: S) {
    <div class="ln"><b>Düzenleme tarihi:</b><span class="v mono">${s.p_duz ? fd(str(s, 'p_duz')) : ''}</span></div>
   </div>
   <div class="sn-parties">
-   <div><div class="hd">Borçlu</div>Ad soyad: ${V(b.ad, '40mm')}<br>T.C. no: <span class="mono">${V(b.tc)}</span><br>Adres: ${V(b.adres, '48mm')}<br>Tel: <span class="mono">${V(b.tel)}</span><br>İmza:</div>
-   <div><div class="hd">Aval veren</div><div class="kn"><b>Düzenleyen lehine aval içindir.</b></div>Ad soyad: ${V(k ? s.kf_ad : '', '40mm')}<br>T.C. no: <span class="mono">${V(k ? s.kf_tc : '')}</span><br>Adres: ${V(k ? s.kf_adres : '', '48mm')}<br>Tel: <span class="mono">${V(k ? s.kf_tel : '')}</span><br>İmza:</div>
+   <div><div class="hd">Borçlu</div>Ad soyad: ${V(b.ad, '36mm')}<br>T.C. no: <span class="mono">${V(b.tc)}</span><br>Adres: ${V(b.adres, '44mm')}<br>Tel: <span class="mono">${V(b.tel)}</span><br>İmza:</div>
+   <div><div class="hd">Aval veren <span class="kn">(düzenleyen lehine aval içindir)</span></div>Ad soyad: ${V(k ? s.kf_ad : '', '36mm')}<br>T.C. no: <span class="mono">${V(k ? s.kf_tc : '')}</span><br>Adres: ${V(k ? s.kf_adres : '', '44mm')}<br>Tel: <span class="mono">${V(k ? s.kf_tel : '')}</span><br>İmza:</div>
   </div></div>`
+
+  const rows = acct.rows.map((r) => `<tr><td class="mono">${r.date}</td><td>${r.tooth}</td><td>${esc(r.name)}</td><td>${esc(r.doctor)}</td><td class="num mono">${money(r.fee)}</td></tr>`).join('')
+  const hesap = `<div class="hesap">
+  <h3 class="dt">Hesap Özeti ve Tedavi Dökümü<span>${esc(s.h_ad)}</span></h3>
+  <div class="hs-sum">
+   <div><b>Toplam ücret</b><span class="mono">${money(acct.owed)} ₺</span></div>
+   <div><b>Ödenen</b><span class="mono">${money(acct.paid)} ₺</span></div>
+   <div class="due"><b>Kalan borç</b><span class="mono">${money(acct.balance)} ₺</span></div>
+  </div>
+  ${acct.rows.length
+    ? `<table class="hs-tab"><thead><tr><th>Tarih</th><th>Diş</th><th>İşlem</th><th>Hekim</th><th class="num">Ücret (₺)</th></tr></thead><tbody>${rows}${acct.extra > 0 ? `<tr><td colspan="5" class="more">… ve ${acct.extra} işlem daha (tam döküm: Hesap sekmesi)</td></tr>` : ''}</tbody></table>`
+    : '<p class="t" style="margin:2mm 0 0">Kayıtlı tedavi bulunmuyor.</p>'}
+  </div>`
+  return bono + hesap
 }
 
 const inputCls = 'mt-1 w-full rounded-lg border border-[#E7ECF2] bg-white px-2.5 py-2 text-sm font-semibold text-[#142536] outline-none focus:border-[#2DD4BF]'
@@ -178,7 +202,7 @@ function scaleSheets(root: HTMLElement) {
 }
 
 // ───────── ana bileşen ─────────
-export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, treatments, transactions, loading }: {
+export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, treatments, transactions, loading, onAnamnesisSaved }: {
   patient: Patient
   clinic: ClinicInfo | null
   doctors: DoctorOption[]
@@ -186,11 +210,36 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
   treatments: Treatment[]
   transactions: Transaction[]
   loading: boolean
+  onAnamnesisSaved: (a: Anamnesis) => void
 }) {
   const [tc, setTc] = useState<string | null>(null)
   const [edits, setEdits] = useState<S>({})
   const [kept, setKept] = usePersistedPreference<Kept>('dentsoft:evrak-kept', KEPT_DEFAULT)
   const sheetsRef = useRef<HTMLDivElement>(null)
+
+  // Anamnez hasta kartıyla İKİ YÖNLÜ eşlenir: burada işaretlenen/yazılan kart kaydına yazılır, karttaki değişiklik buraya yansır.
+  const [pendingAnam, setPendingAnam] = useState<{ base: Anamnesis; next: Anamnesis } | null>(null)
+  const anam = pendingAnam && pendingAnam.base === anamnesis ? pendingAnam.next : anamnesis
+  const saveAnam = (next: Anamnesis) => {
+    setPendingAnam({ base: anamnesis, next })
+    updateAnamnesis(patient.id, next).then((res) => {
+      if (res.success) { onAnamnesisSaved(next); toast.success('Anamnez hasta kartına işlendi') }
+      else { toast.error(`Anamnez kaydedilemedi: ${res.error ?? 'bilinmeyen hata'}`); setPendingAnam(null) }
+    })
+  }
+  const toggleAnam = (key: string) => {
+    const row = ANAM.find((x) => x.key === key)
+    if (!row) return
+    const isOn = row.from.some((d) => anam.diseases.includes(d))
+    const diseases = isOn ? anam.diseases.filter((d) => !row.from.includes(d)) : [...anam.diseases, row.from[0]]
+    saveAnam({ ...anam, diseases })
+  }
+  const commitMeds = (text: string) => {
+    const meds = text.split(/[,;]/).map((m) => m.trim()).filter(Boolean)
+    if (JSON.stringify(meds) !== JSON.stringify(anam.medications)) saveAnam({ ...anam, medications: meds })
+  }
+  const commitNotes = (text: string) => { if (text.trim() !== (anam.notes ?? '').trim()) saveAnam({ ...anam, notes: text.trim() }) }
+  const [lehtarTc, setLehtarTc] = useState('')
 
   // Hasta kartındaki T.C. (şifreli saklanır) — hasta değişince / düzenlenince yeniden okunur
   useEffect(() => {
@@ -215,10 +264,10 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
     a.h_sikayet = ''
     a.h_tarih = today()
     a.tur = isChild ? 'cocuk' : 'yetiskin'
-    for (const x of ANAM) a['an_' + x.key] = x.from.some((d) => anamnesis.diseases.includes(d))
-    a.a_ilac = anamnesis.medications.join(', ')
-    a.a_alerji = anamnesis.diseases.includes('Alerji') ? 'Hasta kartında alerji kaydı var' : ''
-    a.a_diger = anamnesis.notes ?? ''
+    for (const x of ANAM) a['an_' + x.key] = x.from.some((d) => anam.diseases.includes(d))
+    a.a_ilac = anam.medications.join(', ')
+    a.a_alerji = ''
+    a.a_diger = anam.notes ?? ''
     const owed = treatments.reduce((s, t) => s + (t.fee ?? 0), 0)
     const paid = transactions.filter((t) => t.type === 'payment').reduce((s, t) => s + (t.amount ?? 0), 0)
     a.p_toplam = owed > 0 ? String(owed / 100) : ''
@@ -229,20 +278,47 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
     a.p_no = '1/1'
     a.p_kefilvar = false
     return a
-  }, [patient, tc, anamnesis, treatments, transactions])
+  }, [patient, tc, anam, treatments, transactions])
 
-  // Hekim bilgileri: hatırlanan değer yoksa klinik / ilk hekimden
-  const doctorDefault = doctors[0] ? `Dt. ${toTitleCase(doctors[0].name)}` : clinic?.clinic_name ?? ''
+  // Alacaklı (lehtar) = hastanın şubesinin mesul müdürü; yoksa herhangi bir mesul müdür; o da yoksa ilk hekim
+  const responsible = useMemo(
+    () => doctors.find((d) => d.is_mesul_mudur && d.branch_id != null && d.branch_id === patient.branch_id)
+      ?? doctors.find((d) => d.is_mesul_mudur)
+      ?? doctors[0]
+      ?? null,
+    [doctors, patient.branch_id]
+  )
+  const isResponsible = !!responsible?.is_mesul_mudur
+  const responsibleName = responsible ? toTitleCase(responsible.name) : ''
+  // Mesul müdürün T.C. numarası (şifreli saklanır) bonoda lehtar bilgisi olarak otomatik gelir
+  useEffect(() => {
+    let active = true
+    if (!responsible) return
+    getDoctorTc(responsible.id).then((res) => { if (active) setLehtarTc(res.tc ?? '') })
+    return () => { active = false }
+  }, [responsible])
+  // Ödeme/düzenleme yeri: klinik adresindeki "İlçe/İl" (yoksa adresin son sözcüğü)
+  const clinicPlace = useMemo(() => {
+    const addr = (clinic?.address ?? '').trim().replace(/[.,;\s]+$/, '')
+    if (!addr) return ''
+    const m = addr.match(/([\p{L}]+(?:\s[\p{L}]+)?)\s*\/\s*([\p{L}]+)\s*$/u)
+    if (m) return `${toTitleCase(m[1])} / ${toTitleCase(m[2])}`
+    const last = addr.replace(/[.,;]+$/, '').split(/[\s,]+/).filter(Boolean).pop() ?? ''
+    return toTitleCase(last)
+  }, [clinic])
+
+  // Hekim bilgileri: hatırlanan (elle seçilen) değer yoksa mesul müdürden / klinikten
+  const doctorDefault = responsibleName ? `Dt. ${responsibleName}` : clinic?.clinic_name ?? ''
   const eff: S = useMemo(() => ({
     ...auto,
     k_hekim: kept.k_hekim || doctorDefault,
     k_tel: kept.k_tel || clinic?.phone || '',
-    k_lehtar: kept.k_lehtar || kept.k_hekim || doctorDefault,
-    k_ltc: kept.k_ltc,
-    k_sehir: kept.k_sehir,
+    k_lehtar: kept.k_lehtar || responsibleName || doctorDefault,
+    k_ltc: kept.k_ltc || lehtarTc,
+    k_sehir: kept.k_sehir || clinicPlace,
     pg_anam: kept.pg_anam, pg_genel: kept.pg_genel, pg_cerrahi: kept.pg_cerrahi, pg_resto: kept.pg_resto, pg_senet: kept.pg_senet,
     ...edits,
-  }), [auto, kept, doctorDefault, clinic, edits])
+  }), [auto, kept, doctorDefault, responsibleName, lehtarTc, clinicPlace, clinic, edits])
 
   const set = (key: string, value: string | boolean) => {
     if (KEPT_KEYS.includes(key)) setKept({ ...kept, [key]: value } as Kept)
@@ -250,6 +326,18 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
   }
   const txt = (key: string) => String(eff[key] ?? '')
   const on = (key: string) => !!eff[key]
+
+  // Hesap özeti ve tedavi dökümü: Hesap sekmesindeki verilerle aynı (kart/hesap otomatik)
+  const acct: Acct = useMemo(() => {
+    const MAX = 26
+    const sorted = [...treatments].sort((x, y) => String(x.treatment_date ?? '').localeCompare(String(y.treatment_date ?? '')))
+    const owed = treatments.reduce((sum, t) => sum + (t.fee ?? 0), 0)
+    const paid = transactions.filter((t) => t.type === 'payment').reduce((sum, t) => sum + (t.amount ?? 0), 0)
+    return {
+      rows: sorted.slice(0, MAX).map((t) => ({ date: t.treatment_date ? fd(t.treatment_date.slice(0, 10)) : '—', tooth: t.tooth ? String(t.tooth) : '—', name: t.treatment_name, doctor: t.doctor?.name ? toTitleCase(t.doctor.name) : '—', fee: t.fee ?? 0 })),
+      owed, paid, balance: owed - paid, extra: Math.max(0, sorted.length - MAX),
+    }
+  }, [treatments, transactions])
 
   const child = eff.tur === 'cocuk'
   const pAge = age(txt('h_dogum'))
@@ -259,9 +347,9 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
     if (eff.pg_genel) list.push([child ? 'Çocuk genel onam' : 'Genel onam', onamPage(eff, child ? COCUK : GENEL, child)])
     if (eff.pg_cerrahi) list.push(['Cerrahi ek onam', onamPage(eff, CERRAHI, child)])
     if (eff.pg_resto) list.push(['Resto-endo-protetik ek onam', onamPage(eff, RESTO, child)])
-    if (eff.pg_senet) list.push(['Bono', senetPage(eff)])
+    if (eff.pg_senet) list.push(['Bono', senetPage(eff, acct)])
     return list
-  }, [eff, child, pAge])
+  }, [eff, child, pAge, acct])
 
   // Sayfaya sığdır (yazı boyutunu küçült) + önizlemeyi ölçekle
   const [overflow, setOverflow] = useState(false)
@@ -299,7 +387,18 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
   )
   const chk = (id: string, label: string) => (
     <label key={id} className="flex cursor-pointer items-start gap-2 py-1 text-sm text-[#142536]">
-      <input type="checkbox" checked={on(id)} onChange={(e) => set(id, e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#0D9488]" />{label}
+      <input type="checkbox" checked={on(id)} onChange={(e) => (id.startsWith('an_') ? toggleAnam(id.slice(3)) : set(id, e.target.checked))} className="mt-0.5 h-4 w-4 accent-[#0D9488]" />{label}
+    </label>
+  )
+  // Hasta kartına yazılan metin alanları: yazarken yerel, alandan çıkınca karta kaydedilir
+  const syncFld = (id: string, label: string, commit: (v: string) => void) => (
+    <label key={id} className="col-span-2 block text-xs font-bold text-slate-500">{label}
+      <input
+        value={txt(id)}
+        onChange={(e) => set(id, e.target.value)}
+        onBlur={(e) => { commit(e.target.value); setEdits((p) => { const n = { ...p }; delete n[id]; return n }) }}
+        className={inputCls}
+      />
     </label>
   )
 
@@ -351,11 +450,11 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
           {fld('v_adres', 'Adres (hastanınkinden farklıysa)', { full: true })}
         </Sec>
 
-        <Sec title="Anamnez" hint="işaretli = evet">
+        <Sec title="Anamnez" hint="hasta kartıyla eşlenir">
           <div className="col-span-2">{ANAM.map((x) => chk('an_' + x.key, x.label))}</div>
-          {fld('a_ilac', 'Kullandığı ilaçlar', { full: true })}
-          {fld('a_alerji', 'Alerji ayrıntısı', { full: true })}
-          {fld('a_diger', 'Diğer / açıklama', { full: true })}
+          {syncFld('a_ilac', 'Kullandığı ilaçlar (virgülle ayırın)', commitMeds)}
+          {fld('a_alerji', 'Alerji ayrıntısı (yalnızca bu forma)', { full: true })}
+          {syncFld('a_diger', 'Diğer / açıklama (hasta notu)', commitNotes)}
         </Sec>
 
         <Sec title="Senet (bono)" open={on('pg_senet')}>
@@ -398,6 +497,7 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
               </select>
             </label>
           )}
+          {!isResponsible && <p className="col-span-2 text-xs font-semibold text-amber-700">Bu şubede “mesul müdür” işaretli hekim yok; alacaklı olarak ilk hekim geldi. Ayarlar → Diş Hekimi’nden mesul müdürü işaretleyin.</p>}
           {fld('k_hekim', 'Hekim')}
           {fld('k_tel', 'Telefon')}
           {fld('k_lehtar', 'Alacaklı (bonoda lehtar)', { full: true })}

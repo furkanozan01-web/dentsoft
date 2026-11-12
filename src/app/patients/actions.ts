@@ -9,6 +9,7 @@ export {
   deletePatient,
   getAnamnesis,
   getPatientTc,
+  getDoctorTc,
   updateAnamnesis,
   setUntrusted,
 } from './patientActions'

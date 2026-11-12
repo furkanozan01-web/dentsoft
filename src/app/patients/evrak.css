@@ -53,22 +53,34 @@
 .ev-sheet .fill .u { border-bottom: .7pt solid var(--ink); height: 7mm; }
 .ev-sheet .date { text-align: right; font-size: .92em; }
 
-.ev-sheet .senet { border: 1.2pt solid var(--ink); padding: 5mm 6mm; font-size: 1.08em; }
-.ev-sheet .sn-top { display: grid; grid-template-columns: 1.3fr 1.5fr .7fr .8fr; border: .8pt solid var(--ink); margin-bottom: 3.4mm; }
-.ev-sheet .sn-top > div { padding: 1.2mm 1.6mm; border-right: .8pt solid var(--ink); text-align: center; }
+.ev-sheet .senet { border: 1.1pt solid var(--ink); padding: 3.2mm 5mm 3.4mm; font-size: .98em; }
+.ev-sheet .sn-top { display: grid; grid-template-columns: 1.3fr 1.5fr .7fr .8fr; border: .8pt solid var(--ink); margin-bottom: 2.2mm; }
+.ev-sheet .sn-top > div { padding: .6mm 1.4mm; border-right: .8pt solid var(--ink); text-align: center; }
 .ev-sheet .sn-top > div:last-child { border-right: 0; }
-.ev-sheet .sn-top b { display: block; font-size: .7em; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); }
-.ev-sheet .sn-top span { font-weight: 500; font-size: 1.08em; }
-.ev-sheet .sn-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2mm; }
-.ev-sheet .sn-h .dt { margin: 0; font-size: 1.35em; letter-spacing: .06em; }
-.ev-sheet .sn-h .nama { font-size: .78em; font-weight: 700; letter-spacing: .1em; border: .9pt solid var(--ink); padding: .4mm 2.2mm; }
-.ev-sheet .senet p.t { line-height: 1.65; margin-bottom: 2.6mm; }
-.ev-sheet .sn-ln { display: grid; grid-template-columns: 1fr 1fr; gap: 1.8mm 6mm; }
-.ev-sheet .sn-ln .ln .v { min-height: 5mm; }
-.ev-sheet .sn-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-top: 4mm; }
-.ev-sheet .sn-parties > div { border: .6pt solid var(--rule); padding: 2mm 2.6mm; font-size: .95em; line-height: 1.75; min-height: 42mm; }
-.ev-sheet .sn-parties .hd { font-weight: 700; text-transform: uppercase; letter-spacing: .06em; font-size: .82em; margin-bottom: .4mm; }
-.ev-sheet .sn-parties .kn { font-size: .82em; color: var(--ink-2); line-height: 1.35; margin-bottom: .8mm; }
+.ev-sheet .sn-top b { display: block; font-size: .68em; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); }
+.ev-sheet .sn-top span { font-weight: 500; font-size: 1.05em; }
+.ev-sheet .sn-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1.2mm; }
+.ev-sheet .sn-h .dt { margin: 0; font-size: 1.25em; letter-spacing: .06em; }
+.ev-sheet .sn-h .nama { font-size: .74em; font-weight: 700; letter-spacing: .1em; border: .9pt solid var(--ink); padding: .3mm 2mm; }
+.ev-sheet .senet p.t { line-height: 1.5; margin-bottom: 1.6mm; }
+.ev-sheet .sn-ln { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1mm 4mm; }
+.ev-sheet .sn-ln .ln .v { min-height: 4.2mm; }
+.ev-sheet .sn-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; margin-top: 2.2mm; }
+.ev-sheet .sn-parties > div { border: .6pt solid var(--rule); padding: 1.2mm 2.2mm; font-size: .92em; line-height: 1.5; min-height: 24mm; }
+.ev-sheet .sn-parties .hd { font-weight: 700; text-transform: uppercase; letter-spacing: .06em; font-size: .8em; margin-bottom: .2mm; }
+.ev-sheet .sn-parties .hd .kn { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--ink-2); }
+
+.ev-sheet .hesap { margin-top: 4mm; }
+.ev-sheet .hs-sum { display: grid; grid-template-columns: repeat(3, 1fr); border-top: .6pt solid var(--rule); border-left: .6pt solid var(--rule); margin-bottom: 2mm; }
+.ev-sheet .hs-sum > div { border-right: .6pt solid var(--rule); border-bottom: .6pt solid var(--rule); padding: 1mm 2mm; }
+.ev-sheet .hs-sum b { display: block; font-size: .7em; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); font-weight: 600; }
+.ev-sheet .hs-sum span { font-weight: 700; font-size: 1.05em; }
+.ev-sheet .hs-sum .due span { font-size: 1.15em; }
+.ev-sheet .hs-tab { width: 100%; border-collapse: collapse; font-size: .84em; line-height: 1.25; }
+.ev-sheet .hs-tab th { text-align: left; font-size: .8em; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-2); border-bottom: .8pt solid var(--ink); padding: .5mm 1mm; font-weight: 600; }
+.ev-sheet .hs-tab td { padding: .45mm 1mm; border-bottom: .4pt dotted var(--rule); vertical-align: top; }
+.ev-sheet .hs-tab .num { text-align: right; white-space: nowrap; }
+.ev-sheet .hs-tab .more { color: var(--ink-2); font-style: italic; border-bottom: 0; }
 
 @media print {
   @page { size: A4; margin: 0; }

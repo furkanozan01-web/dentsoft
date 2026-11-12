@@ -565,6 +565,7 @@ export default function PatientsClient({
             treatments={treatments}
             transactions={transactions}
             loading={loadingFinance || loadingAnamnesis}
+            onAnamnesisSaved={setAnamnesis}
           />
         )}
 

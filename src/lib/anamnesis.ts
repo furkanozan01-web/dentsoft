@@ -26,6 +26,11 @@ export const DISEASES: DiseaseDef[] = [
   { key: 'Böbrek Yetmezliği', warning: 'İlaç dozu ayarı gerekebilir.', level: 'orange' },
   { key: 'Hamilelik', warning: 'Radyografi ve belirli ilaçlardan kaçının.', level: 'red' },
   { key: 'Nörolojik', warning: 'Konfor önlemleri alınmalı.', level: 'yellow' },
+  { key: 'Bisfosfonat Kullanımı', warning: 'Çene kemiğinde iyileşmeme (osteonekroz) riski; cerrahi öncesi değerlendirin.', level: 'red' },
+  { key: 'Radyoterapi / Kanser Tedavisi', warning: 'Baş-boyun radyoterapisi sonrası kemik iyileşmesi riskli.', level: 'red' },
+  { key: 'Anestezi Reaksiyonu', warning: 'Lokal anesteziye kötü tepki öyküsü; ajan seçimi dikkatle yapılmalı.', level: 'orange' },
+  { key: 'Sigara / Tütün', warning: 'İyileşme ve implant başarısı olumsuz etkilenir.', level: 'yellow' },
+  { key: 'Yakın Zamanda Ameliyat', warning: 'Son 1 yılda ameliyat / hastane yatışı; güncel durumu sorun.', level: 'yellow' },
 ]
 
 export interface DrugInteraction {

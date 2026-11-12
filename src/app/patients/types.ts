@@ -12,6 +12,7 @@ export interface Patient {
   untrusted: boolean | null
   reg_date: string | null
   protocol_no: string | null
+  branch_id?: number | null
   created_at: string
 }
 
@@ -99,6 +100,8 @@ export interface PatientImage {
 }
 
 export interface DoctorOption {
+  branch_id?: number | null
+  is_mesul_mudur?: boolean | null
   id: number
   name: string
   color: string | null

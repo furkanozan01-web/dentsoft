@@ -44,13 +44,13 @@ export default async function PatientsPage() {
     supabase
       .from('patients')
       .select(
-        'id, name, surname, gender, birth_date, phone1, phone2, email, address, status, untrusted, reg_date, protocol_no, created_at'
+        'id, name, surname, gender, birth_date, phone1, phone2, email, address, status, untrusted, reg_date, protocol_no, created_at, branch_id'
       )
       .eq('clinic_id', clinicId)
       .order('created_at', { ascending: false }),
     supabase
       .from('doctors')
-      .select('id, name, color')
+      .select('id, name, color, branch_id, is_mesul_mudur')
       .eq('clinic_id', clinicId)
       .eq('status', 'active')
       .order('name'),

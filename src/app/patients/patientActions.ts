@@ -299,3 +299,13 @@ export async function setUntrusted(
   revalidatePath('/patients')
   return { success: true }
 }
+
+/** Hekimin T.C. kimlik numarası (şifreli saklanır) — yalnızca kendi kliniğinin hekimi için okunur (bono lehtarı için). */
+export async function getDoctorTc(doctorId: number): Promise<{ tc?: string | null; error?: string }> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Yetkisiz erişim' }
+  const { supabase, clinicId } = ctx
+  const { data, error } = await supabase.from('doctors').select('tc_enc').eq('id', doctorId).eq('clinic_id', clinicId).single()
+  if (error) return { error: 'Hekim kimlik bilgisi okunamadı' }
+  return { tc: data?.tc_enc ? tryDecrypt(data.tc_enc) : null }
+}
