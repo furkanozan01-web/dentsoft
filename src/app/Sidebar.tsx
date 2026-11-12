@@ -72,7 +72,7 @@ export default function Sidebar({ fullName, role, canSeeFinans = true, canSeeAya
     .slice(0, 2)
     .map((w) => w[0])
     .join('')
-    .toUpperCase()
+    .toLocaleUpperCase("tr-TR")
 
   return (
     <aside className="w-56 bg-[#0F2B3D] flex flex-col h-screen sticky top-0 flex-shrink-0">

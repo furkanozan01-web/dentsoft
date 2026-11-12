@@ -15,7 +15,7 @@ export async function createPatient(
   const { supabase, clinicId } = ctx
 
   const name = (formData.get('name') as string)?.trim()
-  const surname = (formData.get('surname') as string)?.trim().toUpperCase()
+  const surname = (formData.get('surname') as string)?.trim().toLocaleUpperCase('tr-TR')
   if (!name || !surname) return { error: 'Ad ve soyad zorunludur' }
 
   const tc = (formData.get('tc') as string)?.trim()
@@ -83,7 +83,7 @@ export async function updatePatient(
     .update({
       ...tcUpdate,
       name: (formData.get('name') as string)?.trim(),
-      surname: (formData.get('surname') as string)?.trim().toUpperCase(),
+      surname: (formData.get('surname') as string)?.trim().toLocaleUpperCase('tr-TR'),
       gender: (formData.get('gender') as string) || null,
       birth_date: (formData.get('birth_date') as string) || null,
       phone1: (formData.get('phone1') as string) || null,

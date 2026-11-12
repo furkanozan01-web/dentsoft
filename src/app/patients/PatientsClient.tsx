@@ -1,5 +1,6 @@
 ﻿'use client'
 
+import { useKeepFormValues } from '@/lib/hooks/useKeepFormValues'
 import { useState, useEffect, useCallback, useMemo, useActionState, useRef, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -718,7 +719,11 @@ function PatientCreateCard({
   onCancel: () => void
   onSuccess: (patient: Patient) => void
 }) {
+  const { formRef, onSubmit: keepSubmit, restore: restoreForm } = useKeepFormValues()
   const [state, action, pending] = useActionState(createPatient, null as ActionResult)
+  useEffect(() => {
+    if ((state as ActionResult)?.error) restoreForm()
+  }, [state, restoreForm])
 
   useEffect(() => {
     if ((state as ActionResult)?.success && (state as ActionResult)?.patient) {
@@ -740,7 +745,7 @@ function PatientCreateCard({
         </span>
       </div>
 
-      <form action={action} className="space-y-5">
+      <form ref={formRef} onSubmit={keepSubmit} action={action} className="space-y-5">
         {(state as ActionResult)?.error && (
           <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
             {(state as ActionResult)!.error}

@@ -31,7 +31,7 @@ export async function createPatientFromPeri(params: {
     .insert({
       clinic_id: clinicId,
       name: params.name.trim(),
-      surname: params.surname.trim().toUpperCase(),
+      surname: params.surname.trim().toLocaleUpperCase('tr-TR'),
       gender: params.gender ?? null,
       birth_date: params.birth_date ?? null,
       tc_enc: null,
@@ -73,7 +73,7 @@ export async function updatePatientFromPeri(params: {
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (params.name !== undefined) updates.name = params.name.trim()
-  if (params.surname !== undefined) updates.surname = params.surname.trim().toUpperCase()
+  if (params.surname !== undefined) updates.surname = params.surname.trim().toLocaleUpperCase('tr-TR')
   if (params.phone1 !== undefined) updates.phone1 = params.phone1
   if (params.phone2 !== undefined) updates.phone2 = params.phone2
   if (params.birth_date !== undefined) updates.birth_date = params.birth_date

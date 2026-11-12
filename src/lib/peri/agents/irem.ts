@@ -226,7 +226,7 @@ async function runHastaOlustur(input: Record<string, unknown>): Promise<ToolResu
   const ctx = await getCtx()
 
   const ad = (input.ad as string)?.trim()
-  const soyad = (input.soyad as string)?.trim().toUpperCase()
+  const soyad = (input.soyad as string)?.trim().toLocaleUpperCase('tr-TR')
   const telefon = (input.telefon as string)?.trim()
 
   if (!ad || !soyad || !telefon) {

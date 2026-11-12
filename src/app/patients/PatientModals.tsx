@@ -1,5 +1,6 @@
 ﻿'use client'
 
+import { useKeepFormValues } from '@/lib/hooks/useKeepFormValues'
 import { useActionState, useEffect, useState, useTransition } from 'react'
 import { addPaymentWithCurrency, createPatient, getPatientTc, updatePatient } from './actions'
 import { getBusinessPartners } from '@/app/finance/actions'
@@ -14,7 +15,11 @@ export function NewPatientModal({
   onClose: () => void
   onSuccess: () => void
 }) {
+  const { formRef, onSubmit: keepSubmit, restore: restoreForm } = useKeepFormValues()
   const [state, action, pending] = useActionState(createPatient, null as ActionResult)
+  useEffect(() => {
+    if ((state as ActionResult)?.error) restoreForm()
+  }, [state, restoreForm])
 
   useEffect(() => {
     if ((state as ActionResult)?.success) onSuccess()
@@ -22,7 +27,7 @@ export function NewPatientModal({
 
   return (
     <Modal title="Yeni Hasta Ekle" onClose={onClose}>
-      <form action={action} className="p-6 space-y-4">
+      <form ref={formRef} onSubmit={keepSubmit} action={action} className="p-6 space-y-4">
         {(state as ActionResult)?.error && (
           <div className="text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3">
             {(state as ActionResult)!.error}
@@ -128,7 +133,7 @@ export function EditPatientModal({
       onSuccess({
         ...patient,
         name: name.trim(),
-        surname: surname.trim().toUpperCase(),
+        surname: surname.trim().toLocaleUpperCase('tr-TR'),
         gender: gender || null,
         birth_date: birthDate || null,
         phone1: phone1 || null,

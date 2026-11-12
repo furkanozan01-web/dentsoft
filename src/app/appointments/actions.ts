@@ -164,7 +164,7 @@ export async function createPatientForAppointment(input: {
   const { supabase, clinicId } = ctx
 
   const name = input.name.trim()
-  const surname = input.surname.trim().toUpperCase()
+  const surname = input.surname.trim().toLocaleUpperCase('tr-TR')
   if (!name || !surname) return { error: 'Ad ve soyad zorunludur' }
 
   const { data, error } = await supabase
