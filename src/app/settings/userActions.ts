@@ -159,7 +159,8 @@ export async function updateUserRole(userId: string, role: string): Promise<R> {
       }
     }
   }
-  const { error } = await ctx.supabase
+  // profiles.role / doctor_id istemciden yazılamaz; requireAdmin + klinik doğrulamasından sonra service role ile yazılır
+  const { error } = await createAdminClient()
     .from('profiles')
     .update({ role, ...(doctorId ? { doctor_id: doctorId } : {}), updated_at: new Date().toISOString() })
     .eq('id', userId)

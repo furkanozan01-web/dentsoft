@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getCtx, requireAdmin, type R } from './actionsShared'
 
 // ---- Şube yönetimi ----
@@ -64,7 +65,8 @@ export async function setActiveBranch(branchId: number | null): Promise<R> {
   } else if (ctx.role !== 'bashekim') {
     return { error: 'Tüm şubeler görünümü için yetkiniz yok' }
   }
-  const { error } = await ctx.supabase.from('profiles').update({ active_branch_id: branchId, updated_at: new Date().toISOString() }).eq('id', ctx.userId).eq('clinic_id', ctx.clinicId)
+  // profiles.active_branch_id istemciden yazılamaz (yetki sütunu); yukarıdaki doğrulamadan sonra service role ile yazılır
+  const { error } = await createAdminClient().from('profiles').update({ active_branch_id: branchId, updated_at: new Date().toISOString() }).eq('id', ctx.userId).eq('clinic_id', ctx.clinicId)
   if (error) return { error: error.message }
   revalidatePath('/', 'layout')
   return { success: true }
