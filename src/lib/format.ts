@@ -36,7 +36,7 @@ export function formatAmountRounded(kurus: number | null | undefined): string {
 export function cleanMoney(value: string | null | undefined): string {
   const v = value ?? ''
   if (/-/.test(v)) return ''
-  return v.replace(/./g, '').replace(',', '.').replace(/[^0-9.]/g, '')
+  return v.replace(/\./g, '').replace(',', '.').replace(/[^0-9.]/g, '')
 }
 
 // "1.500,50" / "1500,50" / "1500.50" gibi kullanıcı girdisini kuruşa çevirir.
