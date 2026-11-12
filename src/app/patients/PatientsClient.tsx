@@ -583,7 +583,7 @@ export default function PatientsClient({
             patient={selected}
             treatments={treatments}
             transactions={transactions}
-            clinic={clinic}
+            clinic={patientClinic}
             loading={loadingFinance}
             onChanged={() => loadFinancials(selected.id)}
           />
@@ -594,7 +594,7 @@ export default function PatientsClient({
             patient={selected}
             prescriptions={prescriptions}
             doctors={doctors}
-            clinic={clinic}
+            clinic={patientClinic}
             loading={loadingFinance}
             onChanged={() => loadFinancials(selected.id)}
           />
