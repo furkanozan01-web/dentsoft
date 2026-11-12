@@ -53,6 +53,7 @@ export {
   deleteTariffItem,
   importTdb2024,
   syncTdbProfile,
+  importTdbFromRows,
   importTufanbeyli,
   copyTariffProfile,
   deleteTariffProfile,

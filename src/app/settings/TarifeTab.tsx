@@ -20,6 +20,7 @@ import {
 } from './actions'
 import type { TariffProfile } from './actions'
 import { fmtPrice } from './helpers'
+import TdbExcelImport, { TDB_OFFICIAL_URL } from './TdbExcelImport'
 import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
 import { BulkPriceModal, PriceHistoryModal, TariffCards, TreatmentVisual, VISUAL_SCHEMAS, inferTariffVisual } from './TariffEnhancements'
 import { SummaryLine, SettingsIconBox, UserStatCard, IconClipboard, IconCheckCircle, IconPlus, IconInfo, IconCalendar } from './SettingsSharedUI'
@@ -58,6 +59,7 @@ export default function TarifeTab({
   const [renameName, setRenameName] = useState('')
   const [showAddItem, setShowAddItem] = useState<string | null>(null) // category name
   const [showAddProfile, setShowAddProfile] = useState(false)
+  const [showTdbFile, setShowTdbFile] = useState(false)
   const [viewMode, setViewMode] = useState<'list' | 'cards'>('list')
   const [showBulk, setShowBulk] = useState(false)
   const [historyItem, setHistoryItem] = useState<Tariff | null>(null)
@@ -255,7 +257,7 @@ export default function TarifeTab({
           <div className="flex justify-center gap-3">
             <form action={importAction}>
               <button type="submit" disabled={importPending} className="px-4 py-2 bg-[#2DD4BF] text-[#0F2B3D] text-sm font-semibold rounded-xl hover:bg-[#26b8a5] transition-colors disabled:opacity-60">
-                {importPending ? 'Aktarılıyor…' : 'TDB 2024 Tarifesini İçe Aktar'}
+                {importPending ? 'Aktarılıyor…' : 'TDB 2026 Tarifesini İçe Aktar'}
               </button>
             </form>
             <form action={tufanAction}>
@@ -263,6 +265,10 @@ export default function TarifeTab({
                 {tufanPending ? 'Aktarılıyor…' : 'Tufanbeyli Tarifesini İçe Aktar'}
               </button>
             </form>
+          </div>
+          <div className="flex justify-center gap-4 text-sm">
+            <button type="button" onClick={() => setShowTdbFile(true)} className="font-semibold text-[#0D9488] hover:underline">TDB tarifesini dosyadan yükle</button>
+            <a href={TDB_OFFICIAL_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#0D9488] hover:underline">Resmî TDB tarifesi ↗</a>
           </div>
           {(importState as R)?.error && <p className="text-sm text-red-600">{(importState as R)!.error}</p>}
           {(tufanState as R)?.error && <p className="text-sm text-red-600">{(tufanState as R)!.error}</p>}
@@ -557,6 +563,8 @@ export default function TarifeTab({
         </>
       )}
 
+      {showTdbFile && <TdbExcelImport onClose={() => setShowTdbFile(false)} onDone={() => { setShowTdbFile(false); onChanged() }} />}
+
       {/* Yeni tarife ekleme modal (TDB + Tufanbeyli import veya boş) */}
       {showAddProfile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -573,11 +581,25 @@ export default function TarifeTab({
                     <span className="text-xs font-bold text-blue-600">TDB</span>
                   </span>
                   <div>
-                    <p className="text-sm font-semibold text-[#0F2B3D]">TDB 2024 Tarifesi</p>
-                    <p className="text-xs text-gray-400">8 kategori, ~160 işlem — Asgari ücret tarifesi</p>
+                    <p className="text-sm font-semibold text-[#0F2B3D]">TDB 2026 Tarifesi</p>
+                    <p className="text-xs text-gray-400">8 kategori, 294 işlem — Resmî asgari ücret tarifesi</p>
                   </div>
                 </button>
               </form>
+              <button type="button" onClick={() => { setShowAddProfile(false); setShowTdbFile(true) }}
+                className="w-full px-4 py-3 flex items-center gap-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-left">
+                <span className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
+                  <span className="text-[10px] font-bold text-amber-600">XLS</span>
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-[#0F2B3D]">TDB Tarifesini Dosyadan Yükle</p>
+                  <p className="text-xs text-gray-400">TDB’den indirdiğiniz Excel / CSV dosyası</p>
+                </div>
+              </button>
+              <a href={TDB_OFFICIAL_URL} target="_blank" rel="noopener noreferrer"
+                className="block px-1 text-xs font-semibold text-[#0D9488] hover:underline">
+                Resmî TDB tarifesini TDB sitesinden indir ↗
+              </a>
               <form action={tufanAction}>
                 <button type="submit" disabled={tufanPending}
                   className="w-full px-4 py-3 flex items-center gap-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-60 text-left">

@@ -946,3 +946,60 @@ export async function addTariffItemToProfile(_prev: R, formData: FormData): Prom
   revalidatePath('/patients')
   return { success: true }
 }
+
+// ---- TDB tarifesini Excel/CSV dosyasından içe aktar ----
+// Dosya tarayıcıda çözümlenir (tdbParse.ts); buraya yalnızca doğrulanmış kalemler gelir. Fiyatlar kuruş, KDV dahil.
+export async function importTdbFromRows(
+  year: number,
+  items: { category: string; treatment_name: string; price: number }[]
+): Promise<{ success?: boolean; error?: string; count?: number; updated?: boolean }> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Yetkisiz erişim' }
+  const adminErr = requireAdmin(ctx)
+  if (adminErr) return { error: adminErr.error }
+  const { supabase, clinicId } = ctx
+
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) return { error: 'Geçerli bir yıl girin' }
+  if (!Array.isArray(items) || items.length === 0) return { error: 'İçe aktarılacak kalem yok' }
+  if (items.length > 3000) return { error: 'Bir seferde en fazla 3000 kalem aktarılabilir' }
+  const clean: { category: string; treatment_name: string; price: number; currency: string }[] = []
+  for (const it of items) {
+    const name = String(it?.treatment_name ?? '').trim()
+    const category = String(it?.category ?? '').trim() || 'Diğer'
+    const price = Number(it?.price)
+    if (!name || name.length > 200 || category.length > 120) return { error: 'Geçersiz kalem adı veya kategori bulundu' }
+    if (!Number.isInteger(price) || price <= 0 || price > 100_000_000_00) return { error: `"${name}" için geçersiz fiyat` }
+    clean.push({ category, treatment_name: name, price, currency: 'TRY' })
+  }
+
+  let profileId: number
+  let updated = false
+  const { data: existing } = await supabase
+    .from('tariff_profiles')
+    .select('id')
+    .eq('clinic_id', clinicId)
+    .eq('source', 'tdb')
+    .eq('tdb_year', year)
+    .maybeSingle()
+  if (existing) {
+    profileId = existing.id
+    updated = true
+  } else {
+    const { data: created, error: createErr } = await supabase
+      .from('tariff_profiles')
+      .insert({ clinic_id: clinicId, name: `TDB ${year}`, source: 'tdb', tdb_year: year, last_synced_at: new Date().toISOString() })
+      .select('id')
+      .single()
+    if (createErr || !created) return { error: createErr?.message ?? 'Profil oluşturulamadı' }
+    profileId = created.id
+  }
+
+  const { error } = await supabase.rpc('sync_tdb_tariffs', { p_profile_id: profileId, p_clinic_id: clinicId, p_items: clean })
+  if (error) {
+    if (!updated) await supabase.from('tariff_profiles').delete().eq('id', profileId).eq('clinic_id', clinicId)
+    return { error: error.message }
+  }
+  await supabase.from('tariff_profiles').update({ last_synced_at: new Date().toISOString() }).eq('id', profileId).eq('clinic_id', clinicId)
+  revalidatePath('/settings')
+  return { success: true, count: clean.length, updated }
+}
