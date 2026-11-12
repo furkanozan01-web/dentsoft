@@ -318,7 +318,7 @@ export default function FinanceClient({
   const activeDebts = initialDebts.filter((d) => d.status === 'active')
   const totalDebt = activeDebts.reduce((s, d) => s + (d.total_amount - d.paid_amount), 0)
   const overdueDebts = activeDebts.filter(
-    (d) => d.due_date && d.due_date < new Date().toISOString().slice(0, 10)
+    (d) => d.due_date && d.due_date < localDateValue()
   )
 
   return (

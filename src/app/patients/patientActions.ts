@@ -4,7 +4,17 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { tryEncrypt, tryDecrypt, hashTc } from '@/lib/crypto'
 import { EMPTY_ANAMNESIS, type Anamnesis } from '@/lib/anamnesis'
 import { revalidatePath } from 'next/cache'
+import { localDateValue, toTitleCase } from '@/lib/format'
 import { type CreatedPatient, type ActionResult, nextProtocolNo, getCtx, validatePatient, validateTc, findTcOwner } from './actionsShared'
+
+/** Doğum tarihi gelecekte veya imkânsız derecede eski olamaz (boş geçerli) */
+function birthDateError(value: FormDataEntryValue | null): string | null {
+  if (typeof value !== 'string' || !value) return null
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(value))) return 'Doğum tarihi geçersiz'
+  if (value > localDateValue()) return 'Doğum tarihi gelecekte olamaz'
+  if (value < '1900-01-01') return 'Doğum tarihi geçersiz'
+  return null
+}
 
 export async function createPatient(
   _prev: ActionResult,
@@ -14,9 +24,11 @@ export async function createPatient(
   if (!ctx) return { error: 'Yetkisiz erişim' }
   const { supabase, clinicId } = ctx
 
-  const name = (formData.get('name') as string)?.trim()
+  const name = toTitleCase((formData.get('name') as string)?.trim())
   const surname = (formData.get('surname') as string)?.trim().toLocaleUpperCase('tr-TR')
   if (!name || !surname) return { error: 'Ad ve soyad zorunludur' }
+  const birthError = birthDateError(formData.get('birth_date'))
+  if (birthError) return { error: birthError }
 
   const tc = (formData.get('tc') as string)?.trim()
   let tc_enc: string | null = null
@@ -45,6 +57,7 @@ export async function createPatient(
     email: (formData.get('email') as string) || null,
     address: (formData.get('address') as string) || null,
     protocol_no: protocolNo,
+    reg_date: localDateValue(), // DB varsayılanı UTC günü verir; İstanbul gününü açıkça yaz
     status: 'active',
   })
     .select('id, name, surname, gender, birth_date, phone1, phone2, email, address, status, untrusted, reg_date, protocol_no, created_at')
@@ -86,11 +99,14 @@ export async function updatePatient(
     }
   }
 
+  const birthError = birthDateError(formData.get('birth_date'))
+  if (birthError) return { error: birthError }
+
   const { error } = await supabase
     .from('patients')
     .update({
       ...tcUpdate,
-      name: (formData.get('name') as string)?.trim(),
+      name: toTitleCase((formData.get('name') as string)?.trim()),
       surname: (formData.get('surname') as string)?.trim().toLocaleUpperCase('tr-TR'),
       gender: (formData.get('gender') as string) || null,
       birth_date: (formData.get('birth_date') as string) || null,

@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ConfirmModal'
-import { cleanMoney, formatAmountRounded, kurusToInput } from '@/lib/format'
+import { cleanMoney, formatAmountRounded, kurusToInput, localDateValue } from '@/lib/format'
 import { addClinicDebt, updateClinicDebt, payClinicDebt, deleteClinicDebt } from './actions'
 import type { ClinicDebt } from './FinanceClient'
 
@@ -17,7 +17,7 @@ export default function BorclarTab({
   onChanged: () => void
 }) {
   const confirm = useConfirm()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDateValue()
 
   const [showForm, setShowForm] = useState(false)
   const [editDebt, setEditDebt] = useState<ClinicDebt | null>(null)

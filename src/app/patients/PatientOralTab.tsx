@@ -10,7 +10,7 @@ import {
 } from 'react'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ConfirmModal'
-import { parseToKurus } from '@/lib/format'
+import { localDateValue, parseToKurus } from '@/lib/format'
 import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
 import { addTreatment, cancelTreatment, updateTreatmentFee } from './actions'
 import {
@@ -77,7 +77,7 @@ function OralTab({
   const selectedProfileId = persistedProfileId !== null && tariffProfiles.some((p) => p.id === persistedProfileId) ? persistedProfileId : defaultProfileId
   const setSelectedProfileId = setPersistedProfileId
   const [treatmentDate, setTreatmentDate] = useState<string>(() =>
-    new Date().toISOString().slice(0, 10)
+    localDateValue()
   )
   const [selectedTariffItem, setSelectedTariffItem] = useState<TariffOption | null>(null)
   const [selectedDiagItem, setSelectedDiagItem] = useState<typeof DIAGNOSIS_ITEMS[number] | null>(null)

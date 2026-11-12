@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { formatAmount } from '@/lib/format'
+import { formatAmount, localDateValue } from '@/lib/format'
 import { amountToTurkishWords } from '@/lib/turkishNumbers'
 import { getPatientTc } from './actions'
 import { triggerPrint } from './printTarget'
@@ -49,7 +49,7 @@ export default function SenetPrint({ patient, clinic, title, rows }: SenetPrintP
     }
   }, [patient])
 
-  const issueDate = new Date().toISOString().slice(0, 10)
+  const issueDate = localDateValue()
   const place = placeFromAddress(clinic?.address)
   const creditor = clinic?.clinic_name || 'DentSoft Kliniği'
 

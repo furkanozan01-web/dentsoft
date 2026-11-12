@@ -125,10 +125,11 @@ function HesapTab({
           />
 
           <div className="mt-5 rounded-[20px] border border-[#E7ECF2] bg-[#FAFBFC] px-6 py-5 text-center">
-            <p className="text-xs font-black uppercase tracking-wide text-slate-400">Kalan Borç</p>
-            <p className={`mt-1 text-3xl font-black ${clampedBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-              ₺{formatAmount(clampedBalance)}
+            <p className="text-xs font-black uppercase tracking-wide text-slate-400">{balance < 0 ? 'Alacak (Fazla Ödeme)' : 'Kalan Borç'}</p>
+            <p className={`mt-1 text-3xl font-black ${balance < 0 ? 'text-blue-600' : clampedBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+              ₺{formatAmount(balance < 0 ? -balance : clampedBalance)}
             </p>
+            {balance < 0 && <p className="mt-1 text-xs font-semibold text-slate-500">Hasta adına alacak olarak kayıtlı; sonraki tedavi ücretlerinden düşülür.</p>}
           </div>
 
           <div className="mt-5 overflow-hidden rounded-[18px] border border-[#E7ECF2]">
