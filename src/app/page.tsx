@@ -161,7 +161,7 @@ export default async function DashboardPage() {
       .or(`status.in.(planned,in_progress),and(treatment_date.gte.${monthStartISO},treatment_date.lt.${nextMonthStartISO})`),
     supabase
       .from('doctor_payments')
-      .select('doctor_id, amount, payment_date, earning_period')
+      .select('doctor_id, amount, payment_date, earning_period, payment_type')
       .eq('clinic_id', clinicId)
       .or(`earning_period.eq.${monthKey},and(earning_period.is.null,payment_date.gte.${monthStartISO},payment_date.lt.${nextMonthStartISO})`),
     supabase
@@ -276,9 +276,11 @@ export default async function DashboardPage() {
           amount: payment.amount ?? 0,
           payment_date: payment.payment_date ?? '',
           earning_period: payment.earning_period,
+          payment_type: payment.payment_type,
         })),
         monthKey,
-        profitByMonth
+        profitByMonth,
+        doctors
       )
     : null
 

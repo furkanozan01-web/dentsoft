@@ -748,7 +748,7 @@ export async function getHekimHakedis(input: {
       .eq('clinic_id', clinicId),
     supabase
       .from('doctor_payments')
-      .select('doctor_id, amount, payment_date, earning_period')
+      .select('doctor_id, amount, payment_date, earning_period, payment_type')
       .eq('clinic_id', clinicId)
       .or(`earning_period.eq.${monthKey},and(earning_period.is.null,payment_date.gte.${rangeStart},payment_date.lt.${rangeEnd})`),
     supabase
@@ -791,7 +791,8 @@ export async function getHekimHakedis(input: {
       (txs ?? []) as Parameters<typeof computeSummary>[4],
       (payments ?? []) as Parameters<typeof computeSummary>[5],
       monthKey,
-      profitByMonth
+      profitByMonth,
+      doctors as Parameters<typeof computeSummary>[8]
     )
     return {
       hekim_id: doc.id,
