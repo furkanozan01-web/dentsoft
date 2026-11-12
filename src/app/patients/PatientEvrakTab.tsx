@@ -249,9 +249,9 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
     a.a_alerji = anam.allergyDetail ?? ''
     a.a_diger = anam.notes ?? ''
     const owed = treatments.reduce((s, t) => s + (t.fee ?? 0), 0)
-    const paid = transactions.filter((t) => t.type === 'payment').reduce((s, t) => s + (t.amount ?? 0), 0)
-    // Bono tutarı = hastanın toplam borcu (tedavi toplamı − yapılan ödemeler)
-    a.p_toplam = owed - paid > 0 ? String((owed - paid) / 100) : ''
+    // Evrak bonosu: ilk anlaşmada hastaya bildirilen toplam tedavi ücreti (ödemeler düşülmez).
+    // Kalan borç üzerinden senet, Hesap sekmesindeki Senet Robotu ile yazılır.
+    a.p_toplam = owed > 0 ? String(owed / 100) : ''
     a.p_pesin = ''
     a.p_duz = today()
     a.p_vade = addMonths(today(), 12)
@@ -452,7 +452,7 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
         </Sec>
 
         <Sec title="Senet (bono)" open={on('pg_senet')}>
-          {fld('p_toplam', 'Hastanın toplam borcu (TL)', { type: 'number' })}
+          {fld('p_toplam', 'Anlaşılan toplam tedavi ücreti (TL)', { type: 'number' })}
           {fld('p_pesin', 'Peşinat / alınan (TL)', { type: 'number' })}
           <div className="col-span-2 rounded-lg bg-[#E6FFFA] px-3 py-2 font-mono text-sm text-[#142536]">
             {top ? `${tl(Math.max(0, top - pes))} TL · ${tutarYazi(Math.max(0, top - pes))}` : 'Toplam ücreti girin'}
