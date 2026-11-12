@@ -95,19 +95,22 @@ export function parseTdbSheets(sheets: { name: string; rows: Cell[][] }[], vatIn
     }
 
     let category = /^(sayfa|sheet|tablo)\s*\d*$/i.test(sheet.name.trim()) ? 'Diğer' : sheet.name.trim()
+    // Başlık satırı aynı zamanda bölüm başlığıysa ("1 | TEŞHİS VE TEDAVİ PLANLAMASI | KDV Hariç | KDV Dahil") ilk kategori odur
+    if (headerIdx >= 0 && /^\d+$/.test(String(rows[headerIdx][0] ?? '').trim())) category = String(rows[headerIdx][nameCol] ?? '').trim() || category
     for (let i = headerIdx + 1; i < rows.length; i++) {
       const r = rows[i]
       const name = String(r[nameCol] ?? '').replace(/\s+/g, ' ').trim()
       const price = parseTrNumber(r[priceCol])
       if (!name) { if (r.some((c) => c !== null && c !== undefined && String(c).trim() !== '')) skipped++; continue }
       if (price === null) {
+        if (r.some((c, idx) => idx !== nameCol && /kdv/i.test(String(c ?? '')))) { category = name; continue }
         const others = r.filter((c, idx) => idx !== nameCol && c !== null && c !== undefined && String(c).trim() !== '')
         if (others.length === 0 || (others.length === 1 && /^\d+[.)]?$/.test(String(others[0]).trim()))) { category = name.replace(/^\d+[.)-]?\s*/, ''); continue }
         skipped++
         continue
       }
       if (price <= 0) { skipped++; continue }
-      const cat = (catCol >= 0 ? String(r[catCol] ?? '').trim() : '') || category
+      const cat = tidyCategory((catCol >= 0 ? String(r[catCol] ?? '').trim() : '') || category)
       const key = `${cat}|${name}`.toLocaleLowerCase('tr-TR')
       if (seen.has(key)) { skipped++; continue }
       seen.add(key)
@@ -117,4 +120,43 @@ export function parseTdbSheets(sheets: { name: string; rows: Cell[][] }[], vatIn
   }
   if (items.length === 0) warnings.push('Tabloda içe aktarılabilir işlem bulunamadı')
   return { items, skipped, categories: cats.size, warnings }
+}
+
+const PRICE_RE = /^\d{1,3}(\.\d{3})*,\d{2}$/
+
+/**
+ * PDF metin parçalarını (içerik sırasıyla) tablo satırlarına çevirir.
+ * TDB biçimi: "1-1 | Dişhekimi Muayenesi | 1.500,00 | 1.650,00"; bölüm başlığı: "4 | PROTEZ | KDV Hariç | KDV Dahil %10".
+ * Uzun adlar satır sarsa da birleştirilir; fiyatlardan sonra gelen dipnotlar yok sayılır.
+ */
+export function pdfTokensToRows(rawTokens: string[]): (string | null)[][] {
+  const tokens = rawTokens.map((t) => t.replace(/\s+/g, ' ').trim()).filter(Boolean)
+  const rows: (string | null)[][] = []
+  let rec: { code: string; name: string[]; prices: string[] } | null = null
+  const flush = () => {
+    if (rec && rec.name.length && rec.prices.length >= 1) rows.push([rec.code, rec.name.join(' '), rec.prices[0], rec.prices[rec.prices.length - 1]])
+    rec = null
+  }
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i]
+    if (/^\d+-\d+$/.test(t)) { flush(); rec = { code: t, name: [], prices: [] }; continue }
+    if (/^\d{1,2}$/.test(t) && tokens[i + 1] && /[A-ZÇĞİÖŞÜ]{3}/.test(tokens[i + 1]) && !/[a-zçğıöşü]/.test(tokens[i + 1]) && /kdv/i.test(tokens[i + 2] ?? '')) {
+      flush()
+      rows.push([t, tokens[i + 1], 'KDV Hariç', 'KDV Dahil'])
+      i += 1
+      continue
+    }
+    if (!rec) continue
+    if (PRICE_RE.test(t)) { if (rec.prices.length < 2) rec.prices.push(t); continue }
+    if (rec.prices.length === 0) rec.name.push(t)
+  }
+  flush()
+  return rows
+}
+
+/** "AĞIZ-DİŞ VE ÇENE CERRAHİSİ" → "Ağız-Diş Ve Çene Cerrahisi" (yalnızca tamamı büyük harfliyse) */
+export function tidyCategory(name: string): string {
+  const t = name.trim()
+  if (t !== t.toLocaleUpperCase('tr-TR')) return t
+  return t.toLocaleLowerCase('tr-TR').replace(/(^|[\s-])(\p{L})/gu, (_m, a: string, b: string) => a + b.toLocaleUpperCase('tr-TR'))
 }
