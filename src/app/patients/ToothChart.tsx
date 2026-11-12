@@ -322,7 +322,7 @@ function ToothGraphic({ num, jaw, flags, fit = false, prosthetic = false }: { nu
   const extracted = flags.extracted && !flags.implant
 
   // Çekilmiş/eksik diş (veya tam protezli çene) → boş slot
-  if ((extracted && !prosthetic) || flags.totalProsthesis) {
+  if (extracted && !prosthetic) {
     return <svg width={w} height={height} viewBox={`0 0 ${n2(vbw)} ${VBH}`} style={{ overflow: 'visible' }} />
   }
 
@@ -339,9 +339,9 @@ function ToothGraphic({ num, jaw, flags, fit = false, prosthetic = false }: { nu
   inner.push(<clipPath key="clip" id={clipId}><path d={crownD} /></clipPath>)
 
   if (prosthetic) {
-    // ---- PARSİYEL PROTEZ: akrilik eyer + protez diş ----
+    // ---- PARSİYEL PROTEZ: akrilik eyer + protez diş; TAM PROTEZ: yalnızca kökü olmayan protez diş ----
     inner.push(
-      <path key="saddle" d={`M ${n2(cx - cw * 0.5)} ${n2(J + 3)} C ${n2(cx - cw * 0.54)} ${n2(J - 4)} ${n2(cx - cw * 0.46)} ${n2(J - 10)} ${n2(cx - cw * 0.3)} ${n2(J - 11.5)} Q ${n2(cx)} ${n2(J - 14)} ${n2(cx + cw * 0.3)} ${n2(J - 11.5)} C ${n2(cx + cw * 0.46)} ${n2(J - 10)} ${n2(cx + cw * 0.54)} ${n2(J - 4)} ${n2(cx + cw * 0.5)} ${n2(J + 3)} Q ${n2(cx)} ${n2(J + 6.5)} ${n2(cx - cw * 0.5)} ${n2(J + 3)} Z`} fill="url(#tc-acrylic)" stroke="#B85A70" strokeWidth={0.8} strokeLinejoin="round" />,
+      !flags.totalProsthesis && <path key="saddle" d={`M ${n2(cx - cw * 0.5)} ${n2(J + 3)} C ${n2(cx - cw * 0.54)} ${n2(J - 4)} ${n2(cx - cw * 0.46)} ${n2(J - 10)} ${n2(cx - cw * 0.3)} ${n2(J - 11.5)} Q ${n2(cx)} ${n2(J - 14)} ${n2(cx + cw * 0.3)} ${n2(J - 11.5)} C ${n2(cx + cw * 0.46)} ${n2(J - 10)} ${n2(cx + cw * 0.54)} ${n2(J - 4)} ${n2(cx + cw * 0.5)} ${n2(J + 3)} Q ${n2(cx)} ${n2(J + 6.5)} ${n2(cx - cw * 0.5)} ${n2(J + 3)} Z`} fill="url(#tc-acrylic)" stroke="#B85A70" strokeWidth={0.8} strokeLinejoin="round" />,
       <path key="pcrown" d={crownD} fill="url(#tc-denture-tooth)" stroke="#B8AC92" strokeWidth={0.8} strokeLinejoin="round" />,
       <path key="ptint" d={crownD} fill="url(#tc-enamel-tint)" stroke="none" />,
       gloss('pgloss', 0.9)
@@ -506,7 +506,7 @@ function ToothDefs() {
         {/* Servikalde sıcak ton, insizal/okluzal kenarda mavimsi saydamlık */}
         <linearGradient id="tc-enamel-tint" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#E3BF7C" stopOpacity="0.6" />
-          <stop offset="0.38" stopColor="#EAD3A0" stopOpacity="0.1" />
+          <stop offset="0.38" stopColor="#EAD3A0" stopOpacity="0.06" />
           <stop offset="0.76" stopColor="#FFFFFF" stopOpacity="0" />
           <stop offset="1" stopColor="#8FA9C2" stopOpacity="0.45" />
         </linearGradient>
@@ -690,8 +690,9 @@ function GingivaOverlay({ teeth, jaw, states, hiddenTeeth, prosthetic, uid }: { 
         {/* Kök ucuna doğru saydamlaşır: kanal dolgusu ve periapikal lezyon görünür kalır */}
         <linearGradient id={fillId} gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2={TOOTH_HEIGHT}>
           <stop offset="0" stopColor="#E58796" stopOpacity="0" />
-          <stop offset="0.12" stopColor="#EC95A2" stopOpacity="0.82" />
-          <stop offset="0.45" stopColor="#F1A2AD" stopOpacity="0.93" />
+          <stop offset="0.26" stopColor="#EC95A2" stopOpacity="0.06" />
+          <stop offset="0.4" stopColor="#EC95A2" stopOpacity="0.5" />
+          <stop offset="0.5" stopColor="#F1A2AD" stopOpacity="0.9" />
           <stop offset="1" stopColor="#F5AFB8" stopOpacity="0.97" />
         </linearGradient>
         <linearGradient id={maskGradId} gradientUnits="userSpaceOnUse" x1={-END} y1="0" x2={total + END} y2="0">
@@ -713,35 +714,6 @@ function GingivaOverlay({ teeth, jaw, states, hiddenTeeth, prosthetic, uid }: { 
   )
 }
 
-/** Tam protez: dişler silinir, yerine damak (üst çene) / at nalı kaide (alt çene) simgesi konur */
-function PalateOverlay({ jaw, width }: { jaw: Jaw; width: number }) {
-  const w = width * 0.72
-  const h = TOOTH_HEIGHT * 0.66
-  const upper = jaw === 'upper'
-  return (
-    <svg
-      className="pointer-events-none absolute"
-      style={{ left: (width - w) / 2, [upper ? 'bottom' : 'top']: TOOTH_HEIGHT * 0.1, overflow: 'visible' }}
-      width={w} height={h} viewBox="0 0 100 66" preserveAspectRatio="none" aria-label="Tam protez"
-    >
-      {upper ? (
-        <>
-          <path d="M 5 60 C 3 22 26 4 50 4 C 74 4 97 22 95 60 Q 50 47 5 60 Z" fill="url(#tc-palate)" stroke="#C9667D" strokeWidth="1" strokeLinejoin="round" />
-          <path d="M 50 7 L 50 46" stroke="#C9667D" strokeWidth="0.8" strokeOpacity="0.7" fill="none" />
-          {[16, 25, 34, 42].map((y, i) => <path key={y} d={`M ${30 - i * 2.5} ${y + 4} Q 50 ${y - 5 - i} ${70 + i * 2.5} ${y + 4}`} stroke="#C9667D" strokeWidth="0.9" strokeOpacity="0.65" fill="none" strokeLinecap="round" />)}
-          <ellipse cx="50" cy="13" rx="3" ry="2.2" fill="#E6879A" stroke="#C9667D" strokeWidth="0.5" />
-          <ellipse cx="36" cy="20" rx="12" ry="6" fill="#fff" opacity="0.28" />
-        </>
-      ) : (
-        <>
-          <path d="M 4 4 C 4 46 28 62 50 62 C 72 62 96 46 96 4 L 80 4 C 80 33 66 46 50 46 C 34 46 20 33 20 4 Z" fill="url(#tc-palate)" stroke="#C9667D" strokeWidth="1" strokeLinejoin="round" />
-          <path d="M 12 10 C 14 40 30 55 50 55 C 70 55 86 40 88 10" stroke="#fff" strokeWidth="1.4" strokeOpacity="0.35" fill="none" strokeLinecap="round" />
-        </>
-      )}
-    </svg>
-  )
-}
-
 function TeethRow({
   teeth, jaw, selected, states, onSelect, hiddenTeeth, markedTeeth, markerColor, uid,
 }: {
@@ -759,20 +731,20 @@ function TeethRow({
   const hasPartial = teeth.some((t) => states.get(t)?.removableProsthesis)
   const hasTotal = teeth.some((t) => states.get(t)?.totalProsthesis)
   const prosthetic = new Set(
-    hasPartial && !hasTotal
+    hasTotal
+      ? teeth
+      : hasPartial
       ? teeth.filter((t) => {
           const fl = states.get(t) ?? {}
           return t % 10 !== 8 && !fl.implant && (hiddenTeeth?.has(t) || fl.extracted)
         })
       : []
   )
-  const rowWidth = teeth.reduce((sum, t) => sum + cellWidth(t), 0)
   return (
     <div className="flex justify-center">
       <div className={`relative flex ${jaw === 'upper' ? 'items-end' : 'items-start'}`}>
         {/* Diş eti dişlerin ARKASINDA: kökler pembe zemin üzerinde görünür, dişlerin üstüne pembe binmez */}
         {!hasTotal && <GingivaOverlay teeth={teeth} jaw={jaw} states={states} hiddenTeeth={hiddenTeeth} prosthetic={prosthetic} uid={uid} />}
-        {hasTotal && <PalateOverlay jaw={jaw} width={rowWidth} />}
         {teeth.map((n, i) => {
           const flags = states.get(n) ?? {}
           const isSel = selected === n
