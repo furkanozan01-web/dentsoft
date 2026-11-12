@@ -4,7 +4,7 @@ import { useKeepFormValues } from '@/lib/hooks/useKeepFormValues'
 import { useActionState, useEffect, useState, useTransition } from 'react'
 import { addPaymentWithCurrency, createPatient, getPatientTc, updatePatient } from './actions'
 import { getBusinessPartners } from '@/app/finance/actions'
-import { localDateValue, toTitleCase } from '@/lib/format'
+import { localDateValue, toTitleCase, cleanMoney } from '@/lib/format'
 import { toast } from 'sonner'
 import type { ActionResult, BusinessPartner, Patient } from './types'
 // ---- New Patient Modal ----
@@ -283,7 +283,7 @@ export function AddPaymentModal({
 
     let amountKurus: number
     if (currency === 'TRY') {
-      const raw = tryAmount.replace(/\./g, '').replace(',', '.').replace(/[^0-9.]/g, '')
+      const raw = cleanMoney(tryAmount)
       amountKurus = Math.round(parseFloat(raw) * 100)
     } else {
       if (computedTry === null) {

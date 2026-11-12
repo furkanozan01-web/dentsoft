@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
-import { parseToKurus } from '@/lib/format'
+import { kurusToInput, parseToKurus } from '@/lib/format'
 import { addDoctor, updateDoctor, toggleMesulMudur } from './actions'
 import { SPECIALTIES, DAYS } from './constants'
 import { emptyWorkHours } from './helpers'
@@ -47,14 +47,14 @@ export function DoctorEditor({
   const [userAccessLevel, setUserAccessLevel] = useState('branch')
   const [isMesulMudur, setIsMesulMudur] = useState(doctor?.is_mesul_mudur ?? false)
   const [salaryStr, setSalaryStr] = useState(
-    doctor?.monthly_salary != null ? String(doctor.monthly_salary / 100) : ''
+    doctor?.monthly_salary != null ? kurusToInput(doctor.monthly_salary) : ''
   )
   const [rateStr, setRateStr] = useState(
     doctor?.commission_rate_bps ? String(doctor.commission_rate_bps / 100) : ''
   )
-  const [bonusStr, setBonusStr] = useState(doctor?.bonus_amount ? String(doctor.bonus_amount / 100) : '')
+  const [bonusStr, setBonusStr] = useState(doctor?.bonus_amount ? kurusToInput(doctor.bonus_amount) : '')
   const [guaranteeActive, setGuaranteeActive] = useState(doctor?.guarantee_active ?? false)
-  const [guaranteeAmountStr, setGuaranteeAmountStr] = useState(doctor?.guarantee_amount ? String(doctor.guarantee_amount / 100) : '')
+  const [guaranteeAmountStr, setGuaranteeAmountStr] = useState(doctor?.guarantee_amount ? kurusToInput(doctor.guarantee_amount) : '')
   const [guaranteePeriod, setGuaranteePeriod] = useState(doctor?.guarantee_period ?? 'monthly')
   const [guaranteeMethod, setGuaranteeMethod] = useState(doctor?.guarantee_method ?? 'minimum_total')
   const [guaranteeNote, setGuaranteeNote] = useState(doctor?.guarantee_note ?? '')

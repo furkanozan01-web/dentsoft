@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ConfirmModal'
-import { formatAmountRounded } from '@/lib/format'
+import { cleanMoney, formatAmountRounded, kurusToInput } from '@/lib/format'
 import { addClinicDebt, updateClinicDebt, payClinicDebt, deleteClinicDebt } from './actions'
 import type { ClinicDebt } from './FinanceClient'
 
@@ -224,7 +224,7 @@ function DebtFormModal({
 }) {
   const isEdit = debt !== null
   const [title, setTitle] = useState(debt?.title ?? '')
-  const [amountStr, setAmountStr] = useState(debt ? String(debt.total_amount / 100) : '')
+  const [amountStr, setAmountStr] = useState(debt ? kurusToInput(debt.total_amount) : '')
   const [dueDate, setDueDate] = useState(debt?.due_date ?? '')
   const [recurrence, setRecurrence] = useState(debt?.recurrence ?? 'tek_seferlik')
   const [notes, setNotes] = useState(debt?.notes ?? '')
@@ -234,7 +234,7 @@ function DebtFormModal({
   const inputCls = 'w-full rounded-xl border border-[#E7ECF2] bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#2DD4BF]/30'
 
   const submit = () => {
-    const amountTL = parseFloat(amountStr.replace(',', '.'))
+    const amountTL = parseFloat(cleanMoney(amountStr))
     if (!title.trim()) { setErr('Başlık zorunludur'); return }
     if (isNaN(amountTL) || amountTL <= 0) { setErr('Geçerli bir tutar girin'); return }
     setErr(null)

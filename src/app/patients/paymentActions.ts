@@ -1,6 +1,6 @@
 'use server'
 
-import { localDateValue } from '@/lib/format'
+import { localDateValue, cleanMoney } from '@/lib/format'
 import { revalidatePath } from 'next/cache'
 import { type InvoiceSendResult, nextInvoiceNo, getCtx, validatePatient, calcBalance } from './actionsShared'
 
@@ -101,7 +101,7 @@ export async function addInstallment(
   const patientError = await validatePatient(supabase, clinicId, patientId)
   if (patientError) return { error: patientError }
 
-  const raw = amountTL?.replace(/\./g, '').replace(',', '.').replace(/[^0-9.]/g, '')
+  const raw = cleanMoney(amountTL ?? '')
   const amount = Math.round(parseFloat(raw) * 100)
   if (!dueDate || isNaN(amount) || amount <= 0) return { error: 'Geçerli vade ve tutar girin' }
 

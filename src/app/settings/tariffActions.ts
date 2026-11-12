@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { cleanMoney } from '@/lib/format'
 import { getCtx, requireAdmin, type R } from './actionsShared'
 
 // ---- Tarife ----
@@ -910,7 +911,7 @@ export async function addTariffItemToProfile(_prev: R, formData: FormData): Prom
   const vat_included = formData.get('vat_included') !== 'false'
   const branchIdRaw = Number(formData.get('branch_id'))
   const branch_id = Number.isInteger(branchIdRaw) && branchIdRaw > 0 ? branchIdRaw : null
-  const priceStr = (formData.get('price') as string)?.replace(',', '.').replace(/[^0-9.]/g, '')
+  const priceStr = cleanMoney(formData.get('price') as string)
   const price = Math.round(parseFloat(priceStr || '0') * 100)
 
   if (!profileId || !treatment_name || !category) return { error: 'Profil, işlem adı ve kategori zorunludur' }

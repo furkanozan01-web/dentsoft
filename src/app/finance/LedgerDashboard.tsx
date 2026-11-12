@@ -6,7 +6,7 @@ import {
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
 import { toast } from 'sonner'
-import { localDateValue } from '@/lib/format'
+import { localDateValue, cleanMoney } from '@/lib/format'
 import { addClinicDebt, addExpense, deleteTransaction, payClinicDebt } from './actions'
 import type {
   ClinicDebt, FinBusinessPartner, FinDoctor,
@@ -28,7 +28,7 @@ function money(kurus: number) {
 }
 
 function parseAmount(value: string) {
-  const parsed = Number(value.replace(/\./g, '').replace(',', '.').replace(/[^0-9.]/g, ''))
+  const parsed = Number(cleanMoney(value))
   return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0
 }
 

@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { toast } from 'sonner'
-import { localDateValue } from '@/lib/format'
+import { localDateValue, cleanMoney } from '@/lib/format'
 import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
 import { distributeBranchProfit } from './actions'
 import type { FinBranch, FinDoctor, FinDoctorShare, FinTx } from './FinanceClient'
@@ -14,7 +14,7 @@ function dateText(value: string) {
   return new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString('tr-TR')
 }
 function parseAmount(value: string) {
-  const parsed = Number(value.replace(/\./g, '').replace(',', '.').replace(/[^0-9.]/g, ''))
+  const parsed = Number(cleanMoney(value))
   return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0
 }
 

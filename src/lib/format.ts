@@ -32,12 +32,16 @@ export function formatAmountRounded(kurus: number | null | undefined): string {
   return Math.round((kurus ?? 0) / 100).toLocaleString('tr-TR')
 }
 
+/** Para girdisini ondalıklı sayı metnine çevirir; eksi işareti içeren (negatif) girdi geçersiz sayılır ('' döner) — sessizce pozitife çevrilmesin. */
+export function cleanMoney(value: string | null | undefined): string {
+  const v = value ?? ''
+  if (/-/.test(v)) return ''
+  return v.replace(/./g, '').replace(',', '.').replace(/[^0-9.]/g, '')
+}
+
 // "1.500,50" / "1500,50" / "1500.50" gibi kullanıcı girdisini kuruşa çevirir.
 export function parseToKurus(input: string): number {
-  const raw = (input ?? '')
-    .replace(/\./g, '')
-    .replace(',', '.')
-    .replace(/[^0-9.]/g, '')
+  const raw = cleanMoney(input ?? '')
   const tl = parseFloat(raw)
   return isNaN(tl) ? 0 : Math.round(tl * 100)
 }
@@ -61,4 +65,9 @@ export function escapeHtml(value: string | null | undefined): string {
     '"': '&quot;',
     "'": '&#39;',
   })[character] ?? character)
+}
+
+/** kuruş → düzenleme alanı metni: "4610,50" (binlik ayracı yok; cleanMoney ile geri okunabilir) */
+export function kurusToInput(kurus: number): string {
+  return (kurus / 100).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2, useGrouping: false })
 }

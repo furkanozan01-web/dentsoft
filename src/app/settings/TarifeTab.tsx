@@ -1,5 +1,7 @@
 'use client'
 
+import { cleanMoney, kurusToInput } from '@/lib/format'
+
 import { useState, useEffect, useMemo, useActionState, useTransition, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ConfirmModal'
@@ -164,7 +166,7 @@ export default function TarifeTab({
 
   const handlePriceSave = (item: Tariff) => {
     if (!editingPrice) return
-    const raw = editingPrice.val.replace(',', '.').replace(/[^0-9.]/g, '')
+    const raw = cleanMoney(editingPrice.val)
     const priceKurus = Math.round(parseFloat(raw || '0') * 100)
     if (priceKurus < 0) return
     startTransition(async () => {
@@ -489,7 +491,7 @@ export default function TarifeTab({
                         ) : (
                           <button
                             type="button"
-                            onClick={() => setEditingPrice({ id: t.id, val: String(t.price / 100) })}
+                            onClick={() => setEditingPrice({ id: t.id, val: kurusToInput(t.price) })}
                             className="font-semibold text-[#0F2B3D] hover:text-[#2DD4BF] transition-colors cursor-pointer group"
                             title="Fiyatı düzenle"
                           >
@@ -703,11 +705,11 @@ function IconSearch() {
 
 function TreatmentEditModal({ item, onClose, onSaved }: { item: Tariff; onClose: () => void; onSaved: () => void }) {
   const [name, setName] = useState(item.treatment_name)
-  const [price, setPrice] = useState(String(item.price / 100))
+  const [price, setPrice] = useState(kurusToInput(item.price))
   const [schemas, setSchemas] = useState<string[]>((item.visual_schema || inferTariffVisual(item)).split('+').filter(Boolean))
   const [pending, start] = useTransition()
   const save = () => {
-    const normalized = Number(price.replace(/\./g, '').replace(',', '.').replace(/[^0-9.]/g, ''))
+    const normalized = Number(cleanMoney(price))
     if (!name.trim()) { toast.error('Tedavi adı zorunludur'); return }
     if (!Number.isFinite(normalized) || normalized < 0) { toast.error('Geçerli bir fiyat girin'); return }
     start(async () => {

@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { localDateValue } from '@/lib/format'
+import { localDateValue, cleanMoney } from '@/lib/format'
 import { computeSummary } from '@/lib/finance/hakedis'
 import { canSeeAllHakedis } from '@/lib/permissions'
 
@@ -44,7 +44,7 @@ export async function addExpense(input: {
   if (!ctx) return { error: 'Yetkisiz erişim' }
   const { supabase, clinicId } = ctx
 
-  const raw = input.amount?.replace(/\./g, '').replace(',', '.').replace(/[^0-9.]/g, '')
+  const raw = cleanMoney(input.amount ?? '')
   const amount = Math.round(parseFloat(raw) * 100)
   if (isNaN(amount) || amount <= 0) return { error: 'Geçerli bir tutar girin' }
   const desc = input.description?.trim()
@@ -183,7 +183,7 @@ export async function addDoctorPayment(input: {
   const { supabase, clinicId } = ctx
 
   if (!input.doctorId) return { error: 'Hekim seçin' }
-  const raw = input.amount?.replace(/\./g, '').replace(',', '.').replace(/[^0-9.]/g, '')
+  const raw = cleanMoney(input.amount ?? '')
   const amount = Math.round(parseFloat(raw) * 100)
   if (isNaN(amount) || amount <= 0) return { error: 'Geçerli bir tutar girin' }
 
@@ -328,7 +328,7 @@ export async function distributeBranchProfit(input: {
   const { supabase } = ctx
 
   if (!input.branchId) return { error: 'Şube seçin' }
-  const raw = input.amount?.replace(/\./g, '').replace(',', '.').replace(/[^0-9.]/g, '')
+  const raw = cleanMoney(input.amount ?? '')
   const amount = Math.round(parseFloat(raw) * 100)
   if (isNaN(amount) || amount <= 0) return { error: 'Geçerli bir tutar girin' }
 
@@ -489,7 +489,7 @@ export async function addPartnerService(input: {
   const ctx = await getCtx()
   if (!ctx) return { error: 'Yetkisiz erişim' }
   const { supabase, clinicId } = ctx
-  const raw = input.amount?.replace(/\./g, '').replace(',', '.').replace(/[^0-9.]/g, '')
+  const raw = cleanMoney(input.amount ?? '')
   const amount = Math.round(parseFloat(raw) * 100)
   if (!input.partnerId || !input.serviceName?.trim()) return { error: 'Firma ve hizmet adı zorunludur' }
   if (!Number.isFinite(amount) || amount <= 0) return { error: 'Geçerli bir tutar girin' }

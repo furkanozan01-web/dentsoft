@@ -3,12 +3,12 @@
 import { useEffect, useMemo, useState, useTransition, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { getNextInvoiceNo, getPatientTc, sendInvoiceToInstitution } from './actions'
-import { escapeHtml, toTitleCase, formatAmount } from '@/lib/format'
+import { escapeHtml, toTitleCase, formatAmount, cleanMoney } from '@/lib/format'
 import type { ClinicInfo, Patient, Transaction, Treatment } from './types'
 import { IconFileText, IconInfo } from '@/components/icons'
 
 function parseKurus(value: string): number {
-  const raw = value.replace(/\./g, '').replace(',', '.').replace(/[^0-9.]/g, '')
+  const raw = cleanMoney(value)
   const parsed = parseFloat(raw)
   return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0
 }
