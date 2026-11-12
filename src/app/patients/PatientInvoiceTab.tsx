@@ -74,7 +74,7 @@ function FaturaTab({
     return () => {
       active = false
     }
-  }, [patient.id])
+  }, [patient])
 
   useEffect(() => {
     let active = true

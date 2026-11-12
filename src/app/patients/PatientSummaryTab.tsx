@@ -77,7 +77,7 @@ function HastaKartiTab({
       setTcState({ patientId: patient.id, value: res.tc ?? null })
     })
     return () => { active = false }
-  }, [patient.id])
+  }, [patient])
 
   const printCard = () => {
     const win = window.open('', '_blank', 'width=800,height=600')
@@ -241,13 +241,13 @@ function HastaKartiTab({
       {/* Modaller */}
       {showKvkk && (
         <KvkkModal
-          patient={patient}
+          patient={patient} tc={tcValue}
           onClose={() => setShowKvkk(false)}
         />
       )}
       {showOnam && (
         <OnamModal
-          patient={patient}
+          patient={patient} tc={tcValue}
           onClose={() => setShowOnam(false)}
         />
       )}
@@ -267,7 +267,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 // ---- KVKK Modal ----
-function KvkkModal({ patient, onClose }: { patient: Patient; onClose: () => void }) {
+function KvkkModal({ patient, tc, onClose }: { patient: Patient; tc: string | null; onClose: () => void }) {
   const fullName = `${toTitleCase(patient.name)} ${toTitleCase(patient.surname)}`
   const today = new Date().toLocaleDateString('tr-TR')
 
@@ -300,6 +300,7 @@ function KvkkModal({ patient, onClose }: { patient: Patient; onClose: () => void
 HASTA RIZA VE BİLGİLENDİRME METNİ
 
 Sayın ${fullName},
+T.C. Kimlik No: ${tc || "—"} · Protokol No: ${patient.protocol_no || "—"}
 Tarih: ${today}
 
 6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") uyarınca aşağıdaki bilgiler tarafınıza sunulmaktadır.
@@ -347,7 +348,7 @@ Yukarıdaki bilgileri okudum, anladım ve kişisel verilerimin belirtilen amaçl
 }
 
 // ---- Dijital Onam Modal ----
-function OnamModal({ patient, onClose }: { patient: Patient; onClose: () => void }) {
+function OnamModal({ patient, tc, onClose }: { patient: Patient; tc: string | null; onClose: () => void }) {
   const fullName = `${toTitleCase(patient.name)} ${toTitleCase(patient.surname)}`
   const today = new Date().toLocaleDateString('tr-TR')
 
@@ -379,6 +380,10 @@ function OnamModal({ patient, onClose }: { patient: Patient; onClose: () => void
 {`TEDAVİ ONAM FORMU (DİJİTAL ŞABLON)
 
 Hasta Adı: ${fullName}
+T.C. Kimlik No: ${tc || "—"}
+Doğum Tarihi: ${patient.birth_date ? new Date(patient.birth_date).toLocaleDateString("tr-TR") : "—"}
+Telefon: ${patient.phone1 || "—"}
+Protokol No: ${patient.protocol_no || "—"}
 Tarih: ${today}
 
 Sayın Hastamız,

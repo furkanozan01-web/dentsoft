@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { tryEncrypt, tryDecrypt } from '@/lib/crypto'
 import { EMPTY_ANAMNESIS, type Anamnesis } from '@/lib/anamnesis'
 import { revalidatePath } from 'next/cache'
-import { type CreatedPatient, type ActionResult, nextProtocolNo, getCtx, validatePatient } from './actionsShared'
+import { type CreatedPatient, type ActionResult, nextProtocolNo, getCtx, validatePatient, validateTc } from './actionsShared'
 
 export async function createPatient(
   _prev: ActionResult,
@@ -19,7 +19,13 @@ export async function createPatient(
   if (!name || !surname) return { error: 'Ad ve soyad zorunludur' }
 
   const tc = (formData.get('tc') as string)?.trim()
-  const tc_enc = tc ? tryEncrypt(tc) : null
+  let tc_enc: string | null = null
+  if (tc) {
+    const tcError = validateTc(tc)
+    if (tcError) return { error: tcError }
+    tc_enc = tryEncrypt(tc)
+    if (!tc_enc) return { error: 'T.C. kimlik numarası şifrelenemedi (şifreleme anahtarı eksik); hasta kaydedilmedi' }
+  }
 
   const protocolNo = await nextProtocolNo(supabase, clinicId)
   const { data: patient, error } = await supabase.from('patients').insert({
@@ -56,9 +62,26 @@ export async function updatePatient(
   const id = Number(formData.get('id'))
   if (!id) return { error: 'Hasta ID gerekli' }
 
+  // T.C. yalnızca istemci alanı gönderdiyse güncellenir; boş değer kaydı temizler
+  const tcField = formData.get('tc')
+  let tcUpdate: { tc_enc: string | null } | Record<string, never> = {}
+  if (typeof tcField === 'string') {
+    const tc = tcField.trim()
+    if (!tc) {
+      tcUpdate = { tc_enc: null }
+    } else {
+      const tcError = validateTc(tc)
+      if (tcError) return { error: tcError }
+      const enc = tryEncrypt(tc)
+      if (!enc) return { error: 'T.C. kimlik numarası şifrelenemedi (şifreleme anahtarı eksik)' }
+      tcUpdate = { tc_enc: enc }
+    }
+  }
+
   const { error } = await supabase
     .from('patients')
     .update({
+      ...tcUpdate,
       name: (formData.get('name') as string)?.trim(),
       surname: (formData.get('surname') as string)?.trim().toUpperCase(),
       gender: (formData.get('gender') as string) || null,

@@ -1,9 +1,9 @@
 ﻿'use client'
 
-import { useMemo, useState, useTransition, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ConfirmModal'
-import { addPrescription, deletePrescription } from './actions'
+import { addPrescription, deletePrescription, getPatientTc } from './actions'
 import { escapeHtml, localDateValue, toTitleCase } from '@/lib/format'
 import type { ClinicInfo, DoctorOption, DrugEntry, Patient, Prescription } from './types'
 import { IconFileText, IconInfo, IconSearch, IconTrash } from '@/components/icons'
@@ -133,6 +133,14 @@ function ReceteTab({
   const [doctorId, setDoctorId] = useState<number | null>(doctors[0]?.id ?? null)
   const [indication, setIndication] = useState('')
   const [tc, setTc] = useState('')
+  // Hasta kartındaki T.C. otomatik gelir (elle değiştirilebilir)
+  useEffect(() => {
+    let active = true
+    getPatientTc(patient.id).then((res) => {
+      if (active && res.tc) setTc(res.tc)
+    })
+    return () => { active = false }
+  }, [patient])
   const [printDate, setPrintDate] = useState(() => localDateValue())
   const [drugSearch, setDrugSearch] = useState('')
   const [pending, startTransition] = useTransition()

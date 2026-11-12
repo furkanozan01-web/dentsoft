@@ -1,15 +1,18 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Link from 'next/link'
 
 interface BellAppt {
   id: number
+  patient_id: number | null
   scheduled_at: string
   patient_name: string
 }
 
 interface BellPayment {
   id: number
+  patient_id: number | null
   due_date: string
   amount: number
   patient_name: string
@@ -74,7 +77,7 @@ export default function DashboardBell({
             <div className="max-h-72 overflow-y-auto">
               {pendingCount > 0 && (
                 <a
-                  href="/appointments"
+                  href="/appointments?view=day&section=pending"
                   className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50"
                 >
                   <span className="w-2 h-2 mt-1.5 rounded-full bg-yellow-400 flex-shrink-0" />
@@ -85,7 +88,12 @@ export default function DashboardBell({
               )}
 
               {todayAppts.map((a) => (
-                <div key={a.id} className="flex items-start gap-3 px-4 py-3 border-b border-gray-50">
+                <Link
+                  key={a.id}
+                  href="/appointments?view=day"
+                  onClick={() => setOpen(false)}
+                  className="flex items-start gap-3 px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors"
+                >
                   <span className="w-2 h-2 mt-1.5 rounded-full bg-[#2DD4BF] flex-shrink-0" />
                   <div className="text-sm">
                     <p className="font-medium text-[#0F2B3D]">{a.patient_name}</p>
@@ -93,11 +101,16 @@ export default function DashboardBell({
                       {new Date(a.scheduled_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })} randevusu
                     </p>
                   </div>
-                </div>
+                </Link>
               ))}
 
               {overduePayments.map((p) => (
-                <div key={p.id} className="flex items-start gap-3 px-4 py-3 border-b border-gray-50 last:border-0">
+                <Link
+                  key={p.id}
+                  href={p.patient_id ? `/patients?patient_id=${p.patient_id}&tab=hesap` : '/finance?tab=bakiye'}
+                  onClick={() => setOpen(false)}
+                  className="flex items-start gap-3 px-4 py-3 border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors"
+                >
                   <span className="w-2 h-2 mt-1.5 rounded-full bg-red-400 flex-shrink-0" />
                   <div className="text-sm">
                     <p className="font-medium text-[#0F2B3D]">{p.patient_name}</p>
@@ -105,7 +118,7 @@ export default function DashboardBell({
                       ₺{fmt(p.amount)} vadesi geçmiş · {new Date(p.due_date).toLocaleDateString('tr-TR')}
                     </p>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}

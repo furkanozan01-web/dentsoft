@@ -132,3 +132,13 @@ export async function calcBalance(
     .reduce((s, t) => s + (t.amount ?? 0), 0)
   return { balance: owed - paid }
 }
+
+/** T.C. kimlik numarası doğrulaması (11 hane + resmî sağlama basamakları). Geçerliyse null döner. */
+export function validateTc(tc: string): string | null {
+  if (!/^[1-9][0-9]{10}$/.test(tc)) return 'T.C. kimlik numarası 11 haneli olmalı ve 0 ile başlamamalıdır'
+  const d = tc.split('').map(Number)
+  const tenth = (((d[0] + d[2] + d[4] + d[6] + d[8]) * 7) - (d[1] + d[3] + d[5] + d[7])) % 10
+  const eleventh = d.slice(0, 10).reduce((a, b) => a + b, 0) % 10
+  if (((tenth + 10) % 10) !== d[9] || eleventh !== d[10]) return 'T.C. kimlik numarası geçersiz görünüyor; lütfen kontrol edin'
+  return null
+}

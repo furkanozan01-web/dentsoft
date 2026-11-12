@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import { useActionState, useEffect, useState, useTransition } from 'react'
-import { addPaymentWithCurrency, createPatient, updatePatient } from './actions'
+import { addPaymentWithCurrency, createPatient, getPatientTc, updatePatient } from './actions'
 import { getBusinessPartners } from '@/app/finance/actions'
 import { localDateValue, toTitleCase } from '@/lib/format'
 import { toast } from 'sonner'
@@ -86,8 +86,21 @@ export function EditPatientModal({
   const [phone2, setPhone2] = useState(patient.phone2 ?? '')
   const [email, setEmail] = useState(patient.email ?? '')
   const [address, setAddress] = useState(patient.address ?? '')
+  // T.C. şifreli saklanır; açılışta çözülüp forma yazılır. Okunamazsa alan gönderilmez (kayıt silinmesin)
+  const [tc, setTc] = useState('')
+  const [tcLoaded, setTcLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+
+  useEffect(() => {
+    let active = true
+    getPatientTc(patient.id).then((res) => {
+      if (!active || res.error) return
+      setTc(res.tc ?? '')
+      setTcLoaded(true)
+    })
+    return () => { active = false }
+  }, [patient.id])
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -105,6 +118,7 @@ export function EditPatientModal({
     fd.set('phone2', phone2)
     fd.set('email', email)
     fd.set('address', address)
+    if (tcLoaded) fd.set('tc', tc.trim())
     startTransition(async () => {
       const res = await updatePatient(null, fd)
       if (res?.error) {
@@ -186,9 +200,19 @@ export function EditPatientModal({
             className={`${inputCls} resize-none`}
           />
         </div>
-        <p className="text-[11px] text-gray-400">
-          🔒 T.C. Kimlik No şifreli saklandığı için bu ekrandan değiştirilemez.
-        </p>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1.5">T.C. Kimlik No</label>
+          <input
+            value={tc}
+            onChange={(e) => setTc(e.target.value.replace(/\D/g, '').slice(0, 11))}
+            inputMode="numeric"
+            maxLength={11}
+            disabled={!tcLoaded}
+            placeholder={tcLoaded ? '11 haneli T.C. kimlik no' : 'Yükleniyor...'}
+            className={inputCls}
+          />
+          <p className="mt-1 text-[11px] text-gray-400">🔒 Şifreli saklanır. Boş bırakıp kaydederseniz kayıtlı T.C. silinir.</p>
+        </div>
         <ModalActions onCancel={onClose} pending={pending} submitLabel="Değişiklikleri Kaydet" />
       </form>
     </Modal>

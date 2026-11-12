@@ -38,7 +38,7 @@ export default function SenetPrint({ patient, clinic, title, rows }: SenetPrintP
     return () => {
       active = false
     }
-  }, [patient.id])
+  }, [patient])
 
   const issueDate = new Date().toISOString().slice(0, 10)
 

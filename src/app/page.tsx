@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Sidebar from './Sidebar'
 import DashboardBell from './DashboardBell'
+import MissingInvoiceAlert, { type MissingInvoiceRow } from './MissingInvoiceAlert'
 import DashboardNewPatientButton from './DashboardNewPatientButton'
 import { computeSummary } from '@/lib/finance/hakedis'
 import { getPermissions, canSeeAyarlarNav } from '@/lib/permissions'
@@ -311,14 +312,37 @@ export default async function DashboardPage() {
     // followup_steps tablosu henüz oluşturulmamış olabilir
   }
 
+  // Fatura kontrolü penceresi: faturası eksik son ödemeler
+  let missingInvoiceRows: MissingInvoiceRow[] = []
+  if ((missingInvoiceCount ?? 0) > 0) {
+    const { data: missingTx } = await supabase
+      .from('transactions')
+      .select('id, patient_id, amount, transaction_date, patient:patients(name, surname)')
+      .eq('clinic_id', clinicId)
+      .eq('type', 'payment')
+      .is('invoice_no', null)
+      .order('transaction_date', { ascending: false })
+      .limit(30)
+      .overrideTypes<{ id: number; patient_id: number | null; amount: number; transaction_date: string; patient: { name: string; surname: string } | null }[], { merge: false }>()
+    missingInvoiceRows = (missingTx ?? []).map((t) => ({
+      id: t.id,
+      patient_id: t.patient_id,
+      patient_name: t.patient ? `${t.patient.name} ${t.patient.surname}` : 'Hasta bilgisi yok',
+      amount: t.amount,
+      transaction_date: t.transaction_date,
+    }))
+  }
+
   const bellAppts = appointments.map((a) => ({
     id: a.id,
+    patient_id: a.patient_id,
     scheduled_at: a.scheduled_at,
     patient_name: a.patient ? `${a.patient.name} ${a.patient.surname}` : '—',
   }))
 
   const bellPayments = (overdueRaw ?? []).map((p) => ({
     id: p.id,
+    patient_id: p.patient?.id ?? null,
     due_date: p.due_date,
     amount: p.amount,
     patient_name: p.patient ? `${p.patient.name} ${p.patient.surname}` : '—',
@@ -339,7 +363,7 @@ export default async function DashboardPage() {
       ? [{ color: 'red' as const, title: 'Ödeme zamanı geçen hastalar', text: `${overdueRaw?.length ?? 0} taksit için ödeme takibi gerekiyor.`, topic: 'Ödeme', href: '/finance?tab=bakiye' }]
       : []),
     ...((missingInvoiceCount ?? 0) > 0
-      ? [{ color: 'yellow' as const, title: 'Fatura kontrolü', text: `${missingInvoiceCount} ödeme için fatura bilgisi eksik görünüyor.`, topic: 'Fatura', href: '/finance?tab=defter' }]
+      ? [{ title: 'Fatura kontrolü', node: <MissingInvoiceAlert count={missingInvoiceCount ?? 0} rows={missingInvoiceRows} /> }]
       : []),
     ...(staleControlCount > 0
       ? [{ color: 'blue' as const, title: 'Kontrol hatırlatması', text: `${staleControlCount} aktif hasta son 6 ayda randevuya gelmemiş.`, topic: 'Kontrol', href: '/patients' }]
@@ -497,7 +521,7 @@ export default async function DashboardPage() {
               <p className="rounded-[16px] border border-[#EEF2F6] bg-slate-50/70 px-4 py-5 text-sm text-gray-400">Dikkat gerektiren bir durum yok.</p>
             ) : (
               <div className="space-y-3">
-                {attentionItems.map((item) => <AlertItem key={item.title} {...item} />)}
+                {attentionItems.map((item) => ('node' in item ? <div key={item.title}>{item.node}</div> : <AlertItem key={item.title} {...item} />))}
               </div>
             )}
           </section>
