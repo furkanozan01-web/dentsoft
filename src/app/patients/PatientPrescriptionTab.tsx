@@ -130,7 +130,7 @@ function ReceteTab({
 }) {
   const confirm = useConfirm()
   const [content, setContent] = useState('')
-  const [doctorId, setDoctorId] = useState<number | null>(doctors[0]?.id ?? null)
+  const [doctorId, setDoctorId] = useState<number | null>(null)
   const [indication, setIndication] = useState('')
   const [tc, setTc] = useState('')
   // Hasta kartındaki T.C. otomatik gelir (elle değiştirilebilir)
@@ -168,6 +168,7 @@ function ReceteTab({
   }
 
   const save = () => {
+    if (doctorId === null) { toast.error('Lütfen reçeteyi düzenleyen hekimi seçin'); return }
     startTransition(async () => {
       const res = await addPrescription(patient.id, content, doctorId)
       if (res.error) toast.error(res.error)
@@ -265,6 +266,7 @@ li{padding:0 0 9px 5px;font-size:11pt;font-weight:700;color:#0f172a;break-inside
 
   const printNew = () => {
     if (!content.trim()) return
+    if (doctorId === null) { toast.error('Lütfen reçeteyi düzenleyen hekimi seçin'); return }
     const w = window.open('', '_blank', 'width=680,height=960')
     if (!w) return
     w.document.write(
@@ -360,6 +362,7 @@ li{padding:0 0 9px 5px;font-size:11pt;font-weight:700;color:#0f172a;break-inside
                   onChange={(e) => setDoctorId(e.target.value ? Number(e.target.value) : null)}
                   className="h-11 w-full rounded-[14px] border border-[#E7ECF2] bg-white pl-10 pr-3 text-sm font-semibold text-[#142536] outline-none transition focus:border-[#2DD4BF] focus:shadow-[0_0_0_4px_rgba(45,212,191,0.12)]"
                 >
+                  <option value="">Hekim seçin…</option>
                   {doctors.map((d) => (
                     <option key={d.id} value={d.id}>Dt. {d.name}</option>
                   ))}
