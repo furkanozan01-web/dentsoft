@@ -7,7 +7,7 @@ import { addBusinessPartner, addExpense, addPartnerService, deleteBusinessPartne
 import type { FinBusinessPartner, FinDoctor, FinPatient, FinTx, PartnerService } from './FinanceClient'
 
 const TYPE_LABEL: Record<string,string> = { laboratuvar:'Laboratuvar', implant:'İmplant Firması', dis_deposu:'Diş Deposu', medikal:'Medikal Firma', teknik_servis:'Teknik Servis', diger:'Diğer', tedarikci:'Tedarikçi', firma_odeme:'Firma Ödeme Kanalı' }
-const METHOD_LABEL: Record<string,string> = { cash:'Nakit', card:'Kredi kartı', transfer:'Havale / EFT', check:'Çek', promissory:'Senet', firma_odemesi:'Hasta ödemesinden aktarım' }
+const METHOD_LABEL: Record<string,string> = { cash:'Nakit', card:'Kredi kartı', transfer:'Havale / EFT', check:'Çek', senet:'Senet', firma_odemesi:'Hasta ödemesinden aktarım' }
 type SortKey = 'name'|'type'|'service'|'paid'|'balance'|'lastPayment'|'invoice'|'status'|'contact'
 function money(v:number){return `₺${(v/100).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})}`}
 function dateText(v:string|null){return v?new Date(`${v}T12:00:00`).toLocaleDateString('tr-TR'):'—'}

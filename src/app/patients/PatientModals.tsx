@@ -412,6 +412,7 @@ export function AddPaymentModal({
             <option value="cash">Nakit</option>
             <option value="card">Kredi Kartı</option>
             <option value="transfer">Havale / EFT</option>
+            <option value="senet">Senet</option>
             <option value="firma_odemesi">Firma Ödemesi</option>
           </select>
         </div>

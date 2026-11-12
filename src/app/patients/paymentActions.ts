@@ -262,7 +262,7 @@ export async function addPaymentWithCurrency(
   if (!Number.isFinite(params.amountKurus) || params.amountKurus <= 0)
     return { error: 'Geçerli bir tutar girin' }
 
-  const validMethods = ['cash', 'card', 'transfer', 'firma_odemesi']
+  const validMethods = ['cash', 'card', 'transfer', 'senet', 'firma_odemesi']
   const method = validMethods.includes(params.paymentMethod) ? params.paymentMethod : 'cash'
 
   if (method === 'firma_odemesi' && !params.partnerId)

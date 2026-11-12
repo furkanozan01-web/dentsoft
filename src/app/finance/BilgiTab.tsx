@@ -82,7 +82,7 @@ export default function BilgiTab({
   }, [allTreatments])
 
   const recent = monthTxs.slice(0, 10)
-  const methodLabel: Record<string, string> = { cash: 'Nakit', card: 'Kart', transfer: 'Havale', other: 'Diğer' }
+  const methodLabel: Record<string, string> = { cash: 'Nakit', card: 'Kart', transfer: 'Havale', senet: 'Senet', firma_odemesi: 'Firma', check: 'Çek', other: 'Diğer' }
 
   const totalTreatments = treatmentDist.reduce((sum, item) => sum + item.value, 0)
   return (

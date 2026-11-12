@@ -66,7 +66,7 @@ export async function addExpense(input: {
     return { success: true }
   }
 
-  const { error } = await supabase.from('transactions').insert({
+  const { data: expenseRow, error } = await supabase.from('transactions').insert({
     clinic_id: clinicId,
     amount,
     type: 'expense',
@@ -84,9 +84,37 @@ export async function addExpense(input: {
     payment_status: input.paymentStatus || 'odendi',
     source_type: input.partnerId ? 'company_payment' : 'manual',
     partner_service_id: input.partnerServiceId || null,
-  })
-  if (error) return { error: error.message }
+  }).select('id').single()
+  if (error || !expenseRow) return { error: error?.message ?? 'Gider kaydedilemedi' }
+
+  // Firma ödemesi bir hasta adına yapıldıysa aynı tutar hastanın ödemesi (gelir) olarak da işlenir;
+  // iki kayıt birbirine bağlanır (hasta tarafındaki "Firma Ödemesi" akışıyla aynı).
+  if (input.partnerId && input.patientId && input.category?.trim() === 'Firma Ödemesi') {
+    const { data: incomeRow, error: incomeError } = await supabase
+      .from('transactions')
+      .insert({
+        clinic_id: clinicId,
+        patient_id: input.patientId,
+        amount,
+        type: 'payment',
+        method: 'firma_odemesi',
+        transaction_date: input.date || localDateValue(),
+        description: desc,
+        partner_id: input.partnerId,
+        treatment_id: input.treatmentId || null,
+        linked_transaction_id: expenseRow.id,
+      })
+      .select('id')
+      .single()
+    if (incomeError || !incomeRow) {
+      await supabase.from('transactions').delete().eq('id', expenseRow.id).eq('clinic_id', clinicId)
+      return { error: incomeError?.message ?? 'Gelir kaydı oluşturulamadı; gider de kaydedilmedi' }
+    }
+    await supabase.from('transactions').update({ linked_transaction_id: incomeRow.id }).eq('id', expenseRow.id).eq('clinic_id', clinicId)
+  }
+
   revalidatePath('/finance')
+  revalidatePath('/patients')
   return { success: true }
 }
 
@@ -109,6 +137,13 @@ export async function deleteTransaction(id: number): Promise<R> {
     revalidatePath('/finance')
     return { success: true }
   }
+  const { data: expenseRow } = await supabase
+    .from('transactions')
+    .select('linked_transaction_id')
+    .eq('id', id)
+    .eq('clinic_id', clinicId)
+    .eq('type', 'expense')
+    .maybeSingle()
   const { error } = await supabase
     .from('transactions')
     .delete()
@@ -116,7 +151,19 @@ export async function deleteTransaction(id: number): Promise<R> {
     .eq('clinic_id', clinicId)
     .eq('type', 'expense')
   if (error) return { error: error.message }
+  // Firma ödemesinden doğan bağlı hasta ödemesi (gelir) de silinir; böylece defter tutarlı kalır
+  if (expenseRow?.linked_transaction_id) {
+    await supabase
+      .from('transactions')
+      .delete()
+      .eq('id', expenseRow.linked_transaction_id)
+      .eq('clinic_id', clinicId)
+      .eq('type', 'payment')
+      .eq('method', 'firma_odemesi')
+      .eq('linked_transaction_id', id)
+  }
   revalidatePath('/finance')
+  revalidatePath('/patients')
   return { success: true }
 }
 

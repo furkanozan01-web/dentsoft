@@ -18,6 +18,7 @@ const METHOD_LABEL: Record<string, string> = {
   cash: 'Nakit',
   card: 'Kart',
   transfer: 'Havale',
+  senet: 'Senet',
   firma_odemesi: 'Firma',
   other: 'Diğer',
 }

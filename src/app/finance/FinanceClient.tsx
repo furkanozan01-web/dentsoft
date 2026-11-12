@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { localDateValue, MONTHS_TR } from '@/lib/format'
 import { computeSummary, type HakedisDoctorShare } from '@/lib/finance/hakedis'
 import ExpenseModal from './ExpenseModal'
+import HistoryTab from './HistoryTab'
 import { getTransactionsRange } from './actions'
 
 // Sekmeler ayrı parçalara bölünür; recharts (Bilgi/Defter) yalnızca o sekme
@@ -150,7 +151,7 @@ export interface DoctorPayment {
   earning_period: string | null
 }
 
-type Tab = 'bilgi' | 'defter' | 'kasa' | 'bakiye' | 'hakedis' | 'borclar' | 'ortaklar'
+type Tab = 'bilgi' | 'defter' | 'kasa' | 'bakiye' | 'hakedis' | 'borclar' | 'ortaklar' | 'gecmis'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'bilgi', label: 'Bilgi' },
   { id: 'defter', label: 'Defter' },
@@ -159,6 +160,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'hakedis', label: 'Hakediş' },
   { id: 'borclar', label: 'Borçlar' },
   { id: 'ortaklar', label: 'İş Ortaklarımız' },
+  { id: 'gecmis', label: 'İşlem Geçmişi' },
 ]
 
 export default function FinanceClient({
@@ -444,6 +446,15 @@ export default function FinanceClient({
           <BorclarTab
             debts={initialDebts}
             onChanged={() => router.refresh()}
+          />
+        )}
+        {tab === 'gecmis' && (
+          <HistoryTab
+            txs={txs}
+            patients={patients}
+            partners={initialPartners}
+            doctors={doctors}
+            onPatientClick={(id) => router.push(`/patients?patient_id=${id}&tab=hesap`)}
           />
         )}
         {tab === 'ortaklar' && (

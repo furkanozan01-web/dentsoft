@@ -13,7 +13,7 @@ const MODEL_LABEL: Record<string, string> = {
   guarantee: 'Garantör Sistem', bonus: 'Prim Bazlı', per_transaction: 'İşlem Bazlı', revenue: 'Ciro Bazlı',
 }
 const PAY_LABEL: Record<string, string> = { maas: 'Maaş', ara_odeme: 'Ara ödeme', mahsuplasma: 'Mahsuplaşma', avans: 'Avans', prim: 'Prim', duzeltme: 'Düzeltme', garantor: 'Garanti tamamlama', kar_payi: 'Kâr payı' }
-const METHOD_LABEL: Record<string, string> = { cash: 'Nakit / Kasa', transfer: 'Banka', check: 'Çek', card: 'Kart', other: 'Diğer' }
+const METHOD_LABEL: Record<string, string> = { cash: 'Nakit / Kasa', transfer: 'Banka', check: 'Çek', senet: 'Senet', card: 'Kart', other: 'Diğer' }
 
 function money(value: number) { return `₺${(value / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }
 function dateText(value: string | null) { return value ? new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString('tr-TR') : '—' }
