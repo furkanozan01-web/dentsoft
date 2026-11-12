@@ -259,7 +259,7 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
     a.p_no = '1/1'
     a.p_kefilvar = false
     return a
-  }, [patient, tc, anam, treatments, transactions])
+  }, [patient, tc, anam, treatments])
 
   // Alacaklı (lehtar) = hastanın şubesinin mesul müdürü; yoksa herhangi bir mesul müdür; o da yoksa ilk hekim
   const responsible = useMemo(
