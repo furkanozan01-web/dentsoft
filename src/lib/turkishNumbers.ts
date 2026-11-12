@@ -40,6 +40,9 @@ export function numberToTurkishWords(value: number): string {
 
 // kuruş cinsinden bir tutarı "Beş Bin Türk Lirası" formatında yazıya çevirir.
 export function amountToTurkishWords(kurus: number): string {
-  const lira = Math.round(kurus / 100)
-  return `${numberToTurkishWords(lira)} Türk Lirası`
+  const total = Math.round(kurus)
+  const lira = Math.floor(total / 100)
+  const kr = total % 100
+  const liraText = `${numberToTurkishWords(lira)} Türk Lirası`
+  return kr > 0 ? `${liraText} ${numberToTurkishWords(kr)} Kuruş` : liraText
 }
