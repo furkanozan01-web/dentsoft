@@ -64,6 +64,7 @@ function OralTab({
 }) {
   const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
+  const clickLock = useRef(false)
 
   // ── Paylaşılan sağ panel state'i ──
   const defaultProfileId = useMemo(
@@ -292,7 +293,18 @@ function OralTab({
   })
 
   // ── Diş tıklama ──
-  const handleToothClick = (toothNum: number) => {
+  const handleToothClick = async (toothNum: number) => {
+    // Çift tıklama / hızlı art arda tıklama aynı işlemi iki kez kaydetmesin
+    if (clickLock.current) return
+    clickLock.current = true
+    try {
+      await runToothClick(toothNum)
+    } finally {
+      setTimeout(() => { clickLock.current = false }, 600)
+    }
+  }
+
+  const runToothClick = async (toothNum: number) => {
     if (parsedTab.kind === 'diyagnoz') {
       if (!selectedDiagItem) {
         toast.error('Önce sağ panelden bir tanı türü seçin')
@@ -321,6 +333,17 @@ function OralTab({
       if (!compat.ok) {
         toast.error(compat.error)
         return
+      }
+      const duplicate = treatments.some(
+        (t) => t.tooth === toothNum && t.status !== 'cancelled' && t.treatment_name === selectedTariffItem.treatment_name
+      )
+      if (duplicate) {
+        const ok = await confirm({
+          title: 'Aynı işlem zaten var',
+          message: `${toothNum} numaralı dişe "${selectedTariffItem.treatment_name}" daha önce eklenmiş. Yine de bir kez daha eklensin mi?`,
+          confirmText: 'Evet, ekle',
+        })
+        if (!ok) return
       }
       startTransition(async () => {
         const res = await addTreatment({
