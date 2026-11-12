@@ -1,5 +1,5 @@
 import 'server-only'
-import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
+import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'crypto'
 
 function getKey(): Buffer | null {
   const hex = process.env.ENCRYPTION_KEY
@@ -34,4 +34,11 @@ export function tryDecrypt(ciphertext: string): string | null {
   } catch {
     return null
   }
+}
+
+/** T.C. kimliğin eşleştirme için tek yönlü özeti (HMAC-SHA256, anahtar: ENCRYPTION_KEY). Anahtar yoksa null. */
+export function hashTc(tc: string): string | null {
+  const key = getKey()
+  if (!key) return null
+  return createHmac('sha256', key).update(`tc:${tc.trim()}`).digest('hex')
 }

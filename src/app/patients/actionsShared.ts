@@ -142,3 +142,17 @@ export function validateTc(tc: string): string | null {
   if (((tenth + 10) % 10) !== d[9] || eleventh !== d[10]) return 'T.C. kimlik numarası geçersiz görünüyor; lütfen kontrol edin'
   return null
 }
+
+/** Aynı T.C. özetine sahip başka bir hasta varsa "Ad SOYAD (Protokol)" döner; yoksa null. */
+export async function findTcOwner(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  clinicId: number,
+  tcHash: string,
+  exceptPatientId?: number
+): Promise<string | null> {
+  let query = supabase.from('patients').select('id, name, surname, protocol_no').eq('clinic_id', clinicId).eq('tc_hash', tcHash).limit(1)
+  if (exceptPatientId) query = query.neq('id', exceptPatientId)
+  const { data } = await query
+  const hit = data?.[0]
+  return hit ? `${hit.name} ${hit.surname}${hit.protocol_no ? ` (${hit.protocol_no})` : ''}` : null
+}

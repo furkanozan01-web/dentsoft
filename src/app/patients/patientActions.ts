@@ -1,10 +1,10 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { tryEncrypt, tryDecrypt } from '@/lib/crypto'
+import { tryEncrypt, tryDecrypt, hashTc } from '@/lib/crypto'
 import { EMPTY_ANAMNESIS, type Anamnesis } from '@/lib/anamnesis'
 import { revalidatePath } from 'next/cache'
-import { type CreatedPatient, type ActionResult, nextProtocolNo, getCtx, validatePatient, validateTc } from './actionsShared'
+import { type CreatedPatient, type ActionResult, nextProtocolNo, getCtx, validatePatient, validateTc, findTcOwner } from './actionsShared'
 
 export async function createPatient(
   _prev: ActionResult,
@@ -20,11 +20,15 @@ export async function createPatient(
 
   const tc = (formData.get('tc') as string)?.trim()
   let tc_enc: string | null = null
+  let tc_hash: string | null = null
   if (tc) {
     const tcError = validateTc(tc)
     if (tcError) return { error: tcError }
     tc_enc = tryEncrypt(tc)
-    if (!tc_enc) return { error: 'T.C. kimlik numarası şifrelenemedi (şifreleme anahtarı eksik); hasta kaydedilmedi' }
+    tc_hash = hashTc(tc)
+    if (!tc_enc || !tc_hash) return { error: 'T.C. kimlik numarası şifrelenemedi (şifreleme anahtarı eksik); hasta kaydedilmedi' }
+    const owner = await findTcOwner(supabase, clinicId, tc_hash)
+    if (owner) return { error: `Bu T.C. kimlik numarası ${owner} adlı hastada kayıtlı` }
   }
 
   const protocolNo = await nextProtocolNo(supabase, clinicId)
@@ -35,6 +39,7 @@ export async function createPatient(
     gender: (formData.get('gender') as string) || null,
     birth_date: (formData.get('birth_date') as string) || null,
     tc_enc,
+    tc_hash,
     phone1: (formData.get('phone1') as string) || null,
     phone2: (formData.get('phone2') as string) || null,
     email: (formData.get('email') as string) || null,
@@ -64,17 +69,20 @@ export async function updatePatient(
 
   // T.C. yalnızca istemci alanı gönderdiyse güncellenir; boş değer kaydı temizler
   const tcField = formData.get('tc')
-  let tcUpdate: { tc_enc: string | null } | Record<string, never> = {}
+  let tcUpdate: { tc_enc: string | null; tc_hash: string | null } | Record<string, never> = {}
   if (typeof tcField === 'string') {
     const tc = tcField.trim()
     if (!tc) {
-      tcUpdate = { tc_enc: null }
+      tcUpdate = { tc_enc: null, tc_hash: null }
     } else {
       const tcError = validateTc(tc)
       if (tcError) return { error: tcError }
       const enc = tryEncrypt(tc)
-      if (!enc) return { error: 'T.C. kimlik numarası şifrelenemedi (şifreleme anahtarı eksik)' }
-      tcUpdate = { tc_enc: enc }
+      const hash = hashTc(tc)
+      if (!enc || !hash) return { error: 'T.C. kimlik numarası şifrelenemedi (şifreleme anahtarı eksik)' }
+      const owner = await findTcOwner(supabase, clinicId, hash, id)
+      if (owner) return { error: `Bu T.C. kimlik numarası ${owner} adlı hastada kayıtlı` }
+      tcUpdate = { tc_enc: enc, tc_hash: hash }
     }
   }
 
