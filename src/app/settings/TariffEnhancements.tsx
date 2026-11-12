@@ -20,7 +20,7 @@ export const VISUAL_SCHEMAS = [
 const COLORS: Record<string, string> = {
   exam: 'from-teal-50 to-cyan-100 text-teal-700', cleaning: 'from-cyan-50 to-sky-100 text-cyan-700',
   filling: 'from-amber-50 to-orange-100 text-amber-700', 'root-canal': 'from-yellow-50 to-amber-100 text-yellow-700',
-  crown: 'from-sky-50 to-blue-100 text-sky-700', zirconium: 'from-slate-50 to-slate-200 text-slate-700',
+  crown: 'from-sky-50 to-blue-100 text-sky-700', zirconium: 'from-yellow-50 to-amber-100 text-amber-700',
   emax: 'from-fuchsia-50 to-pink-100 text-fuchsia-700', extraction: 'from-red-50 to-rose-100 text-red-700',
   surgery: 'from-rose-50 to-red-100 text-rose-700', implant: 'from-indigo-50 to-violet-100 text-indigo-700',
   'bone-graft': 'from-orange-50 to-amber-100 text-orange-700', 'sinus-lift': 'from-cyan-50 to-blue-100 text-cyan-700',

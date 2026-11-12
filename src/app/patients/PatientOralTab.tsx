@@ -169,9 +169,11 @@ function OralTab({
     for (const t of treatments) {
       if (!t.tooth) continue
       const next = treatmentFlags(t.tariff?.visual_schema, t.treatment_name)
-      if (next.removableProsthesis) {
-        const jaw = isUpperTooth(t.tooth) ? FDI.upperPermanent.slice(1, -1) : FDI.lowerPermanent.slice(1, -1)
-        for (const tooth of jaw) m.set(tooth, { ...(m.get(tooth) ?? {}), removableProsthesis: true })
+      if (next.totalProsthesis || next.removableProsthesis) {
+        // Protez tek dişe değil tüm çeneye aittir: tam protezde tüm dişler, parsiyelde eksik dişler protezle çizilir
+        const jaw = isUpperTooth(t.tooth) ? FDI.upperPermanent : FDI.lowerPermanent
+        const key = next.totalProsthesis ? 'totalProsthesis' : 'removableProsthesis'
+        for (const tooth of jaw) m.set(tooth, { ...(m.get(tooth) ?? {}), [key]: true })
       } else m.set(t.tooth, { ...(m.get(t.tooth) ?? {}), ...next })
     }
     return m

@@ -9,7 +9,12 @@ export interface ToothFlags {
   implant?: boolean
   extracted?: boolean
   graft?: boolean
+  /** Parsiyel (bölümlü) hareketli protez — çenedeki eksik dişlerin yerine protez diş konur */
   removableProsthesis?: boolean
+  /** Tam (total) protez — çenedeki tüm dişler yerine protez/damak çizilir */
+  totalProsthesis?: boolean
+  /** Apikal rezeksiyon — kök ucu kesik çizilir */
+  apicalResection?: boolean
   // Diyagnoz sembolleri
   mineCaryo?: boolean
   dentinCaryo?: boolean
@@ -61,13 +66,32 @@ export function classifyTreatment(name: string): ToothBooleanFlag | null {
 }
 
 // Tarife kaleminin visual_schema'sından (veya yoksa isminden) diş bayraklarını çıkarır.
+/** İşlem adından protez türü / apikal rezeksiyon çıkarımı (şema seçilmiş olsa da uygulanır). */
+function applyNameHints(flags: ToothFlags, name: string): ToothFlags {
+  const s = name.toLocaleLowerCase('tr')
+  if (s.includes('rezeksiyon')) flags.apicalResection = true
+  if (s.includes('zirkon')) { flags.crown = true; flags.crownMaterial = 'zirconium' }
+  const total = s.includes('tam protez') || s.includes('total protez')
+  const partial = s.includes('bölümlü protez') || s.includes('parsiyel') || s.includes('hareketli protez') || s.includes('hassas tutuculu')
+  if (total || partial) {
+    // Protez bir kron değildir; ad eşleşince kron/dolgu çıkarımı geçersiz
+    delete flags.crown
+    delete flags.crownMaterial
+    delete flags.totalProsthesis
+    delete flags.removableProsthesis
+    if (total) flags.totalProsthesis = true
+    else flags.removableProsthesis = true
+  }
+  return flags
+}
+
 export function treatmentFlags(schema: string | null | undefined, name: string): ToothFlags {
   const flags: ToothFlags = {}
   const schemas = (schema || '').split('+').filter(Boolean)
   if (!schemas.length) {
     const inferred = classifyTreatment(name)
     if (inferred) flags[inferred] = true
-    return flags
+    return applyNameHints(flags, name)
   }
   for (const item of schemas) {
     if (item === 'implant') flags.implant = true
@@ -77,9 +101,10 @@ export function treatmentFlags(schema: string | null | undefined, name: string):
     else if (item === 'root-canal') flags.canal = true
     else if (item === 'extraction') flags.extracted = true
     else if (item === 'bone-graft') flags.graft = true
-    else if (['removable', 'total-prosthesis'].includes(item)) flags.removableProsthesis = true
+    else if (item === 'removable') flags.removableProsthesis = true
+    else if (item === 'total-prosthesis') flags.totalProsthesis = true
   }
-  return flags
+  return applyNameHints(flags, name)
 }
 
 // ─── Diş üzerinde tedavi uyumluluğu (stacking) ───────────────────────────────
@@ -133,6 +158,11 @@ export function checkTreatmentCompatibility(
     if (existing.extracted && !existing.implant) return block(`Bu diş çekilmiş; ${label} eklenemez.`)
     if (existing.implant) return block(`İmplantlı dişe ${label} eklenemez.`)
     if (existing.graft) return block(`Bu dişte greft var; ${label} eklenemez.`)
+  }
+
+  if (incoming.apicalResection) {
+    if (existing.extracted && !existing.implant) return block('Bu diş çekilmiş; kök ucu rezeksiyonu yapılamaz.')
+    if (existing.implant) return block('İmplantlı dişe kök ucu rezeksiyonu yapılamaz.')
   }
 
   if (incoming.filling && existing.crown) {
