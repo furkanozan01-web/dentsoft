@@ -123,7 +123,6 @@ type Acct = {
   extra: number
 }
 const money = (kurus: number) => tl(kurus / 100)
-const signedMoney = (kurus: number) => (kurus === 0 ? '0,00' : `${kurus > 0 ? '+' : '-'}${money(Math.abs(kurus))}`)
 
 /** Bono (kompakt) + altında hastanın hesap özeti ve tedavi dökümü: tek A4 sayfa */
 function senetPage(s: S, acct: Acct) {
@@ -148,20 +147,14 @@ function senetPage(s: S, acct: Acct) {
    <div><div class="hd">Aval veren <span class="kn">(düzenleyen lehine aval içindir)</span></div>Ad soyad: ${V(k ? s.kf_ad : '', '36mm')}<br>T.C. no: <span class="mono">${V(k ? s.kf_tc : '')}</span><br>Adres: ${V(k ? s.kf_adres : '', '44mm')}<br>Tel: <span class="mono">${V(k ? s.kf_tel : '')}</span><br>İmza:</div>
   </div></div>`
 
-  const rows = acct.rows.map((r) => `<tr><td>${r.tooth}</td><td>${esc(r.name)}</td><td class="mono">${r.date}</td><td class="num mono">${money(r.list)}</td><td class="num mono${r.adj < 0 ? ' disc' : ''}">${signedMoney(r.adj)}</td><td class="num mono"><b>${money(r.fee)}</b></td></tr>`).join('')
-  const hesap = `<div class="hesap">
-  <h3 class="dt">Tedavi Dökümü<span>Hesap sekmesindeki kayıtlardan · ${esc(s.h_ad)}</span></h3>
+  const rows = acct.rows.map((r) => `<tr><td>${r.tooth}</td><td>${esc(r.name)}</td><td class="mono">${r.date}</td><td class="num mono"><b>${money(r.fee)}</b></td></tr>`).join('')
+  const hesap = `<div class="hesap" style="margin:0 0 4mm">
+  <h3 class="dt">Tedavi Dökümü<span>${esc(s.h_ad)}</span></h3>
   ${acct.rows.length
-    ? `<table class="hs-tab"><thead><tr><th>Diş</th><th>Tedavi</th><th>Tarih</th><th class="num">Liste fiyatı</th><th class="num">İndirim</th><th class="num">Net tutar</th></tr></thead><tbody>${rows}${acct.extra > 0 ? `<tr><td colspan="6" class="more">… ve ${acct.extra} kalem daha (tam döküm: Hesap sekmesi)</td></tr>` : ''}</tbody></table>`
+    ? `<table class="hs-tab"><thead><tr><th>Diş</th><th>Tedavi</th><th>Tarih</th><th class="num">Tutar</th></tr></thead><tbody>${rows}${acct.extra > 0 ? `<tr><td colspan="4" class="more">… ve ${acct.extra} kalem daha (tam döküm: Hesap sekmesi)</td></tr>` : ''}<tr><td colspan="3" style="text-align:right"><b>TOPLAM</b></td><td class="num mono"><b>${money(acct.net)} ₺</b></td></tr></tbody></table>`
     : '<p class="t" style="margin:2mm 0 0">Tedavi kaydı bulunmuyor.</p>'}
-  <div class="hs-sum">
-   <div><b>Toplam (orijinal)</b><span class="mono">${money(acct.original)} ₺</span></div>
-   <div><b>İndirimli toplam</b><span class="mono">${money(acct.net)} ₺</span></div>
-   <div><b>Yapılan ödemeler</b><span class="mono">${money(acct.paid)} ₺</span></div>
-   <div class="due"><b>Kalan bakiye</b><span class="mono">${money(acct.balance)} ₺</span></div>
-  </div>
   </div>`
-  return bono + hesap
+  return hesap + bono
 }
 
 const inputCls = 'mt-1 w-full rounded-lg border border-[#E7ECF2] bg-white px-2.5 py-2 text-sm font-semibold text-[#142536] outline-none focus:border-[#2DD4BF]'
@@ -257,8 +250,9 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
     a.a_diger = anam.notes ?? ''
     const owed = treatments.reduce((s, t) => s + (t.fee ?? 0), 0)
     const paid = transactions.filter((t) => t.type === 'payment').reduce((s, t) => s + (t.amount ?? 0), 0)
-    a.p_toplam = owed > 0 ? String(owed / 100) : ''
-    a.p_pesin = paid > 0 ? String(paid / 100) : ''
+    // Bono tutarı = hastanın toplam borcu (tedavi toplamı − yapılan ödemeler)
+    a.p_toplam = owed - paid > 0 ? String((owed - paid) / 100) : ''
+    a.p_pesin = ''
     a.p_duz = today()
     a.p_vade = addMonths(today(), 12)
     a.p_borclu = isChild ? 'yakin' : 'hasta'
@@ -458,7 +452,7 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
         </Sec>
 
         <Sec title="Senet (bono)" open={on('pg_senet')}>
-          {fld('p_toplam', 'Toplam ücret (TL)', { type: 'number' })}
+          {fld('p_toplam', 'Hastanın toplam borcu (TL)', { type: 'number' })}
           {fld('p_pesin', 'Peşinat / alınan (TL)', { type: 'number' })}
           <div className="col-span-2 rounded-lg bg-[#E6FFFA] px-3 py-2 font-mono text-sm text-[#142536]">
             {top ? `${tl(Math.max(0, top - pes))} TL · ${tutarYazi(Math.max(0, top - pes))}` : 'Toplam ücreti girin'}
