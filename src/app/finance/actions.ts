@@ -391,7 +391,7 @@ export async function addBusinessPartner(input: {
   const name = input.name?.trim()
   if (!name) return { error: 'İş ortağı adı zorunludur' }
 
-  const validTypes = ['laboratuvar', 'tedarikci', 'firma_odeme', 'diger']
+  const validTypes = ['laboratuvar', 'implant', 'dis_deposu', 'medikal', 'teknik_servis', 'tedarikci', 'firma_odeme', 'diger']
   const partnerType = validTypes.includes(input.partnerType) ? input.partnerType : 'diger'
 
   const { error } = await supabase.from('business_partners').insert({
@@ -434,7 +434,7 @@ export async function updateBusinessPartner(
   const name = input.name?.trim()
   if (name !== undefined && !name) return { error: 'Ad boş bırakılamaz' }
 
-  const validTypes = ['laboratuvar', 'tedarikci', 'firma_odeme', 'diger']
+  const validTypes = ['laboratuvar', 'implant', 'dis_deposu', 'medikal', 'teknik_servis', 'tedarikci', 'firma_odeme', 'diger']
   const updates: Record<string, unknown> = {}
   if (name) updates.name = name
   if (input.partnerType) updates.partner_type = validTypes.includes(input.partnerType) ? input.partnerType : 'diger'

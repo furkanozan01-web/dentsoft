@@ -323,7 +323,7 @@ export function AddPaymentModal({
   }
 
   const inputCls = 'w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#2DD4BF]/30'
-  const firmaPartners = partners.filter((p) => p.partner_type === 'firma_odeme' || p.partner_type === 'diger')
+  const firmaPartners = partners.filter((p) => p.is_active)
 
   return (
     <Modal title="Ödeme Ekle" subtitle={patientName} onClose={onClose}>
