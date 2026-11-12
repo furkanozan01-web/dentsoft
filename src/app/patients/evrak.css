@@ -1,0 +1,82 @@
+/* Evrak sekmesi: A4 kâğıt görünümü. Tüm kurallar .ev-* ile sınırlandırılmıştır (uygulamanın diğer stilleriyle çakışmaz). */
+.ev-sheets { width: 100%; display: flex; flex-direction: column; gap: 18px; }
+.ev-wrap { position: relative; width: 100%; }
+.ev-sheet {
+  --ink: #111c22; --ink-2: #4a5a62; --rule: #9fb0b6;
+  width: 210mm; height: 297mm; background: #fff; color: var(--ink);
+  transform-origin: top left; position: absolute; left: 0; top: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .08), 0 8px 28px rgba(15, 40, 45, .12);
+  overflow: hidden; padding: 13mm 16mm 11mm;
+  font-family: "Segoe UI", Arial, sans-serif;
+}
+.ev-content { height: 100%; overflow: hidden; font-size: var(--fs, 10.4pt); line-height: 1.4; display: flex; flex-direction: column; }
+.ev-sheet .serif { font-family: Georgia, "Times New Roman", serif; }
+.ev-sheet .mono { font-family: Consolas, "Courier New", monospace; font-variant-numeric: tabular-nums; }
+
+.ev-sheet .dh { display: grid; grid-template-columns: 42mm 1fr 42mm; align-items: start; gap: 3mm; margin-bottom: 4.5mm; }
+.ev-sheet .dh .c { text-align: center; font-family: Georgia, "Times New Roman", serif; font-weight: 700; font-size: 1.32em; line-height: 1.2; text-wrap: balance; }
+.ev-sheet .dh .r { text-align: right; font-size: .95em; line-height: 1.45; white-space: nowrap; }
+.ev-sheet .dt { font-family: Georgia, "Times New Roman", serif; font-weight: 700; font-size: 1.12em; margin: 0 0 1.6mm; }
+.ev-sheet .dt span { font-family: "Segoe UI", Arial, sans-serif; font-weight: 500; font-size: .72em; color: var(--ink-2); margin-left: 6px; text-transform: uppercase; letter-spacing: .08em; }
+.ev-sheet .blk { margin-bottom: 3mm; }
+.ev-sheet .kv { display: grid; grid-template-columns: repeat(3, 1fr); border-top: .6pt solid var(--rule); border-left: .6pt solid var(--rule); }
+.ev-sheet .kv > div { border-right: .6pt solid var(--rule); border-bottom: .6pt solid var(--rule); padding: 1mm 1.6mm; min-height: 8.8mm; }
+.ev-sheet .kv b { display: block; font-size: .72em; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); font-weight: 600; }
+.ev-sheet .kv .w2 { grid-column: span 2; }
+.ev-sheet .kv .w3 { grid-column: span 3; }
+.ev-sheet .anam { display: grid; grid-template-columns: 1fr 1fr; column-gap: 5mm; }
+.ev-sheet .ai { display: flex; justify-content: space-between; gap: 3mm; padding: .8mm 0; border-bottom: .5pt dotted var(--rule); }
+.ev-sheet .ai .yn { white-space: nowrap; font-size: .92em; }
+.ev-sheet .box { display: inline-block; width: 2.9mm; height: 2.9mm; border: .7pt solid var(--ink); vertical-align: -.3mm; margin: 0 .6mm 0 1.6mm; position: relative; }
+.ev-sheet .box.on::after { content: ""; position: absolute; inset: .45mm; background: var(--ink); }
+.ev-sheet .lines { margin-top: 1.8mm; display: grid; gap: 1.2mm; }
+.ev-sheet .ln { display: flex; gap: 2mm; align-items: baseline; }
+.ev-sheet .ln b { white-space: nowrap; font-weight: 600; }
+.ev-sheet .ln .v { flex: 1; border-bottom: .5pt solid var(--rule); min-height: 4.6mm; }
+.ev-sheet .blank { display: inline-block; border-bottom: .6pt solid var(--ink-2); min-width: 28mm; height: 1em; vertical-align: -.15em; }
+.ev-sheet p.t { margin: 0 0 1.5mm; text-align: justify; hyphens: auto; }
+
+.ev-sheet .txt h4 { margin: 2.4mm 0 .7mm; font-size: 1em; font-weight: 700; }
+.ev-sheet .txt h4:first-child { margin-top: 0; }
+.ev-sheet .txt p { margin: 0 0 1.1mm; text-align: justify; hyphens: auto; }
+.ev-sheet .txt ul { margin: 0 0 1.1mm; padding-left: 5mm; list-style: disc; }
+.ev-sheet .txt li { margin: 0 0 .7mm; text-align: justify; }
+.ev-sheet .ok { margin-top: 3mm; font-weight: 700; text-align: right; }
+
+.ev-sheet .sigs { margin-top: auto; padding-top: 4mm; display: flex; flex-direction: column; gap: 3.2mm; }
+.ev-sheet .nusha { font-weight: 600; font-size: .95em; }
+.ev-sheet .signer { display: grid; grid-template-columns: 44mm 1fr 42mm; gap: 4mm; align-items: end; }
+.ev-sheet .signer .who b { display: block; text-transform: uppercase; letter-spacing: .06em; font-size: .8em; color: var(--ink-2); }
+.ev-sheet .signer .who span { display: block; min-height: 1.3em; }
+.ev-sheet .fill { display: flex; flex-direction: column; gap: .6mm; font-size: .78em; color: var(--ink-2); }
+.ev-sheet .fill i { font-style: normal; }
+.ev-sheet .fill .u { border-bottom: .7pt solid var(--ink); height: 7mm; }
+.ev-sheet .date { text-align: right; font-size: .92em; }
+
+.ev-sheet .senet { border: 1.2pt solid var(--ink); padding: 5mm 6mm; font-size: 1.08em; }
+.ev-sheet .sn-top { display: grid; grid-template-columns: 1.3fr 1.5fr .7fr .8fr; border: .8pt solid var(--ink); margin-bottom: 3.4mm; }
+.ev-sheet .sn-top > div { padding: 1.2mm 1.6mm; border-right: .8pt solid var(--ink); text-align: center; }
+.ev-sheet .sn-top > div:last-child { border-right: 0; }
+.ev-sheet .sn-top b { display: block; font-size: .7em; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); }
+.ev-sheet .sn-top span { font-weight: 500; font-size: 1.08em; }
+.ev-sheet .sn-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2mm; }
+.ev-sheet .sn-h .dt { margin: 0; font-size: 1.35em; letter-spacing: .06em; }
+.ev-sheet .sn-h .nama { font-size: .78em; font-weight: 700; letter-spacing: .1em; border: .9pt solid var(--ink); padding: .4mm 2.2mm; }
+.ev-sheet .senet p.t { line-height: 1.65; margin-bottom: 2.6mm; }
+.ev-sheet .sn-ln { display: grid; grid-template-columns: 1fr 1fr; gap: 1.8mm 6mm; }
+.ev-sheet .sn-ln .ln .v { min-height: 5mm; }
+.ev-sheet .sn-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-top: 4mm; }
+.ev-sheet .sn-parties > div { border: .6pt solid var(--rule); padding: 2mm 2.6mm; font-size: .95em; line-height: 1.75; min-height: 42mm; }
+.ev-sheet .sn-parties .hd { font-weight: 700; text-transform: uppercase; letter-spacing: .06em; font-size: .82em; margin-bottom: .4mm; }
+.ev-sheet .sn-parties .kn { font-size: .82em; color: var(--ink-2); line-height: 1.35; margin-bottom: .8mm; }
+
+@media print {
+  @page { size: A4; margin: 0; }
+  html[data-print-target="evrak"] body * { visibility: hidden !important; }
+  html[data-print-target="evrak"] .ev-sheets,
+  html[data-print-target="evrak"] .ev-sheets * { visibility: visible !important; }
+  html[data-print-target="evrak"] .ev-sheets { position: absolute; left: 0; top: 0; width: 210mm; display: block; gap: 0; }
+  html[data-print-target="evrak"] .ev-wrap { width: auto !important; height: auto !important; }
+  html[data-print-target="evrak"] .ev-sheet { position: static; transform: none !important; box-shadow: none; break-after: page; page-break-after: always; }
+  html[data-print-target="evrak"] .ev-wrap:last-child .ev-sheet { break-after: auto; page-break-after: auto; }
+}

@@ -169,6 +169,7 @@ export type TabId =
   | 'takip'
   | 'not-goruntu'
   | 'hesap'
+  | 'evrak'
   | 'fatura'
   | 'recete'
 

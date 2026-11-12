@@ -34,6 +34,7 @@ import HastaKartiTab from './PatientSummaryTab'
 import OralTab from './PatientOralTab'
 import HesapTab from './PatientAccountTab'
 import FaturaTab from './PatientInvoiceTab'
+import EvrakTab from './PatientEvrakTab'
 import NotGoruntuTab from './PatientNotesImagesTab'
 import ReceteTab from './PatientPrescriptionTab'
 import TakipTab from './PatientFollowupTab'
@@ -551,6 +552,19 @@ export default function PatientsClient({
             loading={loadingFinance}
             onAddPayment={() => setShowPaymentModal(true)}
             onChanged={() => loadFinancials(selected.id)}
+          />
+        )}
+
+        {activeTab === 'evrak' && selected && (
+          <EvrakTab
+            key={selected.id}
+            patient={selected}
+            clinic={clinic}
+            doctors={doctors}
+            anamnesis={anamnesis}
+            treatments={treatments}
+            transactions={transactions}
+            loading={loadingFinance || loadingAnamnesis}
           />
         )}
 

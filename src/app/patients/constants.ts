@@ -7,6 +7,7 @@ export const PATIENT_TABS: { id: TabId; label: string }[] = [
   { id: 'takip', label: 'Takip' },
   { id: 'not-goruntu', label: 'Not & Görüntü' },
   { id: 'hesap', label: 'Hesap' },
+  { id: 'evrak', label: 'Evrak' },
   { id: 'fatura', label: 'Fatura' },
   { id: 'recete', label: 'Reçete' },
 ]
