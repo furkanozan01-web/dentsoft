@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { getDoctorTc, getPatientTc, updateAnamnesis } from './actions'
 import { toTitleCase } from '@/lib/format'
 import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
-import type { Anamnesis } from '@/lib/anamnesis'
+import { DISEASES, DISEASE_LABELS, type Anamnesis } from '@/lib/anamnesis'
 import type { ClinicInfo, DoctorOption, Patient, Transaction, Treatment } from './types'
 import { triggerPrint } from './printTarget'
 import { CERRAHI, COCUK, GENEL, RESTO, type DocDef, type DocPart } from './evrakTexts'
@@ -14,24 +14,7 @@ import './evrak.css'
 type S = Record<string, string | boolean>
 
 /** Anamnez satırı ↔ hasta kartındaki hastalık adları (boş = karttan gelmez, elle işaretlenir) */
-const ANAM: { key: string; label: string; from: string[] }[] = [
-  { key: 'kalp', label: 'Kalp hastalığı / kapak sorunu / kalp pili', from: ['Kalp Hastalığı'] },
-  { key: 'htn', label: 'Yüksek tansiyon', from: ['Hipertansiyon'] },
-  { key: 'dm', label: 'Şeker hastalığı (diyabet)', from: ['Diyabet'] },
-  { key: 'kan', label: 'Kanama bozukluğu / kan sulandırıcı', from: ['Kanama Bozukluğu'] },
-  { key: 'hep', label: 'Hepatit, HIV veya bulaşıcı hastalık', from: ['Hepatit', 'HIV'] },
-  { key: 'ast', label: 'Astım / solunum yolu hastalığı', from: ['Astım'] },
-  { key: 'epi', label: 'Epilepsi / nörolojik hastalık', from: ['Nörolojik'] },
-  { key: 'bob', label: 'Böbrek veya karaciğer hastalığı', from: ['Böbrek Yetmezliği'] },
-  { key: 'tir', label: 'Tiroid hastalığı', from: ['Tiroid'] },
-  { key: 'bis', label: 'Kemik erimesi ilacı (bisfosfonat vb.)', from: ['Bisfosfonat Kullanımı'] },
-  { key: 'rad', label: 'Kanser tedavisi / baş-boyun radyoterapisi', from: ['Radyoterapi / Kanser Tedavisi'] },
-  { key: 'alj', label: 'İlaç, lateks veya anestezik alerjisi', from: ['Alerji'] },
-  { key: 'ane', label: 'Lokal anesteziye kötü tepki öyküsü', from: ['Anestezi Reaksiyonu'] },
-  { key: 'geb', label: 'Gebelik veya emzirme', from: ['Hamilelik'] },
-  { key: 'sig', label: 'Sigara / tütün kullanımı', from: ['Sigara / Tütün'] },
-  { key: 'ope', label: 'Son 1 yılda ameliyat / hastane yatışı', from: ['Yakın Zamanda Ameliyat'] },
-]
+const ANAM: { key: string; label: string; from: string[] }[] = DISEASES.map((d) => ({ key: d.key, label: DISEASE_LABELS[d.key] ?? d.key, from: [d.key] }))
 
 type Kept = { k_hekim: string; k_tel: string; k_lehtar: string; k_ltc: string; k_sehir: string; pg_anam: boolean; pg_genel: boolean; pg_cerrahi: boolean; pg_resto: boolean; pg_senet: boolean }
 const KEPT_DEFAULT: Kept = { k_hekim: '', k_tel: '', k_lehtar: '', k_ltc: '', k_sehir: '', pg_anam: true, pg_genel: true, pg_cerrahi: false, pg_resto: false, pg_senet: false }
@@ -132,13 +115,15 @@ function anamPage(s: S, child: boolean, a: number | null) {
  ${sigBlock(s, child, false)}`
 }
 type Acct = {
-  rows: { date: string; tooth: string; name: string; doctor: string; fee: number }[]
-  owed: number
+  rows: { date: string; tooth: string; name: string; list: number; adj: number; fee: number }[]
+  original: number
+  net: number
   paid: number
   balance: number
   extra: number
 }
 const money = (kurus: number) => tl(kurus / 100)
+const signedMoney = (kurus: number) => (kurus === 0 ? '0,00' : `${kurus > 0 ? '+' : '-'}${money(Math.abs(kurus))}`)
 
 /** Bono (kompakt) + altında hastanın hesap özeti ve tedavi dökümü: tek A4 sayfa */
 function senetPage(s: S, acct: Acct) {
@@ -163,17 +148,18 @@ function senetPage(s: S, acct: Acct) {
    <div><div class="hd">Aval veren <span class="kn">(düzenleyen lehine aval içindir)</span></div>Ad soyad: ${V(k ? s.kf_ad : '', '36mm')}<br>T.C. no: <span class="mono">${V(k ? s.kf_tc : '')}</span><br>Adres: ${V(k ? s.kf_adres : '', '44mm')}<br>Tel: <span class="mono">${V(k ? s.kf_tel : '')}</span><br>İmza:</div>
   </div></div>`
 
-  const rows = acct.rows.map((r) => `<tr><td class="mono">${r.date}</td><td>${r.tooth}</td><td>${esc(r.name)}</td><td>${esc(r.doctor)}</td><td class="num mono">${money(r.fee)}</td></tr>`).join('')
+  const rows = acct.rows.map((r) => `<tr><td>${r.tooth}</td><td>${esc(r.name)}</td><td class="mono">${r.date}</td><td class="num mono">${money(r.list)}</td><td class="num mono${r.adj < 0 ? ' disc' : ''}">${signedMoney(r.adj)}</td><td class="num mono"><b>${money(r.fee)}</b></td></tr>`).join('')
   const hesap = `<div class="hesap">
-  <h3 class="dt">Hesap Özeti ve Tedavi Dökümü<span>${esc(s.h_ad)}</span></h3>
-  <div class="hs-sum">
-   <div><b>Toplam ücret</b><span class="mono">${money(acct.owed)} ₺</span></div>
-   <div><b>Ödenen</b><span class="mono">${money(acct.paid)} ₺</span></div>
-   <div class="due"><b>Kalan borç</b><span class="mono">${money(acct.balance)} ₺</span></div>
-  </div>
+  <h3 class="dt">Tedavi Dökümü<span>Hesap sekmesindeki kayıtlardan · ${esc(s.h_ad)}</span></h3>
   ${acct.rows.length
-    ? `<table class="hs-tab"><thead><tr><th>Tarih</th><th>Diş</th><th>İşlem</th><th>Hekim</th><th class="num">Ücret (₺)</th></tr></thead><tbody>${rows}${acct.extra > 0 ? `<tr><td colspan="5" class="more">… ve ${acct.extra} işlem daha (tam döküm: Hesap sekmesi)</td></tr>` : ''}</tbody></table>`
-    : '<p class="t" style="margin:2mm 0 0">Kayıtlı tedavi bulunmuyor.</p>'}
+    ? `<table class="hs-tab"><thead><tr><th>Diş</th><th>Tedavi</th><th>Tarih</th><th class="num">Liste fiyatı</th><th class="num">İndirim</th><th class="num">Net tutar</th></tr></thead><tbody>${rows}${acct.extra > 0 ? `<tr><td colspan="6" class="more">… ve ${acct.extra} kalem daha (tam döküm: Hesap sekmesi)</td></tr>` : ''}</tbody></table>`
+    : '<p class="t" style="margin:2mm 0 0">Tedavi kaydı bulunmuyor.</p>'}
+  <div class="hs-sum">
+   <div><b>Toplam (orijinal)</b><span class="mono">${money(acct.original)} ₺</span></div>
+   <div><b>İndirimli toplam</b><span class="mono">${money(acct.net)} ₺</span></div>
+   <div><b>Yapılan ödemeler</b><span class="mono">${money(acct.paid)} ₺</span></div>
+   <div class="due"><b>Kalan bakiye</b><span class="mono">${money(acct.balance)} ₺</span></div>
+  </div>
   </div>`
   return bono + hesap
 }
@@ -238,6 +224,7 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
     const meds = text.split(/[,;]/).map((m) => m.trim()).filter(Boolean)
     if (JSON.stringify(meds) !== JSON.stringify(anam.medications)) saveAnam({ ...anam, medications: meds })
   }
+  const commitAllergy = (text: string) => { if (text.trim() !== (anam.allergyDetail ?? '').trim()) saveAnam({ ...anam, allergyDetail: text.trim() }) }
   const commitNotes = (text: string) => { if (text.trim() !== (anam.notes ?? '').trim()) saveAnam({ ...anam, notes: text.trim() }) }
   const [lehtarTc, setLehtarTc] = useState('')
 
@@ -266,7 +253,7 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
     a.tur = isChild ? 'cocuk' : 'yetiskin'
     for (const x of ANAM) a['an_' + x.key] = x.from.some((d) => anam.diseases.includes(d))
     a.a_ilac = anam.medications.join(', ')
-    a.a_alerji = ''
+    a.a_alerji = anam.allergyDetail ?? ''
     a.a_diger = anam.notes ?? ''
     const owed = treatments.reduce((s, t) => s + (t.fee ?? 0), 0)
     const paid = transactions.filter((t) => t.type === 'payment').reduce((s, t) => s + (t.amount ?? 0), 0)
@@ -327,15 +314,18 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
   const txt = (key: string) => String(eff[key] ?? '')
   const on = (key: string) => !!eff[key]
 
-  // Hesap özeti ve tedavi dökümü: Hesap sekmesindeki verilerle aynı (kart/hesap otomatik)
+  // Tedavi dökümü: Hesap sekmesindeki "Tedavi Dökümü" ile aynı kalemler, aynı sıra ve aynı tutarlar
   const acct: Acct = useMemo(() => {
     const MAX = 26
-    const sorted = [...treatments].sort((x, y) => String(x.treatment_date ?? '').localeCompare(String(y.treatment_date ?? '')))
-    const owed = treatments.reduce((sum, t) => sum + (t.fee ?? 0), 0)
+    const original = treatments.reduce((sum, t) => sum + (t.original_fee ?? t.fee), 0)
+    const net = treatments.reduce((sum, t) => sum + t.fee, 0)
     const paid = transactions.filter((t) => t.type === 'payment').reduce((sum, t) => sum + (t.amount ?? 0), 0)
     return {
-      rows: sorted.slice(0, MAX).map((t) => ({ date: t.treatment_date ? fd(t.treatment_date.slice(0, 10)) : '—', tooth: t.tooth ? String(t.tooth) : '—', name: t.treatment_name, doctor: t.doctor?.name ? toTitleCase(t.doctor.name) : '—', fee: t.fee ?? 0 })),
-      owed, paid, balance: owed - paid, extra: Math.max(0, sorted.length - MAX),
+      rows: treatments.slice(0, MAX).map((t) => {
+        const list = t.original_fee ?? t.fee
+        return { date: t.treatment_date ? fd(t.treatment_date.slice(0, 10)) : '—', tooth: t.tooth ? String(t.tooth) : '—', name: t.treatment_name, list, adj: t.fee - list, fee: t.fee }
+      }),
+      original, net, paid, balance: net - paid, extra: Math.max(0, treatments.length - MAX),
     }
   }, [treatments, transactions])
 
@@ -372,6 +362,16 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
     const ro = new ResizeObserver(() => scaleSheets(root))
     ro.observe(root)
     return () => ro.disconnect()
+  }, [])
+
+  // Ctrl+P ile yazdırılsa da bu sekmedeki sayfalar basılsın (başka bir yazdırma hedefi seçili değilse)
+  useEffect(() => {
+    const root = document.documentElement
+    const before = () => { if (!root.hasAttribute('data-print-target')) root.setAttribute('data-print-target', 'evrak') }
+    const after = () => { if (root.getAttribute('data-print-target') === 'evrak') root.removeAttribute('data-print-target') }
+    window.addEventListener('beforeprint', before)
+    window.addEventListener('afterprint', after)
+    return () => { window.removeEventListener('beforeprint', before); window.removeEventListener('afterprint', after); after() }
   }, [])
 
   const print = () => {
@@ -453,7 +453,7 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
         <Sec title="Anamnez" hint="hasta kartıyla eşlenir">
           <div className="col-span-2">{ANAM.map((x) => chk('an_' + x.key, x.label))}</div>
           {syncFld('a_ilac', 'Kullandığı ilaçlar (virgülle ayırın)', commitMeds)}
-          {fld('a_alerji', 'Alerji ayrıntısı (yalnızca bu forma)', { full: true })}
+          {syncFld('a_alerji', 'Alerji ayrıntısı (hangi ilaç / madde)', commitAllergy)}
           {syncFld('a_diger', 'Diğer / açıklama (hasta notu)', commitNotes)}
         </Sec>
 

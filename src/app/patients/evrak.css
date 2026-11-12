@@ -71,7 +71,7 @@
 .ev-sheet .sn-parties .hd .kn { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--ink-2); }
 
 .ev-sheet .hesap { margin-top: 4mm; }
-.ev-sheet .hs-sum { display: grid; grid-template-columns: repeat(3, 1fr); border-top: .6pt solid var(--rule); border-left: .6pt solid var(--rule); margin-bottom: 2mm; }
+.ev-sheet .hs-sum { display: grid; grid-template-columns: repeat(4, 1fr); border-top: .6pt solid var(--rule); border-left: .6pt solid var(--rule); margin-top: 2.4mm; }
 .ev-sheet .hs-sum > div { border-right: .6pt solid var(--rule); border-bottom: .6pt solid var(--rule); padding: 1mm 2mm; }
 .ev-sheet .hs-sum b { display: block; font-size: .7em; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); font-weight: 600; }
 .ev-sheet .hs-sum span { font-weight: 700; font-size: 1.05em; }
@@ -92,3 +92,4 @@
   html[data-print-target="evrak"] .ev-sheet { position: static; transform: none !important; box-shadow: none; break-after: page; page-break-after: always; }
   html[data-print-target="evrak"] .ev-wrap:last-child .ev-sheet { break-after: auto; page-break-after: auto; }
 }
+.ev-sheet .hs-tab .disc { color: #b42318; }

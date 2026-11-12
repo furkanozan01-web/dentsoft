@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import {
   DISEASES,
+  DISEASE_LABELS,
   DRUG_DATABASE,
   LEVEL_STYLES,
   checkInteractions,
@@ -602,7 +603,8 @@ function AnamnezBox({
   const dirty =
     JSON.stringify(draft.diseases.slice().sort()) !== JSON.stringify(anamnesis.diseases.slice().sort()) ||
     JSON.stringify(draft.medications.slice().sort()) !== JSON.stringify(anamnesis.medications.slice().sort()) ||
-    draft.notes !== anamnesis.notes
+    draft.notes !== anamnesis.notes ||
+    (draft.allergyDetail ?? '') !== (anamnesis.allergyDetail ?? '')
 
   const toggleDisease = (key: string) => {
     setDraft((d) => ({
@@ -635,6 +637,14 @@ function AnamnezBox({
       }
     })
   }
+
+  // Otomatik kayıt: değişiklikten ~1,2 sn sonra karta yazılır (Evrak sekmesi aynı veriyi kullanır)
+  useEffect(() => {
+    if (!dirty || loading || pending) return
+    const timer = setTimeout(save, 1200)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, draft, loading, pending])
 
   const activeDiseases = DISEASES.filter((d) => draft.diseases.includes(d.key))
   const interactions = checkInteractions(draft.medications)
@@ -690,11 +700,23 @@ function AnamnezBox({
               className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-sm transition-colors ${active ? 'border-[#5FD3C1] bg-[#E6FFFA] text-[#0F766E]' : 'border-[#E7ECF2] bg-[#FAFBFC] text-slate-600 hover:border-[#5FD3C1]'}`}
             >
               <input type="checkbox" checked={active} onChange={() => toggleDisease(d.key)} className="h-4 w-4 rounded accent-[#2DD4BF]" />
-              <span className="font-bold">{d.key}</span>
+              <span className="font-bold">{DISEASE_LABELS[d.key] ?? d.key}</span>
             </label>
           )
         })}
       </div>
+
+      {draft.diseases.includes('Alerji') && (
+        <div className="mb-4 max-w-xl">
+          <label className="mb-1.5 block text-xs font-black uppercase tracking-wide text-slate-500">Alerji ayrıntısı</label>
+          <input
+            value={draft.allergyDetail ?? ''}
+            onChange={(e) => setDraft((d) => ({ ...d, allergyDetail: e.target.value }))}
+            placeholder="Hangi ilaç / madde? (ör. Penisilin, lateks)"
+            className="h-11 w-full rounded-[14px] border border-[#E7ECF2] bg-white px-4 text-sm font-medium text-[#0F2B3D] outline-none transition focus:border-[#2DD4BF]"
+          />
+        </div>
+      )}
 
       {activeDiseases.length > 0 && (
         <div className="space-y-1.5 mb-5">

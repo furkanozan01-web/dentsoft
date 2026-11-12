@@ -79,12 +79,35 @@ export interface Anamnesis {
   diseases: string[] // DISEASES[].key listesi
   medications: string[] // serbest metin ilaç adları
   notes: string // serbest klinik not
+  allergyDetail?: string // alerji ayrıntısı (hangi ilaç/madde)
 }
 
 export const EMPTY_ANAMNESIS: Anamnesis = {
   diseases: [],
   medications: [],
   notes: '',
+  allergyDetail: '',
+}
+
+/** Hastalık anahtarı → ekranda ve evrakta gösterilen tam ad (hasta kartı ve Evrak AYNI listeyi/adları kullanır) */
+export const DISEASE_LABELS: Record<string, string> = {
+  'Diyabet': 'Şeker hastalığı (diyabet)',
+  'Hipertansiyon': 'Yüksek tansiyon (hipertansiyon)',
+  'Kalp Hastalığı': 'Kalp hastalığı / kapak sorunu / kalp pili',
+  'Alerji': 'İlaç, lateks veya anestezik alerjisi',
+  'Astım': 'Astım / solunum yolu hastalığı',
+  'Kanama Bozukluğu': 'Kanama bozukluğu / kan sulandırıcı kullanımı',
+  'Hepatit': 'Hepatit (sarılık) / bulaşıcı karaciğer hastalığı',
+  'HIV': 'HIV / AIDS',
+  'Tiroid': 'Tiroid hastalığı',
+  'Böbrek Yetmezliği': 'Böbrek veya karaciğer hastalığı',
+  'Hamilelik': 'Gebelik veya emzirme',
+  'Nörolojik': 'Epilepsi / nörolojik hastalık',
+  'Bisfosfonat Kullanımı': 'Kemik erimesi ilacı (bisfosfonat vb.)',
+  'Radyoterapi / Kanser Tedavisi': 'Kanser tedavisi / baş-boyun radyoterapisi',
+  'Anestezi Reaksiyonu': 'Lokal anesteziye kötü tepki öyküsü',
+  'Sigara / Tütün': 'Sigara / tütün kullanımı',
+  'Yakın Zamanda Ameliyat': 'Son 1 yılda ameliyat / hastane yatışı',
 }
 
 export const LEVEL_STYLES: Record<WarningLevel, { dot: string; box: string; text: string }> = {

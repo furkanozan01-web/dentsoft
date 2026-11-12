@@ -226,6 +226,7 @@ export async function getAnamnesis(
         diseases: Array.isArray(parsed.diseases) ? parsed.diseases : [],
         medications: Array.isArray(parsed.medications) ? parsed.medications : [],
         notes: typeof parsed.notes === 'string' ? parsed.notes : '',
+        allergyDetail: typeof parsed.allergyDetail === 'string' ? parsed.allergyDetail : '',
       },
     }
   } catch {
@@ -264,6 +265,7 @@ export async function updateAnamnesis(
     diseases: (anamnesis.diseases ?? []).filter(Boolean),
     medications: (anamnesis.medications ?? []).map((m) => m.trim()).filter(Boolean),
     notes: (anamnesis.notes ?? '').trim(),
+    allergyDetail: (anamnesis.allergyDetail ?? '').trim(),
   }
 
   const enc = tryEncrypt(JSON.stringify(clean))
