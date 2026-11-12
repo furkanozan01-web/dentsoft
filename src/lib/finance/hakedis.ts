@@ -128,8 +128,6 @@ export interface DoctorSummary {
  * @param payments - Tüm hekim ödemeleri
  * @param monthKey - 'YYYY-MM' formatında ay (örn. '2026-06')
  * @param profitByMonth - `${branch_id}:${monthKey}` anahtarlı şube net kâr tablosu (bkz. finance/page.tsx)
- * @param allDoctors - Verilirse kâr payı, ÖDENMEMİŞ hekim hakedişleri (komisyon/maaş/prim) düşüldükten sonraki
- *                     kârdan hesaplanır; böylece aynı tahsilat hem komisyon hem kâr payı olarak iki kez sayılmaz.
  */
 export function computeSummary(
   doctor: HakedisDoctor,
@@ -139,8 +137,7 @@ export function computeSummary(
   txs: HakedisTx[],
   payments: HakedisDoctorPayment[],
   monthKey: string,
-  profitByMonth: Record<string, number>,
-  allDoctors?: HakedisDoctor[]
+  profitByMonth: Record<string, number>
 ): DoctorSummary {
   const patientMap = new Map(patients.map((p) => [p.id, p]))
   const periodTreatments = treatments.filter(
@@ -246,39 +243,26 @@ export function computeSummary(
     ? Math.max((doctor.guarantee_amount ?? 0) - guaranteeBase, 0)
     : 0
 
+  // Kâr payı HAKEDİŞE DAHİL DEĞİLDİR: hakediş yalnızca yapılan işten komisyon + sabit maaş/prim/garantidir.
+  // Kâr payı, Kasa > "Kâr Payı Öde" ile kasadan hissedarlara hisse oranında dağıtılır (doctor_payments.payment_type='kar_payi').
+  // Burada yalnızca bilgi olarak o dönemde dağıtılan tutar ve hisse oranı gösterilir.
   const monthStart = `${monthKey}-01`
   const monthEnd = `${monthKey}-31`
   const activeShares = shares.filter((s) =>
     s.doctor_id === doctor.id && s.is_active &&
     (!s.start_date || s.start_date <= monthEnd) && (!s.end_date || s.end_date >= monthStart)
   )
-  // Şube kârı nakit esaslıdır (tahsilat − gider; ödenen hakedişler gider olarak düşmüştür).
-  // Henüz ödenmemiş hekim hakedişleri (komisyon + maaş + prim, kâr payı hariç) kârdan düşülür;
-  // birden çok şubede, şubelerin pozitif kârı oranında paylaştırılır.
-  let unpaidAccrual = 0
-  if (allDoctors && allDoctors.length > 0 && activeShares.length > 0) {
-    const nonShare = payments.filter((p) => p.payment_type !== 'kar_payi')
-    for (const other of allDoctors) {
-      const base = computeSummary(other, [], treatments, patients, txs, nonShare, monthKey, {})
-      unpaidAccrual += Math.max(base.entitlement - base.paid, 0)
-    }
-  }
-  const monthProfitTotal = Object.entries(profitByMonth)
-    .filter(([k]) => k.endsWith(`:${monthKey}`) && !k.startsWith('all:'))
-    .reduce((sum, [, v]) => sum + Math.max(v, 0), 0)
-  let profitShare = 0
-  let clinicNetProfit = 0
-  for (const share of activeShares) {
-    const rawProfit = Math.max(profitByMonth[`${share.branch_id}:${monthKey}`] ?? 0, 0)
-    const accrualPart = monthProfitTotal > 0 ? Math.round(unpaidAccrual * (rawProfit / monthProfitTotal)) : 0
-    const branchProfit = Math.max(rawProfit - accrualPart, 0)
-    clinicNetProfit += branchProfit
-    profitShare += Math.round((branchProfit * share.rate_bps) / 10000)
-  }
-  const entitlement = calculatedBeforeGuarantee + guaranteeCompletion + profitShare
+  const isProfitPayment = (p: HakedisDoctorPayment) => p.payment_type === 'kar_payi'
+  const inPeriod = (p: HakedisDoctorPayment) => (p.earning_period ?? p.payment_date.slice(0, 7)) === monthKey
+  const profitShare = payments
+    .filter((p) => p.doctor_id === doctor.id && isProfitPayment(p) && inPeriod(p))
+    .reduce((sum, p) => sum + p.amount, 0)
+  void profitByMonth // kâr payı hakedişe girmez; parametre uyumluluk için duruyor
+  const clinicNetProfit = 0
+  const entitlement = calculatedBeforeGuarantee + guaranteeCompletion
 
   const paid = payments
-    .filter((p) => p.doctor_id === doctor.id && (p.earning_period ?? p.payment_date.slice(0, 7)) === monthKey)
+    .filter((p) => p.doctor_id === doctor.id && !isProfitPayment(p) && inPeriod(p))
     .reduce((s, p) => s + p.amount, 0)
 
   return {

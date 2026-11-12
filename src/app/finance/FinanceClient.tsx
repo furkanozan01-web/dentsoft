@@ -259,7 +259,7 @@ export default function FinanceClient({
     const ciro = mine.reduce((s, t) => s + (t.fee ?? 0), 0)
     const maliyet = mine.reduce((s, t) => s + (t.cost ?? 0), 0)
     const netKar = ciro - maliyet
-    const summary = computeSummary(d, doctorShares, treatments, patients, txs, doctorPayments, monthKey, profitByMonth, doctors)
+    const summary = computeSummary(d, doctorShares, treatments, patients, txs, doctorPayments, monthKey, profitByMonth)
     return { doctor: d, ciro, maliyet, netKar, hakedis: summary.entitlement, count: mine.length }
   })
   const totalHakedis = hakedisByDoctor.reduce((s, h) => s + h.hakedis, 0)

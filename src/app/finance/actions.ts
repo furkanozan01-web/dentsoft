@@ -791,8 +791,7 @@ export async function getHekimHakedis(input: {
       (txs ?? []) as Parameters<typeof computeSummary>[4],
       (payments ?? []) as Parameters<typeof computeSummary>[5],
       monthKey,
-      profitByMonth,
-      doctors as Parameters<typeof computeSummary>[8]
+      profitByMonth
     )
     return {
       hekim_id: doc.id,

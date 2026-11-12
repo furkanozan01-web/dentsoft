@@ -279,8 +279,7 @@ export default async function DashboardPage() {
           payment_type: payment.payment_type,
         })),
         monthKey,
-        profitByMonth,
-        doctors
+        profitByMonth
       )
     : null
 

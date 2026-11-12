@@ -61,9 +61,9 @@ export default function EarningsDashboard({ doctors, doctorShares, treatments, p
     [canSeeAll, doctors, currentDoctorId]
   )
   const summaries = useMemo(() => visibleDoctors.map((d) => {
-    const parts=activeMonthKeys.map(key=>computeSummary(d,doctorShares,treatments,patients,txs,payments,key,profitByMonth,doctors));const first=parts[0]
+    const parts=activeMonthKeys.map(key=>computeSummary(d,doctorShares,treatments,patients,txs,payments,key,profitByMonth));const first=parts[0]
     return {...first,details:parts.flatMap(p=>p.details),gross:parts.reduce((s,p)=>s+p.gross,0),cost:parts.reduce((s,p)=>s+p.cost,0),net:parts.reduce((s,p)=>s+p.net,0),bonus:parts.reduce((s,p)=>s+p.bonus,0),entitlement:parts.reduce((s,p)=>s+p.entitlement,0),paid:parts.reduce((s,p)=>s+p.paid,0),remaining:parts.reduce((s,p)=>s+p.remaining,0),completedCount:parts.reduce((s,p)=>s+p.completedCount,0),fixedAmount:parts.reduce((s,p)=>s+p.fixedAmount,0),commissionAmount:parts.reduce((s,p)=>s+p.commissionAmount,0),guaranteeCompletion:parts.reduce((s,p)=>s+p.guaranteeCompletion,0),guaranteeAmount:parts.reduce((s,p)=>s+(p.doctor.guarantee_active ? (p.doctor.guarantee_amount ?? 0) : 0),0),clinicNetProfit:parts.reduce((s,p)=>s+p.clinicNetProfit,0),profitShare:parts.reduce((s,p)=>s+p.profitShare,0)}
-  }), [visibleDoctors, doctors, doctorShares, treatments, patients, txs, payments, profitByMonth, activeMonthKeys])
+  }), [visibleDoctors, doctorShares, treatments, patients, txs, payments, profitByMonth, activeMonthKeys])
   const firstId = canSeeAll ? summaries[0]?.doctor.id ?? null : currentDoctorId
   const [persistedSelectedId, setPersistedSelectedId] = usePersistedPreference<number | null>('dentsoft:last-doctor-filter-earnings', firstId)
   const selectedId =
@@ -130,7 +130,7 @@ export default function EarningsDashboard({ doctors, doctorShares, treatments, p
         <div className="grid grid-cols-2 gap-3 text-sm lg:grid-cols-3">
           <TopInfo label="Sabit maaş" value={money(fixedAmount)} />
           <TopInfo label="Prim" value={money(selected.bonus)} />
-          <TopInfo label="Hisse" value={money(selected.profitShare)} />
+          <TopInfo label="Dağıtılan Kâr Payı" value={money(selected.profitShare)} />
         </div>
       </div>
     </section>
