@@ -27,6 +27,15 @@ function formatDate(value: string): string {
   return new Date(`${value}T12:00:00`).toLocaleDateString('tr-TR')
 }
 
+/** Klinik adresinin sonundaki "İlçe / İl" bölümünden yer adı (yoksa son kelime) */
+function placeFromAddress(address?: string | null): string {
+  const a = (address ?? '').trim().replace(/[\s.,;]+$/, '')
+  if (!a) return ''
+  const m = a.match(/([\p{L}]+(?:\s[\p{L}]+)?)\s*\/\s*([\p{L}]+)\s*$/u)
+  if (m) return `${m[1]} / ${m[2]}`
+  return a.split(/[\s,]+/).pop() ?? ''
+}
+
 export default function SenetPrint({ patient, clinic, title, rows }: SenetPrintProps) {
   const [tc, setTc] = useState<string | null>(null)
 
@@ -41,108 +50,100 @@ export default function SenetPrint({ patient, clinic, title, rows }: SenetPrintP
   }, [patient])
 
   const issueDate = new Date().toISOString().slice(0, 10)
+  const place = placeFromAddress(clinic?.address)
+  const creditor = clinic?.clinic_name || 'DentSoft Kliniği'
 
   return (
     <>
       <div id={`senet-print-${patient.id}`} className="senet-print" aria-hidden="true">
-        {rows.map((row, i) => (
-          <article key={i} className="senet-block">
-            <header className="senet-header">
-              <span>SENET</span>
-              <strong>Senet No: {i + 1}/{rows.length}</strong>
-            </header>
-
-            <p className="senet-amount">
-              ₺{formatAmount(row.amount)}
-              <span>({amountToTurkishWords(row.amount)})</span>
-            </p>
-
-            <p className="senet-body">
-              İşbu senet karşılığında yukarıda yazılı <strong>{amountToTurkishWords(row.amount)}</strong> ({'₺'}
-              {formatAmount(row.amount)}) tutarındaki borcumu, vadesinde, {clinic?.clinic_name || 'klinik'} yetkilisine
-              veya emrivakiine, hiçbir itiraz ileri sürmeksizin nakden ve defaten ödemeyi kabul ve taahhüt ederim.
-            </p>
-
-            <section className="senet-grid">
-              <div>
-                <span>Düzenleme Tarihi</span>
-                <strong>{formatDate(issueDate)}</strong>
+        {rows.map((row, i) => {
+          const lira = Math.floor(row.amount / 100)
+          const kurus = row.amount % 100
+          return (
+            <article key={i} className="senet-block">
+              <div className="sn-top">
+                <div><b>Ödeme tarihi</b><span>{formatDate(row.dueDate)}</span></div>
+                <div><b>Türk Lirası</b><span>{lira.toLocaleString('tr-TR')}</span></div>
+                <div><b>Kuruş</b><span>{String(kurus).padStart(2, '0')}</span></div>
+                <div><b>No</b><span>{i + 1}/{rows.length}</span></div>
               </div>
-              <div>
-                <span>Vade Tarihi</span>
-                <strong>{formatDate(row.dueDate)}</strong>
+              <div className="sn-h"><h3>BONO</h3><span className="sn-plan">{title}</span><span className="nama">NAMA YAZILIDIR</span></div>
+              <p className="sn-text">
+                İşbu nama muharrer bonomun mukabilinde <b>{formatDate(row.dueDate)}</b> tarihinde Sayın <b>{creditor}</b> yetkilisine
+                veya emrivakiine yukarıda yazılı yalnız <b>#{amountToTurkishWords(row.amount)}#</b> (₺{formatAmount(row.amount)}) kayıtsız
+                ve şartsız ödeyeceğim. İşbu bono emre değildir; ciro yoluyla başkasına devredilemez.
+              </p>
+              <div className="sn-ln">
+                <span>Ödeme yeri: <b>{place || '—'}</b></span>
+                <span>Düzenleme yeri: <b>{place || '—'}</b></span>
+                <span>Düzenleme tarihi: <b>{formatDate(issueDate)}</b></span>
               </div>
-              <div>
-                <span>Plan</span>
-                <strong>{title}</strong>
+              <div className="sn-parties">
+                <div>
+                  <div className="hd">Borçlu</div>
+                  Ad soyad: <b>{patient.name} {patient.surname}</b><br />
+                  T.C. no: {tc || '—'} · Tel: {patient.phone1 || '—'}<br />
+                  Adres: {patient.address || '—'}<br />
+                  İmza:
+                </div>
+                <div>
+                  <div className="hd">Aval veren <span className="kn">(düzenleyen lehine aval içindir)</span></div>
+                  Ad soyad:<br />
+                  T.C. no: &nbsp; Tel:<br />
+                  Adres:<br />
+                  İmza:
+                </div>
               </div>
-            </section>
-
-            <section className="senet-parties">
-              <div>
-                <h3>Alacaklı</h3>
-                <p>{clinic?.clinic_name || 'DentSoft Kliniği'}</p>
-                <p>{clinic?.address || '—'}</p>
-                <p>{[clinic?.phone, clinic?.email].filter(Boolean).join(' · ') || '—'}</p>
-              </div>
-              <div>
-                <h3>Borçlu</h3>
-                <p>{patient.name} {patient.surname}</p>
-                <p>{patient.address || '—'}</p>
-                <p>T.C. Kimlik No: {tc || '—'}</p>
-                <p>{patient.phone1 || '—'}</p>
-              </div>
-            </section>
-
-            <footer className="senet-signature">
-              <div><strong>Borçlu İmzası</strong><span>{patient.name} {patient.surname}</span></div>
-              <div><strong>Yetkili İmzası</strong><span>{clinic?.clinic_name || '—'}</span></div>
-            </footer>
-          </article>
-        ))}
+            </article>
+          )
+        })}
       </div>
 
       <style jsx global>{`
         .senet-print { display: none; }
         @media print {
-          @page { size: A4 portrait; margin: 10mm; }
+          @page { size: A4 portrait; margin: 8mm 10mm; }
           html[data-print-target="senet"] body * { visibility: hidden !important; }
           html[data-print-target="senet"] .senet-print,
           html[data-print-target="senet"] .senet-print * { visibility: visible !important; }
           html[data-print-target="senet"] .senet-print {
             display: block !important;
             position: absolute;
-            inset: 0;
+            left: 0;
+            top: 0;
             width: 190mm;
-            color: #142536;
+            color: #111c22;
             background: white;
-            font-family: Arial, sans-serif;
-            font-size: 9pt;
+            font-family: "Segoe UI", Arial, sans-serif;
+            font-size: 7.6pt;
+            line-height: 1.3;
           }
           .senet-block {
+            box-sizing: border-box;
+            height: 66mm;
+            overflow: hidden;
             break-inside: avoid;
             page-break-inside: avoid;
-            border: 1.5px solid #0f766e;
-            border-radius: 3mm;
-            padding: 6mm;
-            margin-bottom: 6mm;
+            border: 1pt solid #111c22;
+            padding: 2.2mm 4mm;
+            margin-bottom: 3mm;
           }
-          .senet-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #d9e4ea; padding-bottom: 3mm; margin-bottom: 4mm; }
-          .senet-header span { font-size: 14pt; font-weight: 900; color: #0f766e; letter-spacing: 2px; }
-          .senet-header strong { font-size: 9pt; color: #526579; }
-          .senet-amount { margin: 0 0 4mm; font-size: 15pt; font-weight: 900; color: #0f2b3d; }
-          .senet-amount span { margin-left: 3mm; font-size: 9pt; font-weight: 700; color: #526579; }
-          .senet-body { margin: 0 0 4mm; line-height: 1.6; font-size: 8.5pt; text-align: justify; }
-          .senet-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; margin-bottom: 4mm; border: 1px solid #e7ecf2; border-radius: 2mm; padding: 3mm; }
-          .senet-grid span { display: block; margin-bottom: 1mm; color: #7b8b9b; font-size: 6.5pt; font-weight: 700; text-transform: uppercase; }
-          .senet-grid strong { font-size: 8.5pt; }
-          .senet-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-bottom: 6mm; }
-          .senet-parties h3 { margin: 0 0 1.5mm; font-size: 7.5pt; color: #0f766e; text-transform: uppercase; }
-          .senet-parties p { margin: 0.5mm 0; font-size: 8pt; color: #315164; }
-          .senet-signature { display: flex; justify-content: space-between; gap: 10mm; }
-          .senet-signature div { flex: 1; text-align: center; border-top: 1px solid #94a3b8; padding-top: 2mm; }
-          .senet-signature strong { display: block; font-size: 7.5pt; color: #526579; }
-          .senet-signature span { display: block; margin-top: 1mm; font-size: 8pt; }
+          .senet-block:nth-child(4n) { break-after: page; page-break-after: always; margin-bottom: 0; }
+          .senet-block .sn-top { display: grid; grid-template-columns: 1.3fr 1.5fr .7fr .8fr; border: .7pt solid #111c22; margin-bottom: 1.6mm; }
+          .senet-block .sn-top > div { padding: .3mm 1.2mm; border-right: .7pt solid #111c22; text-align: center; }
+          .senet-block .sn-top > div:last-child { border-right: 0; }
+          .senet-block .sn-top b { display: block; font-size: 5.8pt; text-transform: uppercase; letter-spacing: .05em; color: #4a5a62; font-weight: 600; }
+          .senet-block .sn-top span { font-size: 8.6pt; font-weight: 500; }
+          .senet-block .sn-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .8mm; }
+          .senet-block .sn-h h3 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 10.5pt; letter-spacing: .06em; }
+          .senet-block .sn-plan { font-size: 6.6pt; color: #4a5a62; }
+          .senet-block .nama { font-size: 6pt; font-weight: 700; letter-spacing: .1em; border: .7pt solid #111c22; padding: .2mm 1.6mm; }
+          .senet-block .sn-text { margin: 0 0 1.2mm; text-align: justify; line-height: 1.38; }
+          .senet-block .sn-ln { display: flex; justify-content: space-between; gap: 3mm; margin-bottom: 1.4mm; }
+          .senet-block .sn-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 2.6mm; }
+          .senet-block .sn-parties > div { border: .5pt solid #9fb0b6; padding: .8mm 2mm; font-size: 7pt; line-height: 1.5; height: 19mm; overflow: hidden; }
+          .senet-block .sn-parties .hd { font-weight: 700; text-transform: uppercase; letter-spacing: .05em; font-size: 6.2pt; }
+          .senet-block .sn-parties .kn { font-weight: 400; text-transform: none; letter-spacing: 0; color: #4a5a62; }
         }
       `}</style>
     </>
