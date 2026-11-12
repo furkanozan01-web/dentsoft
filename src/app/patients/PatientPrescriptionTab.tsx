@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition, type ReactNode } from 'rea
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ConfirmModal'
 import { addPrescription, deletePrescription, getPatientTc } from './actions'
+import { checkRxSafety } from './prescriptionSafetyActions'
 import { escapeHtml, localDateValue, toTitleCase } from '@/lib/format'
 import type { ClinicInfo, DoctorOption, DrugEntry, Patient, Prescription } from './types'
 import { IconFileText, IconInfo, IconSearch, IconTrash } from '@/components/icons'
@@ -167,9 +168,20 @@ function ReceteTab({
     if (text) setContent((c) => (c ? c + '\n\n' + text : text))
   }
 
+  // Hasta anamneziyle çelişen ilaç varsa hekime gösterir; hekim onaylarsa devam eder (engellemez)
+  const confirmSafety = async (): Promise<boolean> => {
+    const { warnings } = await checkRxSafety(patient.id, content)
+    if (!warnings.length) return true
+    const text = warnings
+      .map((w) => `• ${w.label} — ${w.severity === 'kontrendike' ? 'KONTRENDİKE' : w.severity.toUpperCase()}: ${w.message}${w.ref ? ` (${w.ref})` : ''}`)
+      .join('\n')
+    return confirm({ title: 'Reçete güvenlik uyarısı', message: `${text}\n\nYine de devam edilsin mi?`, confirmText: 'Yine de devam et' })
+  }
+
   const save = () => {
     if (doctorId === null) { toast.error('Lütfen reçeteyi düzenleyen hekimi seçin'); return }
     startTransition(async () => {
+      if (!(await confirmSafety())) return
       const res = await addPrescription(patient.id, content, doctorId)
       if (res.error) toast.error(res.error)
       else { setContent(''); onChanged() }
@@ -264,9 +276,10 @@ li{padding:0 0 9px 5px;font-size:11pt;font-weight:700;color:#0f172a;break-inside
 </body></html>`
   }
 
-  const printNew = () => {
+  const printNew = async () => {
     if (!content.trim()) return
     if (doctorId === null) { toast.error('Lütfen reçeteyi düzenleyen hekimi seçin'); return }
+    if (!(await confirmSafety())) return
     const w = window.open('', '_blank', 'width=680,height=960')
     if (!w) return
     w.document.write(
