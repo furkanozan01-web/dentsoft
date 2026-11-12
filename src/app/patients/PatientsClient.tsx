@@ -55,6 +55,7 @@ export default function PatientsClient({
   tariffProfiles,
   clinic,
   clinicId,
+  branches = [],
   ongoingPatientIds = [],
   treatmentSummaries = [],
 }: {
@@ -64,6 +65,7 @@ export default function PatientsClient({
   tariffProfiles: TariffProfile[]
   clinic: ClinicInfo | null
   clinicId: number
+  branches?: { id: number; address: string | null; phone: string | null }[]
   ongoingPatientIds?: number[]
   treatmentSummaries?: PatientTreatmentSummary[]
 }) {
@@ -75,6 +77,12 @@ export default function PatientsClient({
   const [patients, setPatients] = useState(initial)
   const listFilter = searchParams.get('filter')
   const [selected, setSelected] = useState<Patient | null>(null)
+  // Belgelerde adres/telefon: hastanın şubesinin bilgisi varsa o, yoksa klinik ayarları
+  const patientClinic = useMemo<ClinicInfo | null>(() => {
+    if (!clinic) return null
+    const br = branches.find((b) => b.id === selected?.branch_id)
+    return br ? { ...clinic, address: br.address || clinic.address, phone: br.phone || clinic.phone } : clinic
+  }, [clinic, branches, selected])
   const [lastPatientId, setLastPatientId] = usePersistedPreference<number | null>('dentsoft:last-patient-id', null)
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     const tab = searchParams.get('tab') as TabId | null
@@ -546,7 +554,7 @@ export default function PatientsClient({
             patient={selected}
             transactions={transactions}
             treatments={treatments}
-            clinic={clinic}
+            clinic={patientClinic}
             installments={installments}
             reminders={reminders}
             loading={loadingFinance}
@@ -559,7 +567,7 @@ export default function PatientsClient({
           <EvrakTab
             key={selected.id}
             patient={selected}
-            clinic={clinic}
+            clinic={patientClinic}
             doctors={doctors}
             anamnesis={anamnesis}
             treatments={treatments}
