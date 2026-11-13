@@ -74,6 +74,7 @@ interface TreatmentRow {
   treatment_date: string | null
   status: string
   treatment_name: string
+  is_closed?: boolean | null
 }
 
 function fmt(kurus: number): string {
@@ -154,11 +155,11 @@ export default async function DashboardPage() {
       .eq('is_active', true),
     supabase
       .from('treatments')
-      .select('id, fee, cost, doctor_id, patient_id, treatment_date, status, treatment_name')
+      .select('id, fee, cost, doctor_id, patient_id, treatment_date, status, treatment_name, is_closed')
       .eq('clinic_id', clinicId)
       .neq('status', 'cancelled')
-      // Yalnızca bu ay (hakediş) veya açık durumdaki (devam eden hasta sayısı) tedaviler
-      .or(`status.in.(planned,in_progress),and(treatment_date.gte.${monthStartISO},treatment_date.lt.${nextMonthStartISO})`),
+      // Yalnızca bu ay (hakediş) veya hesabı kapatılmamış (devam eden hasta sayısı) tedaviler
+      .or(`is_closed.eq.false,and(treatment_date.gte.${monthStartISO},treatment_date.lt.${nextMonthStartISO})`),
     supabase
       .from('doctor_payments')
       .select('doctor_id, amount, payment_date, earning_period, payment_type')
@@ -251,7 +252,7 @@ export default async function DashboardPage() {
     : []
   const ongoingPatientIds = new Set(
     scopedTreatments
-      .filter((t) => ['planned', 'in_progress'].includes(t.status) && t.patient_id != null)
+      .filter((t) => !t.is_closed && t.patient_id != null)
       .map((t) => t.patient_id as number)
   )
 

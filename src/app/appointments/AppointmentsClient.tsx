@@ -532,9 +532,15 @@ export default function AppointmentsClient({
                               </span>
                             )}
                             {height > 46 && (
-                              <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[9px] font-bold ${tone.badge}`}>
-                                {STATUS_LABEL[a.status] ?? a.status}
-                              </span>
+                              a.status === 'scheduled' && start.getTime() + (a.duration_min ?? 0) * 60000 < Date.now() ? (
+                                <span className="mt-1 inline-flex rounded-full bg-amber-300 px-2 py-0.5 text-[9px] font-bold text-amber-950" title="Randevu saati geçti: Geldi / Gelmedi olarak işaretleyin">
+                                  Geldi mi?
+                                </span>
+                              ) : (
+                                <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[9px] font-bold ${tone.badge}`}>
+                                  {STATUS_LABEL[a.status] ?? a.status}
+                                </span>
+                              )
                             )}
                             <span
                               onPointerDown={(e) => moveAppointment(a, 'resize', e)}

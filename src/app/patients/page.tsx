@@ -79,11 +79,12 @@ export default async function PatientsPage() {
       .from('treatments')
       .select('patient_id')
       .eq('clinic_id', clinicId)
-      .in('status', ['planned', 'in_progress'])
+      .neq('status', 'cancelled')
+      .eq('is_closed', false)
       .not('patient_id', 'is', null),
     supabase
       .from('treatments')
-      .select('patient_id, status, treatment_name, category')
+      .select('patient_id, status, treatment_name, category, is_closed')
       .eq('clinic_id', clinicId)
       .neq('status', 'cancelled'),
   ])

@@ -3,7 +3,7 @@
 import { localDateValue } from '@/lib/format'
 import { revalidatePath } from 'next/cache'
 import { treatmentFlags, checkTreatmentCompatibility, type ToothFlags } from './toothFlags'
-import { getCtx, validatePatient } from './actionsShared'
+import { getCtx, validatePatient, branchFallback } from './actionsShared'
 
 // Tedavi ekler. Fiyat/ad/kategori SUNUCUDA tariffs tablosundan okunur (uydurma yok).
 export async function addTreatment(input: {
@@ -78,7 +78,9 @@ export async function addTreatment(input: {
     original_fee: tariff.price,
     is_closed: false,
     treatment_date: input.treatmentDate ?? localDateValue(),
-    status: 'planned',
+    // Tedavi sekmesine alınan işlem yapılmış sayılır (planlama/faz işlemleri ayrı tablolarda tutulur)
+    status: 'done',
+    ...(await branchFallback(supabase, input.patientId)),
   })
 
   if (error) return { error: error.message }

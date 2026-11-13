@@ -27,7 +27,7 @@ async function getCtx() {
     .eq('id', user.id)
     .single()
   if (!profile?.clinic_id) return null
-  return { supabase, clinicId: profile.clinic_id, branchId: profile.active_branch_id ?? profile.branch_id, role: profile.role }
+  return { supabase, clinicId: profile.clinic_id, branchId: profile.active_branch_id ?? profile.branch_id, activeBranchId: profile.active_branch_id as number | null, role: profile.role }
 }
 
 async function validateOperatingHours(ctx: NonNullable<Awaited<ReturnType<typeof getCtx>>>, doctorId: number, scheduledAt: string, durationMin: number, override = false) {
@@ -219,11 +219,18 @@ export async function createAppointment(input: {
   if (conflict.conflict) {
     return { error: 'Bu hekimin bu saatte başka randevusu var (çakışma).' }
   }
-  const capacity = await hasUnitCapacity(supabase, clinicId, branchId, input.scheduledAt, input.durationMin)
+  // Kayıt şubesi: aktif şube varsa o; "Tüm Şubeler" görünümünde hastanın şubesi
+  let targetBranchId = branchId
+  if (!ctx.activeBranchId) {
+    const { data: pt } = await supabase.from('patients').select('branch_id').eq('id', input.patientId).maybeSingle()
+    if (pt?.branch_id) targetBranchId = pt.branch_id as number
+  }
+  const capacity = await hasUnitCapacity(supabase, clinicId, targetBranchId, input.scheduledAt, input.durationMin)
   if (capacity.error) return { error: capacity.error }
   if (capacity.full) return { error: 'Bu saat aralığında şubenin tüm ünitleri dolu.' }
 
   const { error } = await supabase.from('appointments').insert({
+    ...(ctx.activeBranchId ? {} : { branch_id: targetBranchId }),
     clinic_id: clinicId,
     patient_id: input.patientId,
     doctor_id: input.doctorId,

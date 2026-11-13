@@ -77,6 +77,27 @@ export async function getCtx() {
   }
 }
 
+/**
+ * Kayıt şubesi kuralı: işlem hangi şubede yapıldıysa o şubeye yazılır. Kullanıcının aktif şubesi varsa
+ * veritabanı tetikleyicisi onu kullanır. "Tüm Şubeler" görünümündeyken (aktif şube yok) tetikleyici
+ * kullanıcının kendi şubesine düşerdi; bunun yerine hastanın şubesi kullanılır.
+ * Dönüş değeri insert nesnesine açılır: `{ ...(await branchFallback(supabase, patientId)) }`
+ */
+export async function branchFallback(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  patientId: number | null | undefined
+): Promise<{ branch_id?: number }> {
+  if (!patientId) return {}
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return {}
+  const { data: profile } = await supabase.from('profiles').select('active_branch_id').eq('id', user.id).maybeSingle()
+  if (profile?.active_branch_id) return {}
+  const { data: patient } = await supabase.from('patients').select('branch_id').eq('id', patientId).maybeSingle()
+  return patient?.branch_id ? { branch_id: patient.branch_id as number } : {}
+}
+
 export async function validatePatient(
   supabase: Awaited<ReturnType<typeof createClient>>,
   clinicId: number,

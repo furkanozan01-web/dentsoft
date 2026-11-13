@@ -88,7 +88,7 @@ function buildRows({ patients, doctors, treatments, txs, installments, clinicNam
     const daysSincePayment = dayDiff(lastPaymentDate ?? startDate, today)
     const latestTreatment = [...patientTreatments].sort((a, b) => (b.treatment_date ?? '').localeCompare(a.treatment_date ?? ''))[0]
     const doctorId = latestTreatment?.doctor_id ?? patientTreatments.find((t) => t.doctor_id)?.doctor_id ?? null
-    const completed = patientTreatments.length > 0 && patientTreatments.every((t) => t.status === 'completed')
+    const completed = patientTreatments.length > 0 && patientTreatments.every((t) => t.status === 'done')
     const inProgress = patientTreatments.some((t) => t.status === 'in_progress')
     const delivery: BalanceRow['delivery'] = completed ? 'Teslim edildi' : inProgress ? 'Devam ediyor' : 'Planlandı'
     const dueSoon = Boolean(nextInstallment && nextInstallment >= today && dayDiff(today, nextInstallment) <= 7)

@@ -2,7 +2,7 @@
 
 import { localDateValue, cleanMoney } from '@/lib/format'
 import { revalidatePath } from 'next/cache'
-import { type InvoiceSendResult, nextInvoiceNo, getCtx, validatePatient, calcBalance } from './actionsShared'
+import { type InvoiceSendResult, nextInvoiceNo, getCtx, validatePatient, calcBalance, branchFallback } from './actionsShared'
 
 export async function sendInvoiceToInstitution(input: {
   patientId: number
@@ -191,6 +191,7 @@ export async function markInstallmentPaid(
     type: 'payment',
     transaction_date: localDateValue(),
     description: 'Taksit ödemesi',
+    ...(await branchFallback(supabase, inst.patient_id)),
   })
   if (txErr) {
     await supabase
@@ -273,10 +274,14 @@ export async function addPaymentWithCurrency(
     ? params.originalCurrency
     : 'TRY'
 
+  // Kayıt şubesi: aktif şube yoksa hastanın şubesi (bkz. branchFallback)
+  const branchPart = await branchFallback(supabase, patientId)
+
   // Gelir kaydı
   const { data: incomeTx, error: incomeErr } = await supabase
     .from('transactions')
     .insert({
+      ...branchPart,
       clinic_id: clinicId,
       patient_id: patientId,
       amount: Math.round(params.amountKurus),
@@ -316,6 +321,7 @@ export async function addPaymentWithCurrency(
     const { data: expenseTx, error: expenseErr } = await supabase
       .from('transactions')
       .insert({
+        ...branchPart,
         clinic_id: clinicId,
         amount: Math.round(params.amountKurus),
         type: 'expense',

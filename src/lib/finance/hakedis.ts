@@ -143,7 +143,7 @@ export function computeSummary(
   const periodTreatments = treatments.filter(
     (t) => t.doctor_id === doctor.id && t.treatment_date?.startsWith(monthKey)
   )
-  const completedTreatments = periodTreatments.filter((t) => t.status === 'completed')
+  const completedTreatments = periodTreatments.filter((t) => t.status === 'done')
   const completedCount = completedTreatments.length
   const rate = doctor.commission_rate_bps ?? 0
   const bonusPool = doctor.bonus_amount ?? 0
@@ -180,7 +180,7 @@ export function computeSummary(
     const gross = collected
     const cost = treatment.cost ?? 0
     const net = Math.max(gross - cost, 0)
-    const completedIndex = treatment.status === 'completed'
+    const completedIndex = treatment.status === 'done'
       ? completedTreatments.findIndex((item) => item.id === treatment.id)
       : -1
     const bonus =
@@ -215,7 +215,7 @@ export function computeSummary(
       earning,
       status: collected > 0 ? 'Tahsil edildi' : 'Tahsilat bekliyor',
       description:
-        treatment.status === 'completed'
+        treatment.status === 'done'
           ? 'İşlem tamamlandı'
           : treatment.status === 'in_progress'
           ? 'Tedavi devam ediyor'

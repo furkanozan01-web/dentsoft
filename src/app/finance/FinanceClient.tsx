@@ -279,7 +279,7 @@ export default function FinanceClient({
         const komisyonHakedis = model === 'commission' || model === 'hybrid'
           ? Math.round((netKar * (d.commission_rate_bps ?? 0)) / 10000)
           : model === 'revenue' ? Math.round((ciro * (d.commission_rate_bps ?? 0)) / 10000)
-          : model === 'per_transaction' ? mineAll.filter((t) => t.status === 'completed').length * (d.per_transaction_amount ?? 0)
+          : model === 'per_transaction' ? mineAll.filter((t) => t.status === 'done').length * (d.per_transaction_amount ?? 0)
           : model === 'bonus' ? (d.bonus_amount ?? 0)
           : model === 'guarantee' ? (d.guarantee_amount ?? 0)
           : 0

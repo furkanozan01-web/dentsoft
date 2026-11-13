@@ -45,6 +45,7 @@ export interface PatientTreatmentSummary {
   status: string | null
   treatment_name: string | null
   category: string | null
+  is_closed?: boolean | null
 }
 
 // ---- Main ----
@@ -148,10 +149,8 @@ export default function PatientsClient({
   const derivedStatus = useCallback((patient: Patient): 'active' | 'passive' => {
     const patientTreatments = treatmentMap.get(patient.id) ?? []
     if (patientTreatments.length === 0) return patient.status === 'passive' ? 'passive' : 'active'
-    const statuses = patientTreatments.map((t) => (t.status ?? '').toLowerCase())
-    if (statuses.some((status) => ['planned', 'in_progress'].includes(status))) return 'active'
-    if (statuses.every((status) => ['done', 'completed', 'paid'].includes(status))) return 'passive'
-    return patient.status === 'passive' ? 'passive' : 'active'
+    // Aktif/pasif: işlemleri biter, ödeme tamamlanır, hesap kapatılınca (çıkış) pasif; yeni tedavi başlayınca tekrar aktif
+    return patientTreatments.some((t) => !t.is_closed) ? 'active' : 'passive'
   }, [treatmentMap])
 
   const filtered = patients
@@ -163,9 +162,8 @@ export default function PatientsClient({
       const treatmentStatusMatches =
         treatmentStatusFilter === 'all' ||
         (treatmentStatusFilter === 'active'
-          ? patientTreatments.some((t) => ['planned', 'in_progress'].includes((t.status ?? '').toLowerCase()))
-          : patientTreatments.length > 0 &&
-            patientTreatments.every((t) => ['done', 'completed', 'paid'].includes((t.status ?? '').toLowerCase())))
+          ? patientTreatments.some((t) => !t.is_closed)
+          : patientTreatments.length > 0 && patientTreatments.every((t) => !!t.is_closed))
       const treatmentTypeMatches =
         treatmentTypeFilter === 'all' ||
         patientTreatments.some((t) => (t.category || t.treatment_name) === treatmentTypeFilter)

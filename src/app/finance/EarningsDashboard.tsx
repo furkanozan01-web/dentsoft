@@ -84,7 +84,7 @@ export default function EarningsDashboard({ doctors, doctorShares, treatments, p
     const today = localDateValue()
     const overdue = installments.filter((i) => i.patient_id && patientIds.has(i.patient_id) && !i.paid && i.due_date < today).reduce((s, i) => s + i.amount, 0)
     const dueToday = installments.filter((i) => i.patient_id && patientIds.has(i.patient_id) && !i.paid && i.due_date === today).reduce((s, i) => s + i.amount, 0)
-    const deliveredTotal = mine.filter((t) => t.status === 'completed').reduce((s, t) => s + (t.fee ?? 0), 0)
+    const deliveredTotal = mine.filter((t) => t.status === 'done').reduce((s, t) => s + (t.fee ?? 0), 0)
     const deliveredCollected = selected.details.filter((r) => r.description === 'İşlem tamamlandı').reduce((s, r) => s + r.collected, 0)
     return { total, collected, unpaid: Math.max(total - collected, 0), overdue, dueToday, delivered: Math.max(deliveredTotal - deliveredCollected, 0) }
   }, [selected, treatments, installments, activeMonthKeys])
