@@ -21,40 +21,33 @@ export type ActionResult = { error?: string; success?: boolean; patient?: Create
 
 export type InvoiceSendResult = { error?: string; success?: boolean; invoiceNo?: string; institution?: string }
 
-export async function nextPrefixedNo(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  table: 'patients' | 'transactions',
-  clinicId: number,
-  column: 'protocol_no' | 'invoice_no',
-  prefix: 'P' | 'F'
-): Promise<string> {
-  const { data } = await supabase
-    .from(table)
-    .select(column)
-    .eq('clinic_id', clinicId)
-    .like(column, `${prefix}%`)
-
-  const max = (data ?? []).reduce((current, row) => {
-    const raw = String((row as Record<string, unknown>)[column] ?? '')
-    const n = Number(raw.replace(new RegExp(`^${prefix}`, 'i'), ''))
-    return Number.isFinite(n) ? Math.max(current, n) : current
-  }, 0)
-
-  return `${prefix}${String(max + 1).padStart(5, '0')}`
-}
-
-export async function nextProtocolNo(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  clinicId: number
-): Promise<string> {
-  return nextPrefixedNo(supabase, 'patients', clinicId, 'protocol_no', 'P')
-}
-
+/**
+ * Fatura numarası hastanın protokol numarasını izler: P0002 numaralı hastanın faturası F0002.
+ * Aynı hastaya ikinci, üçüncü fatura kesilirse F0002-2, F0002-3 olur.
+ */
 export async function nextInvoiceNo(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  clinicId: number
+  clinicId: number,
+  patientId: number
 ): Promise<string> {
-  return nextPrefixedNo(supabase, 'transactions', clinicId, 'invoice_no', 'F')
+  const { data: patient } = await supabase
+    .from('patients')
+    .select('protocol_no')
+    .eq('id', patientId)
+    .eq('clinic_id', clinicId)
+    .maybeSingle()
+  const digits = String(patient?.protocol_no ?? '').replace(/\D/g, '')
+  if (!digits) return ''
+  const base = `F${digits}`
+
+  const { data: used } = await supabase
+    .from('transactions')
+    .select('invoice_no')
+    .eq('clinic_id', clinicId)
+    .eq('patient_id', patientId)
+    .like('invoice_no', `${base}%`)
+  const count = new Set((used ?? []).map((r) => r.invoice_no as string)).size
+  return count === 0 ? base : `${base}-${count + 1}`
 }
 
 export async function getCtx() {

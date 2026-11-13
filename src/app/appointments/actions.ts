@@ -79,24 +79,6 @@ async function hasUnitCapacity(
   return { full: concurrent >= branch.unit_count }
 }
 
-async function nextProtocolNo(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  clinicId: number
-): Promise<string> {
-  const { data } = await supabase
-    .from('patients')
-    .select('protocol_no')
-    .eq('clinic_id', clinicId)
-    .like('protocol_no', 'P%')
-
-  const max = (data ?? []).reduce((current, row) => {
-    const n = Number(String(row.protocol_no ?? '').replace(/^P/i, ''))
-    return Number.isFinite(n) ? Math.max(current, n) : current
-  }, 0)
-
-  return `P${String(max + 1).padStart(5, '0')}`
-}
-
 // Aynı hekimde zaman çakışması var mı? (iptal/gelmedi hariç)
 async function hasConflict(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -177,8 +159,7 @@ export async function createPatientForAppointment(input: {
       phone2: input.phone2?.trim() || null,
       birth_date: input.birthDate || null,
       gender: input.gender || null,
-      protocol_no: await nextProtocolNo(supabase, clinicId),
-      status: 'active',
+      status: 'active', // protokol numarasını veritabanı tetikleyicisi atar
     })
     .select('id')
     .single()

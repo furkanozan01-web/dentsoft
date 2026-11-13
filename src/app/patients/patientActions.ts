@@ -5,7 +5,7 @@ import { tryEncrypt, tryDecrypt, hashTc } from '@/lib/crypto'
 import { EMPTY_ANAMNESIS, type Anamnesis } from '@/lib/anamnesis'
 import { revalidatePath } from 'next/cache'
 import { localDateValue, toTitleCase } from '@/lib/format'
-import { type CreatedPatient, type ActionResult, nextProtocolNo, getCtx, validatePatient, validateTc, findTcOwner } from './actionsShared'
+import { type CreatedPatient, type ActionResult, getCtx, validatePatient, validateTc, findTcOwner } from './actionsShared'
 
 /** Doğum tarihi gelecekte veya imkânsız derecede eski olamaz (boş geçerli) */
 function birthDateError(value: FormDataEntryValue | null): string | null {
@@ -43,7 +43,6 @@ export async function createPatient(
     if (owner) return { error: `Bu T.C. kimlik numarası ${owner} adlı hastada kayıtlı` }
   }
 
-  const protocolNo = await nextProtocolNo(supabase, clinicId)
   const { data: patient, error } = await supabase.from('patients').insert({
     clinic_id: clinicId,
     name,
@@ -56,7 +55,7 @@ export async function createPatient(
     phone2: (formData.get('phone2') as string) || null,
     email: (formData.get('email') as string) || null,
     address: (formData.get('address') as string) || null,
-    protocol_no: protocolNo,
+    // protocol_no: veritabanı tetikleyicisi (P0001 biçimi, klinik başına benzersiz) atar
     reg_date: localDateValue(), // DB varsayılanı UTC günü verir; İstanbul gününü açıkça yaz
     status: 'active',
   })

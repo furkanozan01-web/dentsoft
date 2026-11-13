@@ -78,7 +78,7 @@ function FaturaTab({
 
   useEffect(() => {
     let active = true
-    getNextInvoiceNo().then((res) => {
+    getNextInvoiceNo(patient.id).then((res) => {
       if (!active) return
       if (res.error) {
         toast.error(res.error)

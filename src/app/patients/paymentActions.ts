@@ -19,9 +19,9 @@ export async function sendInvoiceToInstitution(input: {
   const transactionIds = Array.from(new Set(input.transactionIds.map(Number))).filter(Boolean)
   const amountKurus = Math.round(Number(input.amountKurus))
   const lineDescription = input.lineDescription.trim()
-  const invoiceNo = input.invoiceNo.trim() || await nextInvoiceNo(supabase, clinicId)
-
   if (!patientId || transactionIds.length === 0) return { error: 'Faturalanacak ödeme kaydı bulunamadı' }
+  const invoiceNo = input.invoiceNo.trim() || await nextInvoiceNo(supabase, clinicId, patientId)
+  if (!invoiceNo) return { error: 'Fatura numarası üretilemedi (hastanın protokol numarası yok)' }
   if (!lineDescription) return { error: 'Fatura işlem açıklaması zorunludur' }
   if (!Number.isFinite(amountKurus) || amountKurus <= 0) return { error: 'Geçerli bir fatura tutarı girin' }
 
@@ -82,11 +82,12 @@ export async function sendInvoiceToInstitution(input: {
   return { success: true, invoiceNo, institution }
 }
 
-export async function getNextInvoiceNo(): Promise<{ invoiceNo?: string; error?: string }> {
+export async function getNextInvoiceNo(patientId: number): Promise<{ invoiceNo?: string; error?: string }> {
   const ctx = await getCtx()
   if (!ctx) return { error: 'Yetkisiz erişim' }
   const { supabase, clinicId } = ctx
-  return { invoiceNo: await nextInvoiceNo(supabase, clinicId) }
+  const invoiceNo = await nextInvoiceNo(supabase, clinicId, Number(patientId))
+  return invoiceNo ? { invoiceNo } : { error: 'Hastanın protokol numarası yok; fatura numarası üretilemedi' }
 }
 
 export async function addInstallment(

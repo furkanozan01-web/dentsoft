@@ -2,7 +2,7 @@
 
 import { EMPTY_ANAMNESIS, type Anamnesis } from '@/lib/anamnesis'
 import { revalidatePath } from 'next/cache'
-import { nextProtocolNo, getCtx, validatePatient } from './actionsShared'
+import { getCtx, validatePatient } from './actionsShared'
 import { getAnamnesis, updateAnamnesis } from './patientActions'
 
 // ─── PERİ — hasta oluşturma (FormData kullanmayan, TC'siz sürüm) ──────────────
@@ -25,7 +25,6 @@ export async function createPatientFromPeri(params: {
     return { error: 'Ad ve soyad zorunludur' }
   }
 
-  const protocolNo = await nextProtocolNo(supabase, clinicId)
   const { data: patient, error } = await supabase
     .from('patients')
     .insert({
@@ -38,8 +37,7 @@ export async function createPatientFromPeri(params: {
       phone1: params.phone1 ?? null,
       email: params.email ?? null,
       address: params.address ?? null,
-      protocol_no: protocolNo,
-      status: 'active',
+      status: 'active', // protokol numarasını veritabanı tetikleyicisi atar
     })
     .select('id, protocol_no')
     .single()
