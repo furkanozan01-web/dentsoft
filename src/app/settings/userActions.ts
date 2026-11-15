@@ -24,6 +24,7 @@ export async function syncDoctorsToUsers(): Promise<R & { synced?: number }> {
   let synced = 0
 
   for (const doctor of doctors ?? []) {
+    if (doctor.status === 'deleted') continue
     const email = doctor.email?.trim().toLowerCase()
     if (!email) continue
     const existingInvite = inviteMap.get(email)

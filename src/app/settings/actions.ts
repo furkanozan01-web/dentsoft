@@ -28,6 +28,9 @@ export {
   deleteDoctorShare,
 } from './doctorActions'
 
+export { getOffboardSummary, offboardDoctor, offboardUser } from './offboardActions'
+export type { OffboardSummary, OffboardResult } from './offboardActions'
+
 export {
   createStaffUser,
   resetUserPassword,

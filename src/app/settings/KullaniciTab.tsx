@@ -2,10 +2,10 @@
 
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
-import { useConfirm } from '@/components/ConfirmModal'
 import { updateUserRole, setUserActive, type RolePermissionRow } from './actions'
 import { PasswordModal } from './PasswordModal'
 import { UserDetailModal } from './UserDetailModal'
+import { OffboardModal } from './OffboardModal'
 import { ASSIGNABLE_ROLES, ROLE_LABEL } from './constants'
 import {
   SettingsIconBox,
@@ -46,12 +46,13 @@ export default function KullaniciTab({
   onAdd: () => void
   onChanged: () => void
 }) {
-  const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
   const [permissionUser, setPermissionUser] = useState<Profile | null>(null)
   // Şifre penceresi: 'self' = kendi şifrem, Profile = o çalışanın şifresini sıfırla
   const [passwordTarget, setPasswordTarget] = useState<'self' | Profile | null>(null)
   const [detailUser, setDetailUser] = useState<Profile | null>(null)
+  // Pasife alma / silme: hekim hesabıysa devam eden hastalar için aktarım sorulur
+  const [offboard, setOffboard] = useState<{ p: Profile; action: 'passive' | 'delete' } | null>(null)
   const me = profiles.find((p) => p.id === currentUserId)
   // Kullanıcı adı/şifre belirleme yetkisi: başhekim herkes için; mesul müdür kendi şubesindeki (veya "tüm şubeler" yetkisiyse kliniğindeki) hekim ve asistanlar için
   const canSetCredentials = (p: Profile) =>
@@ -84,17 +85,7 @@ export default function KullaniciTab({
       })
       return
     }
-    const ok = await confirm({
-      title: 'Hesabı Pasife Al',
-      message: `${p.full_name ?? p.email ?? 'Kullanıcı'} artık giriş yapamayacak. Devam edilsin mi?`,
-      confirmText: 'Evet, Pasife Al',
-    })
-    if (!ok) return
-    startTransition(async () => {
-      const res = await setUserActive(p.id, false)
-      if ((res as R)?.error) toast.error((res as R)!.error!)
-      else { toast.success('Hesap pasife alındı'); onChanged() }
-    })
+    setOffboard({ p, action: 'passive' })
   }
 
   if (permissionUser) {
@@ -281,6 +272,15 @@ export default function KullaniciTab({
                         ) : (
                           <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-300">—</span>
                         )}
+                        {canManage && (
+                          <button
+                            onClick={() => setOffboard({ p, action: 'delete' })}
+                            disabled={pending}
+                            className="inline-flex h-9 items-center justify-center rounded-xl px-3 text-xs font-black text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                          >
+                            Sil
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -330,6 +330,17 @@ export default function KullaniciTab({
           </section>
         </aside>
       </div>
+      {offboard && (
+        <OffboardModal
+          kind="user"
+          name={offboard.p.full_name ?? offboard.p.username ?? 'Kullanıcı'}
+          doctorId={offboard.p.doctor_id}
+          userId={offboard.p.id}
+          action={offboard.action}
+          onClose={() => setOffboard(null)}
+          onDone={() => { setOffboard(null); onChanged() }}
+        />
+      )}
       {detailUser && (
         <UserDetailModal
           user={detailUser}

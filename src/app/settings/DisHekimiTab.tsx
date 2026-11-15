@@ -1,9 +1,7 @@
 'use client'
 
-import { useState, useTransition, type ReactNode } from 'react'
-import { toast } from 'sonner'
-import { useConfirm } from '@/components/ConfirmModal'
-import { deleteDoctor } from './actions'
+import { useState, type ReactNode } from 'react'
+import { OffboardModal } from './OffboardModal'
 import { PAYMENT_MODEL_LABEL } from './constants'
 import {
   SettingsIconBox,
@@ -13,15 +11,14 @@ import {
   IconPlus,
   IconClipboard,
 } from './SettingsSharedUI'
-import type { Branch, Doctor, R } from './types'
+import type { Branch, Doctor } from './types'
 import { IconPencil, IconTrash } from './disHekimiShared'
 import { DoctorEditor } from './DoctorEditor'
 
 export default function DisHekimiTab({ doctors, branches, isAdmin, onChanged }: { doctors: Doctor[]; branches: Branch[]; isAdmin: boolean; onChanged: () => void }) {
-  const confirm = useConfirm()
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [mode, setMode] = useState<'none' | 'new' | 'edit'>('none')
-  const [delPending, startDel] = useTransition()
+  const [offboard, setOffboard] = useState<{ doctor: Doctor; action: 'passive' | 'delete' } | null>(null)
 
   const selected = doctors.find((d) => d.id === selectedId) ?? null
   const activeDoctors = doctors.filter((d) => d.status === 'active')
@@ -30,26 +27,6 @@ export default function DisHekimiTab({ doctors, branches, isAdmin, onChanged }: 
   const openNew = () => { setSelectedId(null); setMode('new') }
   const openEdit = (d: Doctor) => { setSelectedId(d.id); setMode('edit') }
   const closeEditor = () => { setMode('none'); setSelectedId(null) }
-
-  const handleDelete = async (d: Doctor) => {
-    const ok = await confirm({
-      title: 'Hekimi Pasife Al',
-      message: 'Dt. ' + d.name + ' pasife alınacak (kayıt silinmez). Devam edilsin mi?',
-      confirmText: 'Evet',
-    })
-    if (!ok) return
-    const fd = new FormData()
-    fd.set('id', String(d.id))
-    startDel(async () => {
-      const res = await deleteDoctor(null, fd)
-      if ((res as R)?.error) toast.error((res as R)!.error!)
-      else {
-        toast.success('Hekim pasife alındı')
-        if (selectedId === d.id) closeEditor()
-        onChanged()
-      }
-    })
-  }
 
   return (
     <div className="space-y-6">
@@ -120,7 +97,7 @@ export default function DisHekimiTab({ doctors, branches, isAdmin, onChanged }: 
                           )}
                         </td>
                         <td className="px-5 py-4"><span className={'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-black ' + (isActive ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-500')}><span className={'h-2 w-2 rounded-full ' + (isActive ? 'bg-green-500' : 'bg-slate-400')} />{isActive ? 'Aktif' : 'Pasif'}</span></td>
-                        <td className="px-5 py-4"><div className="flex items-center justify-end gap-2"><button onClick={(e) => { e.stopPropagation(); openEdit(d) }} className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-[#E6FFFA] hover:text-[#0F766E]" title="Düzenle"><IconPencil /></button><button onClick={(e) => { e.stopPropagation(); handleDelete(d) }} disabled={delPending} className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40" title="Pasife al"><IconTrash /></button></div></td>
+                        <td className="px-5 py-4"><div className="flex items-center justify-end gap-2"><button onClick={(e) => { e.stopPropagation(); openEdit(d) }} className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-[#E6FFFA] hover:text-[#0F766E]" title="Düzenle"><IconPencil /></button>{isActive && <button onClick={(e) => { e.stopPropagation(); setOffboard({ doctor: d, action: 'passive' }) }} className="inline-flex h-9 items-center justify-center rounded-xl px-3 text-xs font-black text-slate-400 transition hover:bg-amber-50 hover:text-amber-700" title="Pasife al">Pasife Al</button>}<button onClick={(e) => { e.stopPropagation(); setOffboard({ doctor: d, action: 'delete' }) }} className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-red-50 hover:text-red-600" title="Sil"><IconTrash /></button></div></td>
                       </tr>
                     )
                   })}
@@ -143,6 +120,7 @@ export default function DisHekimiTab({ doctors, branches, isAdmin, onChanged }: 
         </aside>
       </div>
 
+      {offboard && <OffboardModal kind="doctor" name={'Dt. ' + offboard.doctor.name} doctorId={offboard.doctor.id} action={offboard.action} onClose={() => setOffboard(null)} onDone={() => { if (selectedId === offboard.doctor.id) closeEditor(); setOffboard(null); onChanged() }} />}
       {mode !== 'none' && <div className="fixed inset-0 z-50 flex items-center justify-center p-4"><button type="button" aria-label="Düzenleyiciyi kapat" onClick={closeEditor} className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm" /><div className="relative max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl shadow-2xl"><DoctorEditor key={mode === 'edit' ? selected?.id ?? 'edit' : 'new'} doctor={mode === 'edit' ? selected : null} branches={branches} isAdmin={isAdmin} onCancel={closeEditor} onSaved={() => { closeEditor(); onChanged() }} onSharesChanged={onChanged} /></div></div>}
     </div>
   )

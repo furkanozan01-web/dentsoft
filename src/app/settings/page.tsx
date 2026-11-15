@@ -50,6 +50,7 @@ export default async function SettingsPage() {
         'id, name, specialty, phone, email, color, status, diploma_no, tc_enc, diploma_date, birth_date, payment_model, monthly_salary, commission_rate_bps, guarantee_amount, bonus_amount, per_transaction_amount, salary_day, payment_account, work_hours_json, is_mesul_mudur, branch_id, title, guarantee_active, guarantee_period, guarantee_method, guarantee_note, doctor_shares(id, doctor_id, branch_id, rate_bps, start_date, end_date, period, profit_distribution_type, note, is_active)'
       )
       .eq('clinic_id', clinicId)
+      .neq('status', 'deleted') // silinen (gizlenen) hekimler listelerde görünmez
       .order('name'),
     // profiles RLS'i yalnızca kişinin kendi satırını döndürür; yöneticiler (başhekim/mesul müdür) kliniğin tüm kullanıcılarını
     // listelemek için sunucuda service role ile (clinic_id filtreli) okur. Mesul müdür yalnızca kendi şubesini görür.
