@@ -27,6 +27,7 @@ export function UserModal({
 }) {
   const [state, action, pending] = useActionState(createStaffUser, null as R)
   const [role, setRole] = useState('asistan')
+  const [isDentist, setIsDentist] = useState(false)
 
   useEffect(() => {
     if ((state as R)?.success) onSuccess()
@@ -69,7 +70,13 @@ export function UserModal({
             <p className="text-[11px] text-gray-400 mt-1">Bu kullanıcı yalnızca kendi laboratuvar portalını görür: yaptığı işleri ve ücretlerini bildirir; hasta, finans ve diğer bilgilere erişemez.</p>
           </div>
         )}
-        {role === 'hekim' && (
+        {role === 'responsible_manager' && (
+          <label className="flex items-center gap-2 text-sm font-medium text-gray-600">
+            <input type="checkbox" name="is_dentist" checked={isDentist} onChange={(e) => setIsDentist(e.target.checked)} />
+            Aynı zamanda diş hekimi (Diş Hekimi sekmesinde de görünsün)
+          </label>
+        )}
+        {(role === 'hekim' || (role === 'responsible_manager' && isDentist)) && (
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1.5">
               Hangi hekimle ilişkilendir?

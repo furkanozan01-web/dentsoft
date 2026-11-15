@@ -122,14 +122,16 @@ export async function createStaffUser(_prev: R, formData: FormData): Promise<R> 
     if (!partner) return { error: 'Seçilen firma bu klinikte kayıtlı bir laboratuvar değil' }
   }
 
-  // Hekim rolü → bir doctors kaydıyla ilişkilendir (mevcut veya yeni)
+  // Hekim rolü (veya "aynı zamanda diş hekimi" işaretli mesul müdür) → bir doctors kaydıyla ilişkilendir (mevcut veya yeni):
+  // Kullanıcı ve Diş Hekimi sekmeleri her zaman aynı kişiyi göstersin diye
   let doctorId: number | null = null
-  if (role === 'hekim') {
-    const doctorChoice = (formData.get('doctor_id') as string) || ''
+  const isDentistManager = role === 'responsible_manager' && formData.get('is_dentist') === 'on'
+  if (role === 'hekim' || isDentistManager) {
+    const doctorChoice = (formData.get('doctor_id') as string) || 'new'
     if (doctorChoice === 'new') {
       const { data: newDoc, error: docErr } = await admin
         .from('doctors')
-        .insert({ clinic_id: ctx.clinicId, name: fullName || username, status: 'active', branch_id: branchId })
+        .insert({ clinic_id: ctx.clinicId, name: fullName || username, status: 'active', branch_id: branchId, title: 'Diş Hekimi', ...(isDentistManager ? { is_mesul_mudur: true } : {}) })
         .select('id')
         .single()
       if (docErr || !newDoc) return { error: docErr?.message ?? 'Hekim profili oluşturulamadı' }
