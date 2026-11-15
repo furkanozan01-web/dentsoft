@@ -260,59 +260,17 @@ export default function FinanceClient({
     const maliyet = mine.reduce((s, t) => s + (t.cost ?? 0), 0)
     const netKar = ciro - maliyet
     const summary = computeSummary(d, doctorShares, treatments, patients, txs, doctorPayments, monthKey, profitByMonth)
-    return { doctor: d, ciro, maliyet, netKar, hakedis: summary.entitlement, count: mine.length }
+    return { doctor: d, ciro, maliyet, netKar, hakedis: summary.entitlement, kalan: summary.remaining, count: mine.length }
   })
   const totalHakedis = hakedisByDoctor.reduce((s, h) => s + h.hakedis, 0)
-
-  // Hakediş KASA (kümülatif) — modele göre komisyon/maaş ayrı tutulur
-  const hakedisKasa = useMemo(
-    () =>
-      doctors.map((d) => {
-        const mineAll = treatments.filter((t) => t.doctor_id === d.id)
-        const ciro = mineAll.reduce((s, t) => s + (t.fee ?? 0), 0)
-        const maliyet = mineAll.reduce((s, t) => s + (t.cost ?? 0), 0)
-        const netKar = ciro - maliyet
-        const ciroMonth = mineAll
-          .filter((t) => t.treatment_date?.startsWith(monthKey))
-          .reduce((s, t) => s + (t.fee ?? 0), 0)
-        const model = d.payment_model
-        const komisyonHakedis = model === 'commission' || model === 'hybrid'
-          ? Math.round((netKar * (d.commission_rate_bps ?? 0)) / 10000)
-          : model === 'revenue' ? Math.round((ciro * (d.commission_rate_bps ?? 0)) / 10000)
-          : model === 'per_transaction' ? mineAll.filter((t) => t.status === 'done').length * (d.per_transaction_amount ?? 0)
-          : model === 'bonus' ? (d.bonus_amount ?? 0)
-          : model === 'guarantee' ? (d.guarantee_amount ?? 0)
-          : 0
-        const aylikMaas = model === 'salary' || model === 'hybrid' ? (d.monthly_salary ?? 0) : 0
-        const odenen = doctorPayments
-          .filter((p) => p.doctor_id === d.id)
-          .reduce((s, p) => s + p.amount, 0)
-        const odenenAy = doctorPayments
-          .filter((p) => p.doctor_id === d.id && p.payment_date?.startsWith(monthKey))
-          .reduce((s, p) => s + p.amount, 0)
-        return {
-          doctor: d,
-          model,
-          ciro,
-          ciroMonth,
-          maliyet,
-          netKar,
-          komisyonHakedis,
-          aylikMaas,
-          odenen,
-          odenenAy,
-          kasadaKalan: komisyonHakedis - odenen,
-          count: mineAll.length,
-        }
-      }),
-    [doctors, treatments, doctorPayments, monthKey]
-  )
+  // Hakediş sonrası net kâr: gelir − gider − hekimlere henüz ödenmemiş hakediş (tahakkuk)
+  const unpaidHakedis = hakedisByDoctor.reduce((s, h) => s + Math.max(h.kalan, 0), 0)
+  const netProfitAfterHakedis = netProfit - unpaidHakedis
 
   // Hakediş görünüm yetkisi: admin veya mesul müdür tüm hekimleri görür, diğerleri sadece kendini
+  // (Eski 'hakediş kasası' hesabı kaldırıldı: ekranda gösterilmiyordu ve kartlardan farklı formül kullanıyordu.)
   const canSeeAllHakedis = isAdmin || isMesulMudur
-  const visibleKasa = canSeeAllHakedis
-    ? hakedisKasa
-    : hakedisKasa.filter((r) => r.doctor.id === currentDoctorId)
+  const visibleDoctors = canSeeAllHakedis ? doctors : doctors.filter((d) => d.id === currentDoctorId)
 
   // Aktif borçlar özeti (vadesi geçmiş kontrol için)
   const activeDebts = initialDebts.filter((d) => d.status === 'active')
@@ -373,6 +331,7 @@ export default function FinanceClient({
             monthIncome={monthIncome}
             monthExpense={monthExpense}
             netProfit={netProfit}
+            netProfitAfterHakedis={netProfitAfterHakedis}
             totalHakedis={totalHakedis}
             totalDebt={totalDebt}
             overdueDebtCount={overdueDebts.length}
@@ -415,7 +374,7 @@ export default function FinanceClient({
         )}
         {tab === 'hakedis' && (
           <EarningsDashboard
-            doctors={visibleKasa.map((row) => row.doctor)}
+            doctors={visibleDoctors}
             doctorShares={doctorShares}
             treatments={treatments}
             patients={patients}

@@ -75,19 +75,44 @@ export default function EarningsDashboard({ doctors, doctorShares, treatments, p
   const [showAllPayments, setShowAllPayments] = useState(false)
   const [pending, begin] = useTransition()
   const selected = summaries.find((s) => s.doctor.id === selectedId) ?? summaries[0] ?? null
+  // Bakiye paneli: TÜM ZAMANLAR, hekimin iş payına göre. Toplam işlem, tahsil edilen ve kalan aynı kümeden hesaplanır
+  // (hastanın ödemeleri, tüm işleri üzerinden hekimlere iş payı oranında dağıtılır; fazla ödeme sayılmaz).
   const balanceInfo = useMemo(() => {
     if (!selected) return { total: 0, collected: 0, unpaid: 0, overdue: 0, dueToday: 0, delivered: 0 }
-    const mine = treatments.filter((t) => t.doctor_id === selected.doctor.id && t.treatment_date && activeMonthKeys.some(key=>t.treatment_date!.startsWith(key)))
-    const patientIds = new Set(mine.map((t) => t.patient_id).filter((id): id is number => id != null))
-    const total = mine.reduce((s, t) => s + (t.fee ?? 0), 0)
-    const collected = selected.details.reduce((s, r) => s + r.collected, 0)
+    const feeByPatient = new Map<number, number>()
+    for (const tr of treatments) if (tr.patient_id != null) feeByPatient.set(tr.patient_id, (feeByPatient.get(tr.patient_id) ?? 0) + (tr.fee ?? 0))
+    const paidByPatient = new Map<number, number>()
+    for (const tx of txs) if (tx.type === 'payment' && tx.patient_id != null) paidByPatient.set(tx.patient_id, (paidByPatient.get(tx.patient_id) ?? 0) + tx.amount)
+    const ratioOf = (pid: number) => {
+      const fee = feeByPatient.get(pid) ?? 0
+      return fee > 0 ? Math.min(1, (paidByPatient.get(pid) ?? 0) / fee) : 0
+    }
+    const mine = treatments.filter((tr) => tr.doctor_id === selected.doctor.id)
+    let total = 0, collected = 0, delivered = 0
+    const myFeeByPatient = new Map<number, number>()
+    for (const tr of mine) {
+      const fee = tr.fee ?? 0
+      const got = tr.patient_id != null ? Math.round(fee * ratioOf(tr.patient_id)) : 0
+      total += fee
+      collected += got
+      if (tr.status === 'done') delivered += fee - got
+      if (tr.patient_id != null) myFeeByPatient.set(tr.patient_id, (myFeeByPatient.get(tr.patient_id) ?? 0) + fee)
+    }
     const today = localDateValue()
-    const overdue = installments.filter((i) => i.patient_id && patientIds.has(i.patient_id) && !i.paid && i.due_date < today).reduce((s, i) => s + i.amount, 0)
-    const dueToday = installments.filter((i) => i.patient_id && patientIds.has(i.patient_id) && !i.paid && i.due_date === today).reduce((s, i) => s + i.amount, 0)
-    const deliveredTotal = mine.filter((t) => t.status === 'done').reduce((s, t) => s + (t.fee ?? 0), 0)
-    const deliveredCollected = selected.details.filter((r) => r.description === 'İşlem tamamlandı').reduce((s, r) => s + r.collected, 0)
-    return { total, collected, unpaid: Math.max(total - collected, 0), overdue, dueToday, delivered: Math.max(deliveredTotal - deliveredCollected, 0) }
-  }, [selected, treatments, installments, activeMonthKeys])
+    // Taksitler hastanın tamamı içindir; hekimin payı kadarı ona sayılır
+    const shareOf = (pid: number) => {
+      const all = feeByPatient.get(pid) ?? 0
+      return all > 0 ? (myFeeByPatient.get(pid) ?? 0) / all : 0
+    }
+    let overdue = 0, dueToday = 0
+    for (const i of installments) {
+      if (!i.patient_id || i.paid || !myFeeByPatient.has(i.patient_id)) continue
+      const part = Math.round(i.amount * shareOf(i.patient_id))
+      if (i.due_date < today) overdue += part
+      else if (i.due_date === today) dueToday += part
+    }
+    return { total, collected, unpaid: Math.max(total - collected, 0), overdue, dueToday, delivered: Math.max(delivered, 0) }
+  }, [selected, treatments, txs, installments])
   const fixedAmount = selected?.fixedAmount ?? 0
   const hasCommission = (selected?.doctor.commission_rate_bps ?? 0) > 0
   const guaranteeAmount = selected?.guaranteeAmount ?? 0

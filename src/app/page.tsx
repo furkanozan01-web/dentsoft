@@ -283,7 +283,7 @@ export default async function DashboardPage() {
       )
     : null
 
-  const hakedisLabel = 'Hakedişim'
+  const hakedisLabel = 'Kalan Hakedişim'
   const hakedisValue = Math.max(ownSummary?.remaining ?? 0, 0)
 
   const activePatientIds = new Set(((activePatientsRaw ?? []) as { id: number }[]).map((p) => p.id))
@@ -423,7 +423,7 @@ export default async function DashboardPage() {
               href="/finance?tab=hakedis"
               label={hakedisLabel}
               value={`₺${fmt(hakedisValue)}`}
-              detail={currentDoctor ? 'Bu ay kişisel net hakedişiniz' : 'Hekim hesabıyla eşleşme yok'}
+              detail={currentDoctor ? `Bu ay hakediş ₺${fmt(ownSummary?.entitlement ?? 0)} − ödenen ₺${fmt(ownSummary?.paid ?? 0)}` : 'Hekim hesabıyla eşleşme yok'}
               tone="purple"
               icon={<IconLiraTile />}
             />

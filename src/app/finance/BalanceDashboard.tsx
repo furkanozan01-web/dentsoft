@@ -13,6 +13,7 @@ interface BalanceRow {
   name: string
   createdAt: string
   doctorId: number | null
+  doctorIds: number[]
   doctor: string
   clinic: string
   startDate: string | null
@@ -88,6 +89,12 @@ function buildRows({ patients, doctors, treatments, txs, installments, clinicNam
     const daysSincePayment = dayDiff(lastPaymentDate ?? startDate, today)
     const latestTreatment = [...patientTreatments].sort((a, b) => (b.treatment_date ?? '').localeCompare(a.treatment_date ?? ''))[0]
     const doctorId = latestTreatment?.doctor_id ?? patientTreatments.find((t) => t.doctor_id)?.doctor_id ?? null
+    // Çok hekimli hastada bakiye tek hekime yazılmaz: işi yapan tüm hekimler, iş tutarı sırasıyla listelenir
+    const feeByDoctor = new Map<number, number>()
+    for (const t of patientTreatments) if (t.doctor_id) feeByDoctor.set(t.doctor_id, (feeByDoctor.get(t.doctor_id) ?? 0) + (t.fee ?? 0))
+    const doctorNames = feeByDoctor.size
+      ? [...feeByDoctor.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => doctorMap.get(id) ?? `Hekim #${id}`).join(', ')
+      : 'Atanmamış'
     const completed = patientTreatments.length > 0 && patientTreatments.every((t) => t.status === 'done')
     const inProgress = patientTreatments.some((t) => t.status === 'in_progress')
     const delivery: BalanceRow['delivery'] = completed ? 'Teslim edildi' : inProgress ? 'Devam ediyor' : 'Planlandı'
@@ -134,7 +141,7 @@ function buildRows({ patients, doctors, treatments, txs, installments, clinicNam
 
     return {
       id: patient.id, name: `${patient.name} ${patient.surname}`, createdAt: patient.created_at,
-      doctorId, doctor: doctorId ? doctorMap.get(doctorId) ?? `Hekim #${doctorId}` : 'Atanmamış',
+      doctorId, doctorIds: [...feeByDoctor.keys()], doctor: doctorNames,
       clinic: clinicName, startDate, dueDate, lastPaymentDate, owed, paid, balance,
       installmentText: patientInstallments.length ? `${patientInstallments.length} açık • ${money(patientInstallments.reduce((s, i) => s + i.amount, 0))}` : 'Taksit yok',
       nextInstallment, delivery, delayDays, daysSincePayment, risk, score, description, recommendation,
@@ -159,7 +166,7 @@ export default function BalanceDashboard({ patients, doctors, treatments, txs, i
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [direction, setDirection] = useState<SortDirection>('asc')
   const rows = useMemo(() => buildRows({ patients, doctors, treatments, txs, installments, clinicName, today }), [patients, doctors, treatments, txs, installments, clinicName, today])
-  const filtered = rows.filter((row) => (doctorFilter === 'all' || row.doctorId === Number(doctorFilter)) && (clinicFilter === 'all' || row.clinic === clinicFilter) && (riskFilter === 'all' || row.risk === riskFilter))
+  const filtered = rows.filter((row) => (doctorFilter === 'all' || row.doctorIds.includes(Number(doctorFilter))) && (clinicFilter === 'all' || row.clinic === clinicFilter) && (riskFilter === 'all' || row.risk === riskFilter))
   const sorted = [...filtered].sort((a, b) => {
     const av = sortKey === 'risk' ? RISK_ORDER[a.risk] : sortKey === 'installment' ? (a.nextInstallment ?? '') : sortKey === 'delay' ? a.delayDays : sortKey === 'delivery' ? a.delivery : a[sortKey]
     const bv = sortKey === 'risk' ? RISK_ORDER[b.risk] : sortKey === 'installment' ? (b.nextInstallment ?? '') : sortKey === 'delay' ? b.delayDays : sortKey === 'delivery' ? b.delivery : b[sortKey]
