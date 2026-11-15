@@ -868,7 +868,7 @@ export async function updateTariffItemColor(itemId: number, color: string | null
   return { success: true }
 }
 
-export async function updateTariffItemDetails(itemId: number, input: { name: string; price: number; visualSchema: string }): Promise<R> {
+export async function updateTariffItemDetails(itemId: number, input: { name: string; price: number; visualSchema: string; cost?: number }): Promise<R> {
   const ctx = await getCtx()
   if (!ctx) return { error: 'Yetkisiz erişim' }
   const adminErr = requireAdmin(ctx)
@@ -877,6 +877,8 @@ export async function updateTariffItemDetails(itemId: number, input: { name: str
   if (!Number.isInteger(itemId) || itemId <= 0) return { error: 'Geçersiz tarife kalemi' }
   if (!name) return { error: 'Tedavi adı zorunludur' }
   if (!Number.isFinite(input.price) || input.price < 0) return { error: 'Geçerli bir fiyat girin' }
+  const cost = Math.round(input.cost ?? 0)
+  if (!Number.isFinite(cost) || cost < 0) return { error: 'Geçerli bir masraf girin' }
   const validSchemas = ['exam','cleaning','filling','root-canal','crown','porcelain','zirconium','emax','extraction','surgery','implant','bone-graft','sinus-lift','whitening','orthodontics','prosthesis','removable','total-prosthesis','night-guard','smile','pedo','periodontal']
   const selectedSchemas = input.visualSchema.split('+').filter(Boolean)
   if (!selectedSchemas.length || selectedSchemas.some((schema) => !validSchemas.includes(schema))) return { error: 'Geçersiz tedavi şeması' }
@@ -884,6 +886,7 @@ export async function updateTariffItemDetails(itemId: number, input: { name: str
   const { error } = await ctx.supabase.from('tariffs').update({
     treatment_name: name,
     price: Math.round(input.price),
+    cost,
     visual_schema: input.visualSchema,
   }).eq('id', itemId).eq('clinic_id', ctx.clinicId)
   if (error) return { error: error.message }
@@ -913,6 +916,7 @@ export async function addTariffItemToProfile(_prev: R, formData: FormData): Prom
   const branch_id = Number.isInteger(branchIdRaw) && branchIdRaw > 0 ? branchIdRaw : null
   const priceStr = cleanMoney(formData.get('price') as string)
   const price = Math.round(parseFloat(priceStr || '0') * 100)
+  const cost = Math.max(0, Math.round(parseFloat(cleanMoney(formData.get('cost') as string) || '0') * 100))
 
   if (!profileId || !treatment_name || !category) return { error: 'Profil, işlem adı ve kategori zorunludur' }
 
@@ -933,6 +937,7 @@ export async function addTariffItemToProfile(_prev: R, formData: FormData): Prom
     category,
     treatment_code,
     price,
+    cost,
     currency,
     color,
     visual_schema,

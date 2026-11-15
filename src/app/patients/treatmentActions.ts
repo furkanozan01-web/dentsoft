@@ -20,7 +20,7 @@ export async function addTreatment(input: {
   // Tarifeyi klinik kapsamında doğrula ve fiyatını al
   const { data: tariff, error: tErr } = await supabase
     .from('tariffs')
-    .select('treatment_name, category, price, visual_schema')
+    .select('treatment_name, category, price, visual_schema, cost')
     .eq('id', input.tariffId)
     .eq('clinic_id', clinicId)
     .single()
@@ -76,6 +76,7 @@ export async function addTreatment(input: {
     category: tariff.category,
     fee: tariff.price,
     original_fee: tariff.price,
+    cost: tariff.cost ?? 0, // tarifedeki masraf (lab, malzeme): komisyon masraf düşüldükten sonra hesaplanır
     is_closed: false,
     treatment_date: input.treatmentDate ?? localDateValue(),
     // Tedavi sekmesine alınan işlem yapılmış sayılır (planlama/faz işlemleri ayrı tablolarda tutulur)

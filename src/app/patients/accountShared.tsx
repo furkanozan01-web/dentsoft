@@ -29,15 +29,18 @@ export function FinanceLine({
   value,
   valueClassName = 'text-[#0F2B3D]',
   strong = false,
+  sub,
 }: {
   label: string
   value: string
   valueClassName?: string
   strong?: boolean
+  /** Etiketin altında küçük not (örn. masraf) */
+  sub?: string
 }) {
   return (
     <div className={`flex items-center justify-between gap-4 border-b border-[#EEF2F6] px-4 py-3 last:border-0 ${strong ? 'bg-[#FAFBFC]' : 'bg-white'}`}>
-      <span className={`text-sm ${strong ? 'font-black text-[#142536]' : 'font-semibold text-slate-500'}`}>{label}</span>
+      <span className={`text-sm ${strong ? 'font-black text-[#142536]' : 'font-semibold text-slate-500'}`}>{label}{sub && <span className="mt-0.5 block text-[11px] font-semibold text-slate-400">{sub}</span>}</span>
       <span className={`text-sm font-black ${valueClassName}`}>{value}</span>
     </div>
   )

@@ -139,6 +139,8 @@ export interface Tariff {
   vat_included: boolean
   branch_id: number | null
   price_updated_at: string
+  /** Tedavi masrafı (kuruş) */
+  cost?: number | null
 }
 
 export interface TariffPriceHistory {

@@ -61,7 +61,7 @@ export default async function SettingsPage() {
       .order('created_at'),
     supabase
       .from('tariffs')
-      .select('id, treatment_name, category, price, profile_id, is_active, currency, treatment_code, duration_minutes, color, visual_schema, application_region, vat_rate, vat_included, branch_id, price_updated_at')
+      .select('id, treatment_name, category, price, profile_id, is_active, currency, treatment_code, duration_minutes, color, visual_schema, application_region, vat_rate, vat_included, branch_id, price_updated_at, cost')
       .eq('clinic_id', clinicId)
       .order('category')
       .order('treatment_name'),
@@ -110,6 +110,7 @@ export default async function SettingsPage() {
       vat_included: true,
       branch_id: null,
       price_updated_at: '',
+      cost: 0,
     }))
   }
 

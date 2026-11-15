@@ -56,6 +56,7 @@ export default function PatientsClient({
   tariffProfiles,
   clinic,
   clinicId,
+  userRole = '',
   branches = [],
   ongoingPatientIds = [],
   treatmentSummaries = [],
@@ -66,6 +67,7 @@ export default function PatientsClient({
   tariffProfiles: TariffProfile[]
   clinic: ClinicInfo | null
   clinicId: number
+  userRole?: string
   branches?: { id: number; address: string | null; phone: string | null }[]
   ongoingPatientIds?: number[]
   treatmentSummaries?: PatientTreatmentSummary[]
@@ -199,7 +201,7 @@ export default function PatientsClient({
               .order('transaction_date', { ascending: false }),
             supabase
               .from('treatments')
-              .select('id, treatment_date, treatment_name, fee, original_fee, is_closed, status, tooth, doctor:doctors(name), tariff:tariffs(visual_schema)')
+              .select('id, treatment_date, treatment_name, fee, original_fee, cost, is_closed, status, tooth, doctor:doctors(name), tariff:tariffs(visual_schema)')
               .eq('clinic_id', clinicId)
               .eq('patient_id', patientId)
               .neq('status', 'cancelled')
@@ -558,6 +560,7 @@ export default function PatientsClient({
             loading={loadingFinance}
             onAddPayment={() => setShowPaymentModal(true)}
             onChanged={() => loadFinancials(selected.id)}
+            showCost={['bashekim', 'responsible_manager', 'hekim'].includes(userRole)}
           />
         )}
 

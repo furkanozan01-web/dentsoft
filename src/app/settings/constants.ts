@@ -28,7 +28,6 @@ export const PAYMENT_MODELS: { key: string; label: string; desc: string }[] = [
   { key: 'commission', label: 'Komisyon', desc: 'Ciro üzerinden yüzde' },
   { key: 'hybrid', label: 'Karma', desc: 'Maaş + komisyon' },
   { key: 'guarantee', label: 'Garantör Sistem', desc: 'Aylık garanti tutarı' },
-  { key: 'bonus', label: 'Prim Bazlı', desc: 'Aylık performans primi' },
   { key: 'per_transaction', label: 'İşlem Bazlı', desc: 'Tamamlanan işlem başına tutar' },
   { key: 'revenue', label: 'Ciro Bazlı', desc: 'Brüt ciro üzerinden yüzde' },
 ]

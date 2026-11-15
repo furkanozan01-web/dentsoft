@@ -54,6 +54,8 @@ export interface Treatment {
   treatment_name: string
   fee: number
   original_fee: number | null
+  /** Tedavi masrafı (kuruş) — yalnızca hekim/yönetici görür */
+  cost?: number | null
   is_closed: boolean
   status: string
   tooth: number | null
@@ -115,6 +117,8 @@ export interface TariffOption {
   profile_id: number | null
   is_active: boolean | null
   visual_schema: string | null
+  /** Tedavi masrafı (kuruş) */
+  cost?: number | null
 }
 
 export interface TariffProfile {

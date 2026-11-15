@@ -52,8 +52,7 @@ export function DoctorEditor({
   const [rateStr, setRateStr] = useState(
     doctor?.commission_rate_bps ? String(doctor.commission_rate_bps / 100) : ''
   )
-  const [bonusStr, setBonusStr] = useState(doctor?.bonus_amount ? kurusToInput(doctor.bonus_amount) : '')
-  const [guaranteeActive, setGuaranteeActive] = useState(doctor?.guarantee_active ?? false)
+    const [guaranteeActive, setGuaranteeActive] = useState(doctor?.guarantee_active ?? false)
   const [guaranteeAmountStr, setGuaranteeAmountStr] = useState(doctor?.guarantee_amount ? kurusToInput(doctor.guarantee_amount) : '')
   const [guaranteePeriod, setGuaranteePeriod] = useState(doctor?.guarantee_period ?? 'monthly')
   const [guaranteeMethod, setGuaranteeMethod] = useState(doctor?.guarantee_method ?? 'minimum_total')
@@ -98,7 +97,7 @@ export function DoctorEditor({
       monthly_salary: salaryStr ? parseToKurus(salaryStr) : 0,
       commission_rate_bps: rateBps,
       guarantee_amount: guaranteeActive && guaranteeAmountStr ? parseToKurus(guaranteeAmountStr) : 0,
-      bonus_amount: bonusStr ? parseToKurus(bonusStr) : 0,
+      bonus_amount: 0, // prim kaldırıldı
       per_transaction_amount: null,
       guarantee_active: guaranteeActive,
       guarantee_period: guaranteePeriod,
@@ -229,10 +228,9 @@ export function DoctorEditor({
       <section>
         <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Esnek Hakediş Ayarları</h3>
         <p className="mb-4 text-xs font-semibold text-slate-400">Sistem girilen tutarlara göre sabit, komisyon veya karma modeli otomatik belirler.</p>
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4"><p className="text-xs font-black uppercase text-emerald-700">Sabit Ücret</p><label className="mt-3 block text-xs font-bold text-slate-500">Aylık tutar (₺)<input value={salaryStr} onChange={(e) => setSalaryStr(e.target.value)} placeholder="0" className={`mt-1.5 ${inputCls}`} /></label></div>
-          <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4"><p className="text-xs font-black uppercase text-blue-700">Komisyon</p><label className="mt-3 block text-xs font-bold text-slate-500">Tahsilat oranı: %{rateStr || '0'}<input type="range" min="0" max="100" step="0.5" value={rateStr || '0'} onChange={(e) => setRateStr(e.target.value)} className="mt-3 w-full accent-blue-600" /></label><input value={rateStr} onChange={(e) => setRateStr(e.target.value)} placeholder="0" className={`mt-2 ${inputCls}`} /></div>
-          <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4"><p className="text-xs font-black uppercase text-amber-700">Prim</p><label className="mt-3 block text-xs font-bold text-slate-500">Aylık prim (₺)<input value={bonusStr} onChange={(e) => setBonusStr(e.target.value)} placeholder="0" className={`mt-1.5 ${inputCls}`} /></label></div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4"><p className="text-xs font-black uppercase text-emerald-700">Sabit Maaş</p><label className="mt-3 block text-xs font-bold text-slate-500">Aylık tutar (₺)<input value={salaryStr} onChange={(e) => setSalaryStr(e.target.value)} placeholder="0" className={`mt-1.5 ${inputCls}`} /></label><p className="mt-2 text-[11px] font-semibold text-slate-400">Her ay belirlenen günde hekimin hesabına alacak olarak yazılır.</p></div>
+          <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4"><p className="text-xs font-black uppercase text-blue-700">Komisyon</p><label className="mt-3 block text-xs font-bold text-slate-500">Komisyon oranı: %{rateStr || '0'}<input type="range" min="0" max="100" step="0.5" value={rateStr || '0'} onChange={(e) => setRateStr(e.target.value)} className="mt-3 w-full accent-blue-600" /></label><input value={rateStr} onChange={(e) => setRateStr(e.target.value)} placeholder="0" className={`mt-2 ${inputCls}`} /><p className="mt-2 text-[11px] font-semibold text-slate-400">Yapılan işten masraflar (lab, malzeme) düşülür; kalan kâr üzerinden bu oranda komisyon verilir. Masraf, Ayarlar → Tarife bölümünde tedavi başına girilir.</p></div>
         </div>
 
         <div className="mt-4 rounded-2xl border border-violet-100 bg-violet-50/60 p-4">

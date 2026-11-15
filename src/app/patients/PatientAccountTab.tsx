@@ -31,6 +31,7 @@ function HesapTab({
   loading,
   onAddPayment,
   onChanged,
+  showCost = false,
 }: {
   patient: Patient
   transactions: Transaction[]
@@ -41,6 +42,8 @@ function HesapTab({
   loading: boolean
   onAddPayment: () => void
   onChanged: () => void
+  /** Tedavi masraflarını göster (hekim/yönetici) */
+  showCost?: boolean
 }) {
   const confirm = useConfirm()
   const [delPending, startDel] = useTransition()
@@ -52,6 +55,7 @@ function HesapTab({
   const visibleTreatments = showClosed ? treatments : treatments.filter((t) => !t.is_closed)
 
   const totalOwed = treatments.reduce((s, t) => s + (t.fee ?? 0), 0)
+  const totalCost = treatments.reduce((s, t) => s + (t.cost ?? 0), 0)
   const payments = transactions.filter((t) => t.type === 'payment')
   const totalPaid = payments.reduce((s, t) => s + (t.amount ?? 0), 0)
   const balance = totalOwed - totalPaid
@@ -138,9 +142,15 @@ function HesapTab({
             ) : (
               <>
                 {visibleTreatments.map((tr) => (
-                  <FinanceLine key={tr.id} label={tr.treatment_name} value={`₺${formatAmount(tr.fee)}`} />
+                  <FinanceLine key={tr.id} label={tr.treatment_name} value={`₺${formatAmount(tr.fee)}`} sub={showCost && (tr.cost ?? 0) > 0 ? `Masraf ₺${formatAmount(tr.cost ?? 0)}` : undefined} />
                 ))}
                 <FinanceLine label="Toplam Ücret" value={`₺${formatAmount(totalOwed)}`} strong />
+                {showCost && totalCost > 0 && (
+                  <>
+                    <FinanceLine label="Toplam Masraf (lab, malzeme)" value={`₺${formatAmount(totalCost)}`} />
+                    <FinanceLine label="Kâr (ücret − masraf)" value={`₺${formatAmount(totalOwed - totalCost)}`} strong />
+                  </>
+                )}
               </>
             )}
           </div>

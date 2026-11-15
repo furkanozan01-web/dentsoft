@@ -129,7 +129,6 @@ export default function EarningsDashboard({ doctors, doctorShares, treatments, p
         </div>
         <div className="grid grid-cols-2 gap-3 text-sm lg:grid-cols-3">
           <TopInfo label="Sabit maaş" value={money(fixedAmount)} />
-          <TopInfo label="Prim" value={money(selected.bonus)} />
           <TopInfo label="Dağıtılan Kâr Payı" value={money(selected.profitShare)} />
         </div>
       </div>

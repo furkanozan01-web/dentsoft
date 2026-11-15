@@ -146,7 +146,8 @@ export function computeSummary(
   const completedTreatments = periodTreatments.filter((t) => t.status === 'done')
   const completedCount = completedTreatments.length
   const rate = doctor.commission_rate_bps ?? 0
-  const bonusPool = doctor.bonus_amount ?? 0
+  // Prim kaldırıldı: hekim üç kalemden alır: sabit maaş, kâr payı (hisse), komisyon. Komisyon masraf düşüldükten sonraki kâr üzerinden hesaplanır.
+  const bonusPool = 0
   const baseBonus = completedCount > 0 ? Math.floor(bonusPool / completedCount) : 0
   const bonusRemainder = completedCount > 0 ? bonusPool % completedCount : 0
 
@@ -178,7 +179,9 @@ export function computeSummary(
     const collected = Math.min(treatment.fee ?? 0, exactCollected + proportionalCollected)
 
     const gross = collected
-    const cost = treatment.cost ?? 0
+    // Masraf (lab, malzeme): tahsil edilen oranda düşülür; komisyon kalan kâr üzerinden hesaplanır
+    const treatmentFee = treatment.fee ?? 0
+    const cost = treatmentFee > 0 ? Math.round((treatment.cost ?? 0) * (collected / treatmentFee)) : 0
     const net = Math.max(gross - cost, 0)
     const completedIndex = treatment.status === 'done'
       ? completedTreatments.findIndex((item) => item.id === treatment.id)
@@ -188,7 +191,7 @@ export function computeSummary(
         ? baseBonus + (completedIndex < bonusRemainder ? 1 : 0)
         : 0
 
-    const earning = rate > 0 ? Math.round((gross * rate) / 10000) : 0
+    const earning = rate > 0 ? Math.round((net * rate) / 10000) : 0
 
     const relevantPayments = [...exactPayments, ...unlinkedPayments]
     const latestCollection = relevantPayments.sort((a, b) =>
@@ -234,7 +237,7 @@ export function computeSummary(
     monthKey === currentMonth && (!doctor.salary_day || new Date().getDate() >= doctor.salary_day)
   )
   const fixedAmount = fixedDue ? (doctor.monthly_salary ?? 0) : 0
-  const periodBonus = fixedDue ? (doctor.bonus_amount ?? 0) : 0
+  const periodBonus = 0 // prim yok
   const calculatedBeforeGuarantee = fixedAmount + variable + periodBonus
   const guaranteeBase = doctor.guarantee_method === 'commission_only'
     ? variable + periodBonus

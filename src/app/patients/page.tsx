@@ -61,7 +61,7 @@ export default async function PatientsPage() {
       .eq('clinic_id', clinicId),
     supabase
       .from('tariffs')
-      .select('id, treatment_name, category, price, profile_id, is_active, visual_schema')
+      .select('id, treatment_name, category, price, profile_id, is_active, visual_schema, cost')
       .eq('clinic_id', clinicId)
       .order('category')
       .order('treatment_name'),
@@ -106,6 +106,7 @@ export default async function PatientsPage() {
           tariffProfiles={(tariffProfiles ?? []) as TariffProfile[]}
           clinic={(clinic ?? null) as ClinicInfo | null}
           clinicId={clinicId}
+          userRole={profile.role ?? ''}
           branches={(branches ?? []) as { id: number; address: string | null; phone: string | null }[]}
           ongoingPatientIds={Array.from(new Set(((ongoingTreatments ?? []) as { patient_id: number | null }[]).map((t) => t.patient_id).filter((id): id is number => id !== null)))}
           treatmentSummaries={(treatmentSummaries ?? []) as PatientTreatmentSummary[]}
