@@ -53,6 +53,31 @@ function periodKey(dateValue: string, period: Period) {
   return { key: dateValue, label: dateText(dateValue) }
 }
 
+/** Seçilen dönemin tarih aralığı: günlük = o gün, haftalık = pazartesi-pazar, aylık = ayın tamamı, yıllık = yılın tamamı */
+function rangeFor(period: Period, anchor: string): { start: string; end: string } {
+  const d = new Date(`${anchor}T12:00:00`)
+  if (period === 'daily') return { start: anchor, end: anchor }
+  if (period === 'weekly') {
+    const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
+    return { start: localDateValue(mon), end: localDateValue(sun) }
+  }
+  if (period === 'monthly') {
+    return { start: localDateValue(new Date(d.getFullYear(), d.getMonth(), 1)), end: localDateValue(new Date(d.getFullYear(), d.getMonth() + 1, 0)) }
+  }
+  return { start: `${d.getFullYear()}-01-01`, end: `${d.getFullYear()}-12-31` }
+}
+function shiftAnchor(period: Period, anchor: string, dir: -1 | 1): string {
+  const d = new Date(`${anchor}T12:00:00`)
+  if (period === 'daily') d.setDate(d.getDate() + dir)
+  else if (period === 'weekly') d.setDate(d.getDate() + 7 * dir)
+  else if (period === 'monthly') d.setMonth(d.getMonth() + dir, 1)
+  else d.setFullYear(d.getFullYear() + dir, 0, 1)
+  return localDateValue(d)
+}
+// Tabloda ve grafikte satırlar, seçilen dönemden bir kademe ince gruplanır (aylık görünümde haftalar, yıllıkta aylar…)
+const GROUP_BY: Record<Period, Period> = { daily: 'daily', weekly: 'daily', monthly: 'weekly', yearly: 'monthly' }
+
 function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
   if (!active || !payload?.length) return null
   const income = payload.find((p) => p.name === 'Gelir')?.value ?? 0
@@ -88,6 +113,15 @@ export default function LedgerDashboard({
   const [start, setStart] = useState(initialStart)
   const [end, setEnd] = useState(initialEnd)
   const [period, setPeriod] = useState<Period>('monthly')
+  // Dönem düğmeleri tarih aralığını da değiştirir: Günlük = bugün, Haftalık = bu hafta, Aylık = bu ay, Yıllık = bu yıl
+  const choosePeriod = (p: Period) => {
+    const r = rangeFor(p, localDateValue())
+    setPeriod(p); setStart(r.start); setEnd(r.end)
+  }
+  const movePeriod = (dir: -1 | 1) => {
+    const r = rangeFor(period, shiftAnchor(period, start, dir))
+    setStart(r.start); setEnd(r.end)
+  }
   // Trend grafiği bitiş yılının tamamını gösterir; bu yüzden hem başlangıç hem yıl başı yüklü olmalı.
   useEffect(() => {
     const yearStart = `${end.slice(0, 4)}-01-01`
@@ -113,7 +147,7 @@ export default function LedgerDashboard({
   const trend = useMemo(() => {
     const buckets = new Map<string, { label: string; Gelir: number; Gider: number }>()
     filtered.forEach((tx) => {
-      const p = periodKey(tx.transaction_date, period)
+      const p = periodKey(tx.transaction_date, GROUP_BY[period])
       const item = buckets.get(p.key) ?? { label: p.label, Gelir: 0, Gider: 0 }
       if (tx.type === 'payment') item.Gelir += tx.amount
       if (tx.type === 'expense') item.Gider += tx.amount
@@ -125,7 +159,7 @@ export default function LedgerDashboard({
   const incomeRows = useMemo(() => {
     const buckets = new Map<string, { label: string; total: number }>()
     income.forEach((tx) => {
-      const p = periodKey(tx.transaction_date, period)
+      const p = periodKey(tx.transaction_date, GROUP_BY[period])
       const item = buckets.get(p.key) ?? { label: p.label, total: 0 }
       item.total += tx.amount
       buckets.set(p.key, item)
@@ -135,7 +169,7 @@ export default function LedgerDashboard({
   const expenseRows = useMemo(() => {
     const buckets = new Map<string, { label: string; total: number }>()
     expense.forEach((tx) => {
-      const p = periodKey(tx.transaction_date, period)
+      const p = periodKey(tx.transaction_date, GROUP_BY[period])
       const item = buckets.get(p.key) ?? { label: p.label, total: 0 }
       item.total += tx.amount
       buckets.set(p.key, item)
@@ -181,12 +215,16 @@ export default function LedgerDashboard({
           <DateField label="Bitiş" value={end} onChange={setEnd} />
           {loadingOlder && <span className="pb-2 text-xs font-bold text-slate-400">Eski dönem yükleniyor…</span>}
         </div>
+        <div className="flex items-center gap-2">
+        <button type="button" onClick={() => movePeriod(-1)} className="h-9 w-9 rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-500 hover:bg-slate-50" aria-label="Önceki dönem">‹</button>
+        <button type="button" onClick={() => movePeriod(1)} className="h-9 w-9 rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-500 hover:bg-slate-50" aria-label="Sonraki dönem">›</button>
         <div className="flex rounded-xl bg-slate-100 p-1">
           {(Object.keys(PERIOD_LABEL) as Period[]).map((p) => (
-            <button key={p} onClick={() => setPeriod(p)} className={`rounded-lg px-3 py-1.5 text-[11px] font-black ${period === p ? 'bg-white text-[#0F766E] shadow-sm' : 'text-slate-400'}`}>
+            <button key={p} onClick={() => choosePeriod(p)} className={`rounded-lg px-3 py-1.5 text-[11px] font-black ${period === p ? 'bg-white text-[#0F766E] shadow-sm' : 'text-slate-400'}`}>
               {PERIOD_LABEL[p]}
             </button>
           ))}
+        </div>
         </div>
       </div>
 
@@ -211,7 +249,7 @@ export default function LedgerDashboard({
         <ChartCard title="Aylara Göre Gelir-Gider" subtitle={`${end.slice(0, 4)} yılı aylık karşılaştırması`}>
           <ResponsiveContainer width="100%" height={310}><BarChart data={monthly} margin={{ left: 8, right: 8 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EEF2F6" /><XAxis dataKey="ay" tick={{ fontSize: 11 }} /><YAxis tickFormatter={(v) => `${Math.round(v / 100000)}B`} tick={{ fontSize: 10 }} /><Tooltip content={<ChartTooltip />} /><Legend /><Bar name="Gelir" dataKey="Gelir" fill="#22C55E" radius={[6, 6, 0, 0]} /><Bar name="Gider" dataKey="Gider" fill="#EF4444" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer>
         </ChartCard>
-        <ChartCard title="Gelir-Gider Eğilimi" subtitle="Seçilen aralığın dönemsel değişimi" action={<div className="flex rounded-xl bg-slate-100 p-1">{(Object.keys(PERIOD_LABEL) as Period[]).map((p) => <button key={p} onClick={() => setPeriod(p)} className={`rounded-lg px-2.5 py-1.5 text-[11px] font-black ${period === p ? 'bg-white text-[#0F766E] shadow-sm' : 'text-slate-400'}`}>{PERIOD_LABEL[p]}</button>)}</div>}>
+        <ChartCard title="Gelir-Gider Eğilimi" subtitle="Seçilen aralığın dönemsel değişimi" action={<div className="flex rounded-xl bg-slate-100 p-1">{(Object.keys(PERIOD_LABEL) as Period[]).map((p) => <button key={p} onClick={() => choosePeriod(p)} className={`rounded-lg px-2.5 py-1.5 text-[11px] font-black ${period === p ? 'bg-white text-[#0F766E] shadow-sm' : 'text-slate-400'}`}>{PERIOD_LABEL[p]}</button>)}</div>}>
           <ResponsiveContainer width="100%" height={310}><LineChart data={trend} margin={{ left: 8, right: 8 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EEF2F6" /><XAxis dataKey="label" tick={{ fontSize: 10 }} /><YAxis tickFormatter={(v) => `${Math.round(v / 100000)}B`} tick={{ fontSize: 10 }} /><Tooltip content={<ChartTooltip />} /><Legend /><Line name="Gelir" dataKey="Gelir" stroke="#22C55E" strokeWidth={3} dot={{ r: 3 }} /><Line name="Gider" dataKey="Gider" stroke="#EF4444" strokeWidth={3} dot={{ r: 3 }} /></LineChart></ResponsiveContainer>
         </ChartCard>
       </div>
