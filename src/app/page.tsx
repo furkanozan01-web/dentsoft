@@ -165,7 +165,7 @@ export default async function DashboardPage() {
       .eq('clinic_id', clinicId),
     supabase
       .from('transactions')
-      .select('transaction_date, amount, type, patient_id, treatment_id, method, branch_id')
+      .select('transaction_date, amount, type, patient_id, treatment_id, method, branch_id, invoice_no, invoice_amount, invoice_sent_at, invoice_vat_rate')
       .eq('clinic_id', clinicId)
       // Ay sonuna kadar tüm işlemler: önceki aylardaki ödemeler fazla ödeme (alacak) sınırı için gerekir
       .lt('transaction_date', nextMonthStartISO),

@@ -43,6 +43,9 @@ export interface FinTx {
   original_currency: string | null
   original_amount: number | null
   exchange_rate: number | null
+  invoice_amount?: number | null
+  invoice_sent_at?: string | null
+  invoice_vat_rate?: number | null
 }
 export interface FinTreatment {
   id: number
@@ -187,6 +190,7 @@ export default function FinanceClient({
   partnerServices,
   profitByMonth,
   kasaTotals,
+  kasaMethods,
   years,
   windowStart,
   branches,
@@ -208,6 +212,7 @@ export default function FinanceClient({
   partnerServices: PartnerService[]
   profitByMonth: Record<string, number>
   kasaTotals: Record<string, { income: number; expense: number }>
+  kasaMethods: Record<string, Record<string, { income: number; expense: number }>>
   years: number[]
   windowStart: string
   branches: FinBranch[]
@@ -360,6 +365,7 @@ export default function FinanceClient({
             patients={patients}
             partners={initialPartners}
             debts={initialDebts}
+            branches={branches}
             initialStart={`${monthKey}-01`}
             initialEnd={localDateValue(new Date(year, month + 1, 0))}
             onNeedFrom={ensureLoaded}
@@ -385,6 +391,7 @@ export default function FinanceClient({
           <EarningsDashboard
             doctors={visibleDoctors}
             doctorShares={doctorShares}
+            branches={branches}
             treatments={treatments}
             patients={patients}
             txs={txs}
@@ -406,6 +413,7 @@ export default function FinanceClient({
             branches={branches}
             txs={windowTxs}
             totals={kasaTotals}
+            methodTotals={kasaMethods}
             doctorShares={doctorShares}
             doctors={doctors}
             onChanged={() => router.refresh()}

@@ -329,6 +329,10 @@ export async function addPaymentWithCurrency(
         transaction_date: txDate,
         description: `${partnerName} üzerinden ödeme — Hasta: ${patientName}`,
         partner_id: params.partnerId,
+        // Defterde "Firma Ödemesi" olarak görünsün ve firmanın ödeme geçmişine yazılsın
+        category: 'Firma Ödemesi',
+        source_type: 'company_payment',
+        payment_status: 'odendi',
         linked_transaction_id: incomeTx.id,
       })
       .select('id')

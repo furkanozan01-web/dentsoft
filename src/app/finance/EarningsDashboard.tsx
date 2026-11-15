@@ -5,7 +5,8 @@ import { toast } from 'sonner'
 import { localDateValue } from '@/lib/format'
 import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
 import { addDoctorPayment, deleteDoctorPayment } from './actions'
-import type { DoctorPayment, FinDoctor, FinDoctorShare, FinInstallment, FinPatient, FinTreatment, FinTx } from './FinanceClient'
+import type { DoctorPayment, FinBranch, FinDoctor, FinDoctorShare, FinInstallment, FinPatient, FinTreatment, FinTx } from './FinanceClient'
+import ProfitShareCard from './ProfitShareCard'
 import { computeRange, computeReceivable, type DoctorSummary } from '@/lib/finance/hakedis'
 
 const MODEL_LABEL: Record<string, string> = {
@@ -18,9 +19,10 @@ const METHOD_LABEL: Record<string, string> = { cash: 'Nakit / Kasa', transfer: '
 function money(value: number) { return `₺${(value / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }
 function dateText(value: string | null) { return value ? new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString('tr-TR') : '—' }
 
-export default function EarningsDashboard({ doctors, doctorShares, treatments, patients, txs, payments, installments, vatBps, monthKey, canSeeAll, canManagePayments, onNeedFrom, currentDoctorId, onChanged, onPatientClick }: {
+export default function EarningsDashboard({ doctors, doctorShares, branches, profitByMonth, treatments, patients, txs, payments, installments, vatBps, monthKey, canSeeAll, canManagePayments, onNeedFrom, currentDoctorId, onChanged, onPatientClick }: {
   doctors: FinDoctor[]
   doctorShares: FinDoctorShare[]
+  branches: FinBranch[]
   treatments: FinTreatment[]
   patients: FinPatient[]
   txs: FinTx[]
@@ -174,6 +176,8 @@ export default function EarningsDashboard({ doctors, doctorShares, treatments, p
         </div>
       </div>
     </section>
+
+    {canSeeAll && canManagePayments && <ProfitShareCard branches={branches} doctors={doctors} doctorShares={doctorShares} payments={payments} profitByMonth={profitByMonth} monthKey={monthKey} onChanged={onChanged} />}
 
     <section className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)]"><div className="mb-5"><h3 className="font-black text-[#142536]">Bakiye Paneli</h3><p className="mt-1 text-xs font-semibold text-slate-400">Hekimin yaptığı işlerden hastalarda bekleyen tutarlar; doğrudan hakediş değildir</p></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6"><Stat label="Toplam işlem" value={balanceInfo.total}/><Stat label="Tahsil edilen" value={balanceInfo.collected} tone="green"/><Stat label="Tahsil edilmeyen" value={balanceInfo.unpaid} tone="red"/><Stat label="Vadesi geçmiş" value={balanceInfo.overdue} tone="red"/><Stat label="Bugün taksit" value={balanceInfo.dueToday}/><Stat label="Teslim edilmiş / ödenmemiş" value={balanceInfo.delivered} tone="violet"/></div></section>
 

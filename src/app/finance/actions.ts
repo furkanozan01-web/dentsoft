@@ -39,6 +39,8 @@ export async function addExpense(input: {
   invoiceStatus?: string
   paymentStatus?: string
   partnerServiceId?: number | null
+  /** Giderin düşeceği şube (boşsa aktif şube) */
+  branchId?: number | null
 }): Promise<R> {
   const ctx = await getCtx()
   if (!ctx) return { error: 'Yetkisiz erişim' }
@@ -84,6 +86,7 @@ export async function addExpense(input: {
     payment_status: input.paymentStatus || 'odendi',
     source_type: input.partnerId ? 'company_payment' : 'manual',
     partner_service_id: input.partnerServiceId || null,
+    ...(input.branchId ? { branch_id: input.branchId } : {}),
   }).select('id').single()
   if (error || !expenseRow) return { error: error?.message ?? 'Gider kaydedilemedi' }
 
@@ -103,6 +106,7 @@ export async function addExpense(input: {
         partner_id: input.partnerId,
         treatment_id: input.treatmentId || null,
         linked_transaction_id: expenseRow.id,
+        ...(input.branchId ? { branch_id: input.branchId } : {}),
       })
       .select('id')
       .single()
@@ -139,17 +143,20 @@ export async function deleteTransaction(id: number): Promise<R> {
   }
   const { data: expenseRow } = await supabase
     .from('transactions')
-    .select('linked_transaction_id')
+    .select('linked_transaction_id, clinic_debt_id')
     .eq('id', id)
     .eq('clinic_id', clinicId)
     .eq('type', 'expense')
     .maybeSingle()
-  const { error } = await supabase
-    .from('transactions')
-    .delete()
-    .eq('id', id)
-    .eq('clinic_id', clinicId)
-    .eq('type', 'expense')
+  // Borç ödemesinden doğan gider silinirse borcun ödenen tutarı da geri alınır (Borçlar ile Defter tutarlı kalır)
+  const { error } = expenseRow?.clinic_debt_id
+    ? await supabase.rpc('revert_debt_payment', { p_transaction_id: id })
+    : await supabase
+        .from('transactions')
+        .delete()
+        .eq('id', id)
+        .eq('clinic_id', clinicId)
+        .eq('type', 'expense')
   if (error) return { error: error.message }
   // Firma ödemesinden doğan bağlı hasta ödemesi (gelir) de silinir; böylece defter tutarlı kalır
   if (expenseRow?.linked_transaction_id) {
@@ -262,7 +269,7 @@ export async function deleteDoctorPayment(id: number): Promise<R> {
 
 // ── Eski dönem işlemleri (Finans sayfası son 13 ayı yükler) ──────────────────
 
-const TX_RANGE_COLUMNS = 'id, transaction_date, amount, method, type, description, patient_id, treatment_id, doctor_id, category, invoice_no, recurring, partner_id, partner_service_id, account_name, invoice_status, payment_status, source_type, original_currency, original_amount, exchange_rate, branch_id'
+const TX_RANGE_COLUMNS = 'id, transaction_date, amount, method, type, description, patient_id, treatment_id, doctor_id, category, invoice_no, recurring, partner_id, partner_service_id, account_name, invoice_status, payment_status, source_type, original_currency, original_amount, exchange_rate, branch_id, invoice_amount, invoice_sent_at, invoice_vat_rate'
 
 export async function getTransactionsRange(
   from: string,
@@ -734,7 +741,7 @@ export async function updateClinicDebt(id: number, input: {
   return { success: true }
 }
 
-export async function payClinicDebt(id: number, paymentKurus: number): Promise<R> {
+export async function payClinicDebt(id: number, paymentKurus: number, opts?: { method?: string | null; date?: string | null }): Promise<R> {
   const ctx = await getCtx()
   if (!ctx) return { error: 'Yetkisiz erişim' }
   const { supabase } = ctx
@@ -744,8 +751,9 @@ export async function payClinicDebt(id: number, paymentKurus: number): Promise<R
   const { error } = await supabase.rpc('pay_clinic_debt', {
     p_debt_id: id,
     p_amount: paymentKurus,
-    p_method: null,
+    p_method: opts?.method || null,
     p_account_name: null,
+    p_date: opts?.date || localDateValue(),
   })
   if (error) return { error: error.message }
   revalidatePath('/finance')
@@ -853,7 +861,7 @@ export async function getHekimHakedis(input: {
       .neq('status', 'cancelled'),
     supabase
       .from('transactions')
-      .select('transaction_date, amount, type, patient_id, treatment_id, method, branch_id')
+      .select('transaction_date, amount, type, patient_id, treatment_id, method, branch_id, invoice_no, invoice_amount, invoice_sent_at, invoice_vat_rate')
       .eq('clinic_id', clinicId)
       // Dönem sonuna kadar tüm işlemler (önceki ödemeler fazla ödeme sınırı için gerekir)
       .lt('transaction_date', rangeEnd),

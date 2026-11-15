@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import { localDateValue, cleanMoney } from '@/lib/format'
 import { addClinicDebt, addExpense, deleteTransaction, payClinicDebt } from './actions'
 import type {
-  ClinicDebt, FinBusinessPartner, FinDoctor,
+  ClinicDebt, FinBranch, FinBusinessPartner, FinDoctor,
   FinPatient, FinTreatment, FinTx,
 } from './FinanceClient'
 
@@ -93,7 +93,7 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
 }
 
 export default function LedgerDashboard({
-  txs, treatments, doctors, patients, partners, debts,
+  txs, treatments, doctors, patients, partners, debts, branches,
   initialStart, initialEnd, onNeedFrom, loadingOlder, onChanged, onPatientClick,
 }: {
   txs: FinTx[]
@@ -102,6 +102,7 @@ export default function LedgerDashboard({
   patients: FinPatient[]
   partners: FinBusinessPartner[]
   debts: ClinicDebt[]
+  branches: FinBranch[]
   initialStart: string
   initialEnd: string
   /** Seçilen aralık yüklü pencereden eskiyse eksik işlemleri getirtir. */
@@ -258,7 +259,7 @@ export default function LedgerDashboard({
         {debts.filter((d) => d.status !== 'cancelled').length === 0 ? <Empty text="Henüz sabit gider tanımlanmadı." /> : debts.filter((d) => d.status !== 'cancelled').map((d) => <ManagementRow key={d.id} title={d.title} meta={`${d.due_date ? dateText(d.due_date) : 'Vade yok'} • ${d.recurrence === 'aylik' ? 'Aylık' : d.recurrence === 'yillik' ? 'Yıllık' : 'Tek seferlik'}${d.account_name ? ` • ${d.account_name}` : ''}`} amount={d.total_amount - d.paid_amount} badge={d.status === 'paid' ? 'Ödendi' : 'Bekliyor'} action={d.status === 'active' ? <button onClick={() => setPayDebt(d)} className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700">Öde</button> : null} />)}
       </ManagementSection>
 
-      {modal && <EntryModal mode={modal} doctors={doctors} partners={partners} patients={patients} treatments={treatments} onClose={() => setModal(null)} onSuccess={() => { setModal(null); onChanged() }} />}
+      {modal && <EntryModal mode={modal} branches={branches} doctors={doctors} partners={partners} patients={patients} treatments={treatments} onClose={() => setModal(null)} onSuccess={() => { setModal(null); onChanged() }} />}
       {payDebt && <PayDebtModal debt={payDebt} onClose={() => setPayDebt(null)} onSuccess={() => { setPayDebt(null); onChanged() }} />}
     </div>
   )
@@ -374,7 +375,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 const field = 'h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#2DD4BF]'
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="block text-xs font-black text-slate-500">{label}<div className="mt-1.5">{children}</div></label> }
 
-function EntryModal({ mode, doctors, partners, patients, treatments, onClose, onSuccess }: { mode: 'expense' | 'fixed' | 'company' | 'doctor'; doctors: FinDoctor[]; partners: FinBusinessPartner[]; patients: FinPatient[]; treatments: FinTreatment[]; onClose: () => void; onSuccess: () => void }) {
+function EntryModal({ mode, branches, doctors, partners, patients, treatments, onClose, onSuccess }: { mode: 'expense' | 'fixed' | 'company' | 'doctor'; branches: FinBranch[]; doctors: FinDoctor[]; partners: FinBusinessPartner[]; patients: FinPatient[]; treatments: FinTreatment[]; onClose: () => void; onSuccess: () => void }) {
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(localDateValue())
   const [description, setDescription] = useState('')
@@ -382,6 +383,8 @@ function EntryModal({ mode, doctors, partners, patients, treatments, onClose, on
   const [account, setAccount] = useState('')
   const [doctorId, setDoctorId] = useState('')
   const [partnerId, setPartnerId] = useState('')
+  // Gider hangi şubenin kasasına düşsün (boş = aktif şube)
+  const [branchId, setBranchId] = useState('')
   const [patientId, setPatientId] = useState('')
   const [treatmentId, setTreatmentId] = useState('')
   const [invoiceNo, setInvoiceNo] = useState('')
@@ -403,7 +406,7 @@ function EntryModal({ mode, doctors, partners, patients, treatments, onClose, on
     }
     if (mode === 'doctor' && !doctorId) { toast.error('Hekim seçin'); return }
     if (mode === 'company' && !partnerId) { toast.error('Firma seçin'); return }
-    const result = await addExpense({ amount, date, description: description || (mode === 'company' ? 'Firma ödemesi' : mode === 'doctor' ? 'Hekim hakediş ödemesi' : 'Gider'), category: mode === 'doctor' ? 'Hekim Hakediş' : mode === 'company' ? 'Firma Ödemesi' : undefined, invoiceNo, method, accountName: account, doctorId: doctorId ? Number(doctorId) : null, partnerId: partnerId ? Number(partnerId) : null, patientId: patientId ? Number(patientId) : null, treatmentId: treatmentId ? Number(treatmentId) : null, invoiceStatus, paymentStatus })
+    const result = await addExpense({ amount, date, description: description || (mode === 'company' ? 'Firma ödemesi' : mode === 'doctor' ? 'Hekim hakediş ödemesi' : 'Gider'), category: mode === 'doctor' ? 'Hekim Hakediş' : mode === 'company' ? 'Firma Ödemesi' : undefined, invoiceNo, method, accountName: account, doctorId: doctorId ? Number(doctorId) : null, partnerId: partnerId ? Number(partnerId) : null, patientId: patientId ? Number(patientId) : null, treatmentId: treatmentId ? Number(treatmentId) : null, invoiceStatus, paymentStatus, branchId: branchId ? Number(branchId) : null })
     if (result?.error) toast.error(result.error); else { toast.success(mode === 'doctor' ? 'Ödeme Hakediş ve Gider bölümlerine işlendi' : 'Gider kaydedildi'); onSuccess() }
   })
 
@@ -414,6 +417,7 @@ function EntryModal({ mode, doctors, partners, patients, treatments, onClose, on
     <Field label="Tutar (₺)"><input value={amount} onChange={(e) => setAmount(e.target.value)} className={field} placeholder="0,00" /></Field>
     <Field label={mode === 'fixed' ? 'İlk ödeme tarihi' : 'Ödeme tarihi'}><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={field} /></Field>
     <Field label="Ödeme yöntemi"><select value={method} onChange={(e) => setMethod(e.target.value)} className={field}><option value="cash">Nakit / Kasa</option><option value="transfer">Banka transferi</option><option value="card">Kart</option><option value="check">Çek</option><option value="senet">Senet</option><option value="other">Diğer</option></select></Field>
+    {branches.length > 1 && mode !== 'doctor' && mode !== 'fixed' && <Field label="Şube (hangi kasadan çıkar)"><select value={branchId} onChange={(e) => setBranchId(e.target.value)} className={field}><option value="">Aktif şube (otomatik)</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></Field>}
     <Field label="İlgili kasa / banka"><input value={account} onChange={(e) => setAccount(e.target.value)} className={field} placeholder="Ana Kasa / İş Bankası" /></Field>
     {mode === 'fixed' && <><Field label="Ödeme günü"><input type="number" min="1" max="31" value={paymentDay} onChange={(e) => setPaymentDay(e.target.value)} className={field} /></Field><Field label="Tekrarlama sıklığı"><select value={recurrence} onChange={(e) => setRecurrence(e.target.value)} className={field}><option value="aylik">Aylık</option><option value="yillik">Yıllık</option><option value="tek_seferlik">Tek seferlik</option></select></Field></>}
     {mode === 'company' && <><Field label="İlgili hasta"><select value={patientId} onChange={(e) => { setPatientId(e.target.value); setTreatmentId('') }} className={field}><option value="">Hasta seçilmedi</option>{patients.map((p) => <option key={p.id} value={p.id}>{p.name} {p.surname}</option>)}</select></Field><Field label="İlgili tedavi"><select value={treatmentId} onChange={(e) => setTreatmentId(e.target.value)} className={field}><option value="">Tedavi seçilmedi</option>{selectedTreatments.map((t) => <option key={t.id} value={t.id}>{t.treatment_name}</option>)}</select></Field><Field label="Fatura no"><input value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} className={field} /></Field><Field label="Fatura durumu"><select value={invoiceStatus} onChange={(e) => setInvoiceStatus(e.target.value)} className={field}><option value="belirsiz">Fatura bekleniyor</option><option value="faturali">Faturalı</option><option value="faturasiz">Faturasız</option></select></Field><Field label="Ödeme durumu"><select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)} className={field}><option value="odendi">Ödendi</option><option value="bekliyor">Bekliyor</option></select></Field></>}

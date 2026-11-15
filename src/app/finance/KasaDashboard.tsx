@@ -19,24 +19,44 @@ function parseAmount(value: string) {
 }
 
 export default function KasaDashboard({
-  branches, txs, totals, doctorShares, doctors, onChanged,
+  branches, txs, totals, methodTotals, doctorShares, doctors, onChanged,
 }: {
   branches: FinBranch[]
   txs: FinTx[]
   /** Şube → tüm zamanlar gelir/gider toplamı (finance_totals RPC'si; satır sınırından bağımsız). */
   totals: Record<string, { income: number; expense: number }>
+  /** Şube → ödeme yöntemi → gelir/gider (finance_kasa_totals RPC'si) */
+  methodTotals: Record<string, Record<string, { income: number; expense: number }>>
   doctorShares: FinDoctorShare[]
   doctors: FinDoctor[]
   onChanged: () => void
 }) {
   const defaultBranchId = branches.find((b) => b.is_default)?.id ?? branches[0]?.id ?? null
   const [persistedBranchId, setPersistedBranchId] = usePersistedPreference<number | null>('dentsoft:last-branch-filter-kasa', defaultBranchId)
-  const branchId = persistedBranchId !== null && branches.some((b) => b.id === persistedBranchId) ? persistedBranchId : defaultBranchId
+  // 0 = tüm şubeler
+  const branchId = persistedBranchId !== null && (persistedBranchId === 0 || branches.some((b) => b.id === persistedBranchId)) ? persistedBranchId : defaultBranchId
+  const allBranches = branchId === 0
   const [showPay, setShowPay] = useState(false)
 
-  const branchTxs = useMemo(() => txs.filter((t) => t.branch_id === branchId), [txs, branchId])
-  const income = branchId !== null ? totals[branchId]?.income ?? 0 : 0
-  const expense = branchId !== null ? totals[branchId]?.expense ?? 0 : 0
+  const branchTxs = useMemo(() => (allBranches ? txs : txs.filter((t) => t.branch_id === branchId)), [txs, branchId, allBranches])
+  const selectedKeys = allBranches ? branches.map((b) => String(b.id)) : branchId !== null ? [String(branchId)] : []
+  const income = selectedKeys.reduce((s, k) => s + (totals[k]?.income ?? 0), 0)
+  const expense = selectedKeys.reduce((s, k) => s + (totals[k]?.expense ?? 0), 0)
+  // Ödeme yöntemine göre döküm: paranın nerede durduğu (nakit / banka-kart / çek / senet ...)
+  const methodRows = useMemo(() => {
+    const groups: Record<string, { label: string; income: number; expense: number }> = {}
+    const labelOf: Record<string, string> = { cash: 'Nakit kasa', card: 'Kredi kartı', transfer: 'Banka / Havale', check: 'Çek', senet: 'Senet (vadeli, henüz nakit değil)', firma_odemesi: 'Firma aktarımı', other: 'Diğer / belirtilmemiş' }
+    for (const key of selectedKeys) {
+      for (const [method, v] of Object.entries(methodTotals[key] ?? {})) {
+        const g = (groups[method] ??= { label: labelOf[method] ?? method, income: 0, expense: 0 })
+        g.income += v.income
+        g.expense += v.expense
+      }
+    }
+    const order = ['cash', 'card', 'transfer', 'check', 'senet', 'firma_odemesi', 'other']
+    return Object.entries(groups).sort(([a], [b]) => (order.indexOf(a) === -1 ? 99 : order.indexOf(a)) - (order.indexOf(b) === -1 ? 99 : order.indexOf(b))).map(([, g]) => g)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [methodTotals, branchId, branches])
   const balance = income - expense
   const recentTxs = useMemo(() => [...branchTxs].sort((a, b) => b.transaction_date.localeCompare(a.transaction_date)).slice(0, 20), [branchTxs])
 
@@ -64,14 +84,15 @@ export default function KasaDashboard({
             onChange={(e) => setPersistedBranchId(Number(e.target.value))}
             className="h-11 rounded-[14px] border border-[#E7ECF2] bg-white px-3 text-sm font-bold text-[#0F2B3D] outline-none focus:border-[#2DD4BF]"
           >
+            {branches.length > 1 && <option value={0}>Tüm şubeler</option>}
             {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
         </div>
         <button
           onClick={() => setShowPay(true)}
-          disabled={shareholders.length === 0}
+          disabled={shareholders.length === 0 || allBranches}
           className="inline-flex h-11 items-center justify-center gap-2 rounded-[14px] bg-[linear-gradient(135deg,#5FD3C1,#1EAEA0)] px-4 text-sm font-black text-white shadow-[0_10px_20px_rgba(30,174,160,0.18)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
-          title={shareholders.length === 0 ? 'Bu şubede aktif hissedar yok' : undefined}
+          title={allBranches ? 'Kâr payı için tek bir şube seçin' : shareholders.length === 0 ? 'Bu şubede aktif hissedar yok' : undefined}
         >
           Kâr Payı Öde
         </button>
@@ -85,6 +106,25 @@ export default function KasaDashboard({
           <span className="text-red-500">Toplam Gider: {money(expense)}</span>
         </div>
       </div>
+
+      {methodRows.length > 0 && (
+        <div className="rounded-[24px] border border-slate-200/90 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
+          <h2 className="text-base font-black text-[#142536]">Paranın Dağılımı</h2>
+          <p className="mt-1 text-xs font-semibold text-slate-400">Her ödeme yönteminde biriken net tutar (gelir − gider). Toplamı yukarıdaki kasa bakiyesine eşittir.</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {methodRows.map((g) => {
+              const net = g.income - g.expense
+              return (
+                <div key={g.label} className="rounded-2xl border border-[#EEF2F6] bg-[#FAFBFC] p-4">
+                  <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">{g.label}</p>
+                  <p className={`mt-1 text-lg font-black ${net >= 0 ? 'text-[#0F766E]' : 'text-red-600'}`}>{money(net)}</p>
+                  <p className="mt-1 text-[11px] font-bold text-slate-400">+{money(g.income)} / −{money(g.expense)}</p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
         <section className="overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
@@ -153,7 +193,7 @@ export default function KasaDashboard({
   )
 }
 
-function DistributeModal({
+export function DistributeModal({
   branchId, branchName, shareholders, doctorMap, onClose, onSuccess,
 }: {
   branchId: number

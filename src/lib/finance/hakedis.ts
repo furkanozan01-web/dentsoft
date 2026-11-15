@@ -59,6 +59,11 @@ export interface HakedisTx {
   treatment_id: number | null
   method?: string | null
   branch_id?: number | null
+  /** Fatura bilgisi: KDV masrafı yalnızca fatura kesilen tutar için, fatura tarihinde düşülür */
+  invoice_no?: string | null
+  invoice_amount?: number | null
+  invoice_sent_at?: string | null
+  invoice_vat_rate?: number | null
 }
 
 export interface HakedisPatient {
@@ -91,7 +96,7 @@ export interface DetailRow {
   collected: number
   gross: number
   cost: number
-  /** Masrafın içindeki KDV (tahsil edilen tutarın KDV payı) */
+  /** Masrafın içindeki KDV (dönemde kesilen faturaların KDV payı) */
   vat: number
   net: number
   rate: number
@@ -203,21 +208,62 @@ function commissionCore(
     if (latest) lastCollection.set(pid, { date: latest.transaction_date, method: latest.method ?? null })
   }
 
-  // Satırlar: bu hekimin, aralıkta tahsilat alan tedavileri + aralıkta yapılan (henüz tahsilatı olmayan) tedavileri
+  // KDV: ücret alınır alınmaz değil, FATURA KESİLDİKTEN sonra (fatura tarihinin düştüğü dönemde) ve yalnızca
+  // faturalanan tutar üzerinden masraf sayılır. Bir fatura birden çok ödemeyi kapsar; tutar her satırda aynı
+  // yazıldığından fatura numarasına göre bir kez alınır. Hastanın tedavilerine ücret payı oranında dağıtılır.
+  const vatBy = new Map<number, number>() // tedavi id -> aralıkta düşülecek KDV (kuruş)
+  if (vatBps > 0) {
+    const invoices = new Map<string, { patientId: number; amount: number; date: string; bps: number }>()
+    for (const tx of payTxs) {
+      if (!tx.invoice_no) continue
+      const key = tx.patient_id + '|' + tx.invoice_no
+      const sentDate = tx.invoice_sent_at
+        ? new Date(tx.invoice_sent_at).toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' })
+        : tx.transaction_date
+      const prev = invoices.get(key)
+      if (prev) {
+        if (tx.invoice_amount == null) prev.amount += tx.amount
+      } else {
+        invoices.set(key, {
+          patientId: tx.patient_id as number,
+          amount: tx.invoice_amount ?? tx.amount,
+          date: sentDate,
+          bps: tx.invoice_vat_rate ?? vatBps,
+        })
+      }
+    }
+    const vatByPatient = new Map<number, number>()
+    for (const inv of invoices.values()) {
+      if (!inRange(inv.date) || inv.bps <= 0) continue
+      const v = Math.round((inv.amount * inv.bps) / (10000 + inv.bps))
+      vatByPatient.set(inv.patientId, (vatByPatient.get(inv.patientId) ?? 0) + v)
+    }
+    for (const [pid, v] of vatByPatient) {
+      const pTreatments = treatments.filter((t) => t.patient_id === pid)
+      const totalFee = pTreatments.reduce((s, t) => s + (t.fee ?? 0), 0)
+      if (totalFee <= 0) continue
+      for (const tr of pTreatments) {
+        const part = Math.round((v * (tr.fee ?? 0)) / totalFee)
+        if (part > 0) vatBy.set(tr.id, part)
+      }
+    }
+  }
+
+  // Satırlar: bu hekimin, aralıkta tahsilat alan / KDV düşülen tedavileri + aralıkta yapılan (henüz tahsilatı olmayan) tedavileri
   const periodIds = new Set(periodTreatments.map((t) => t.id))
   const doctorRows = treatments.filter(
-    (t) => t.doctor_id === doctor.id && (periodIds.has(t.id) || (collectedBy.get(t.id) ?? 0) > 0)
+    (t) => t.doctor_id === doctor.id && (periodIds.has(t.id) || (collectedBy.get(t.id) ?? 0) > 0 || (vatBy.get(t.id) ?? 0) > 0)
   )
   const details = doctorRows.map((treatment): DetailRow => {
     const patient = treatment.patient_id ? patientMap.get(treatment.patient_id) : null
     const treatmentFee = treatment.fee ?? 0
     const collected = collectedBy.get(treatment.id) ?? 0
     const gross = collected
-    // Masraf = lab/malzeme (tahsil edilen oranda) + KDV (ücret KDV dahildir; KDV klinik geliri değildir).
+    // Masraf = lab/malzeme (tahsil edilen oranda) + KDV (yalnızca kesilen faturanın KDV'si; fatura döneminde düşer).
     const materialCost = treatmentFee > 0 ? Math.round((treatment.cost ?? 0) * (collected / treatmentFee)) : 0
-    const vat = vatBps > 0 ? Math.round((collected * vatBps) / (10000 + vatBps)) : 0
+    const vat = vatBy.get(treatment.id) ?? 0
     const cost = materialCost + vat
-    const net = Math.max(gross - cost, 0)
+    const net = Math.max(gross - materialCost, 0) - vat
     const earning = rate > 0 ? Math.round((net * rate) / 10000) : 0
     const collection = treatment.patient_id != null ? lastCollection.get(treatment.patient_id) : undefined
 

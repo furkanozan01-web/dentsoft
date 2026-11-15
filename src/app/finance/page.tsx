@@ -63,7 +63,7 @@ export default async function FinancePage() {
     getCanSeeAllHakedis(),
     supabase
       .from('transactions')
-      .select('id, transaction_date, amount, method, type, description, patient_id, treatment_id, doctor_id, category, invoice_no, recurring, partner_id, partner_service_id, account_name, invoice_status, payment_status, source_type, original_currency, original_amount, exchange_rate, branch_id')
+      .select('id, transaction_date, amount, method, type, description, patient_id, treatment_id, doctor_id, category, invoice_no, recurring, partner_id, partner_service_id, account_name, invoice_status, payment_status, source_type, original_currency, original_amount, exchange_rate, branch_id, invoice_amount, invoice_sent_at, invoice_vat_rate')
       .eq('clinic_id', clinicId)
       .gte('transaction_date', windowStart)
       .order('transaction_date', { ascending: false }),
@@ -203,6 +203,19 @@ export default async function FinancePage() {
   }
   const years = Array.from(yearSet).sort((a, b) => b - a)
 
+  // Kasa dökümü: şube → ödeme yöntemi → gelir/gider (tüm zamanlar). Yalnızca hakediş yetkisi olanlara.
+  const kasaMethods: Record<string, Record<string, { income: number; expense: number }>> = {}
+  if (canSeeAllHakedis) {
+    const { data: methodRows } = await supabase.rpc('finance_kasa_totals')
+    for (const row of (methodRows ?? []) as { branch_id: number | null; method: string; type: string; total: number }[]) {
+      if (!row.branch_id) continue
+      const byMethod = (kasaMethods[row.branch_id] ??= {})
+      const m = (byMethod[row.method] ??= { income: 0, expense: 0 })
+      if (row.type === 'payment') m.income += Number(row.total)
+      else if (row.type === 'expense' || row.type === 'refund') m.expense += Number(row.total)
+    }
+  }
+
   return (
     <div className="flex min-h-screen bg-[#F0F4F9]">
       <Sidebar fullName={profile.full_name ?? ''} role={profile.role ?? ''} canSeeFinans={canSeeFinans} canSeeAyarlar={canSeeAyarlar} />
@@ -226,6 +239,7 @@ export default async function FinancePage() {
           partnerServices={(partnerServices ?? []) as PartnerService[]}
           profitByMonth={profitByMonth}
           kasaTotals={kasaTotals}
+          kasaMethods={kasaMethods}
           years={years}
           windowStart={windowStart}
         />

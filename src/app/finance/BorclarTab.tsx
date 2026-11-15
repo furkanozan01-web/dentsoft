@@ -32,7 +32,8 @@ export default function BorclarTab({
   const overdueCount = activeDebts.filter((d) => d.due_date && d.due_date < today).length
 
   const handlePay = (debtId: number) => {
-    const amountTL = parseFloat(payStr.replace(',', '.'))
+    // "25.000" veya "25.000,50" gibi binlik ayraçlı girişler doğru okunsun (eskiden 25 ₺ olarak kaydediliyordu)
+    const amountTL = parseFloat(cleanMoney(payStr))
     if (isNaN(amountTL) || amountTL <= 0) { toast.error('Geçerli bir tutar girin'); return }
     const amountKurus = Math.round(amountTL * 100)
     startTransition(async () => {
