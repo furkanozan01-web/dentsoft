@@ -103,6 +103,7 @@ export interface FinPatient {
   name: string
   surname: string
   created_at: string
+  branch_id?: number | null
 }
 export interface FinInstallment {
   id: number
@@ -374,6 +375,7 @@ export default function FinanceClient({
             patients={patients}
             doctors={doctors}
             clinicName={clinicName}
+            branches={branches}
             onPatientClick={(id) => router.push(`/patients?patient_id=${id}&tab=hesap`)}
             onPayClick={(id) => router.push(`/patients?patient_id=${id}&tab=hesap&pay=1`)}
           />

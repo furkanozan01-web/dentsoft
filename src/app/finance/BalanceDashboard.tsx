@@ -16,6 +16,7 @@ interface BalanceRow {
   doctorIds: number[]
   doctor: string
   clinic: string
+  branchId: number | null
   startDate: string | null
   dueDate: string | null
   lastPaymentDate: string | null
@@ -63,13 +64,14 @@ function latest(values: Array<string | null | undefined>) {
   return values.filter((v): v is string => Boolean(v)).sort().at(-1) ?? null
 }
 
-function buildRows({ patients, doctors, treatments, txs, installments, clinicName, today }: {
+function buildRows({ patients, doctors, treatments, txs, installments, clinicName, branchNames, today }: {
   patients: FinPatient[]
   doctors: FinDoctor[]
   treatments: FinTreatment[]
   txs: FinTx[]
   installments: FinInstallment[]
   clinicName: string
+  branchNames: Map<number, string>
   today: string
 }): BalanceRow[] {
   const doctorMap = new Map(doctors.map((d) => [d.id, d.name]))
@@ -142,20 +144,21 @@ function buildRows({ patients, doctors, treatments, txs, installments, clinicNam
     return {
       id: patient.id, name: `${patient.name} ${patient.surname}`, createdAt: patient.created_at,
       doctorId, doctorIds: [...feeByDoctor.keys()], doctor: doctorNames,
-      clinic: clinicName, startDate, dueDate, lastPaymentDate, owed, paid, balance,
+      clinic: patient.branch_id ? branchNames.get(patient.branch_id) ?? clinicName : clinicName, branchId: patient.branch_id ?? null, startDate, dueDate, lastPaymentDate, owed, paid, balance,
       installmentText: patientInstallments.length ? `${patientInstallments.length} açık • ${money(patientInstallments.reduce((s, i) => s + i.amount, 0))}` : 'Taksit yok',
       nextInstallment, delivery, delayDays, daysSincePayment, risk, score, description, recommendation,
     }
   }).filter((row) => row.balance > 0)
 }
 
-export default function BalanceDashboard({ patients, doctors, treatments, txs, installments, clinicName, onPatientClick, onPayClick }: {
+export default function BalanceDashboard({ patients, doctors, treatments, txs, installments, clinicName, branches, onPatientClick, onPayClick }: {
   patients: FinPatient[]
   doctors: FinDoctor[]
   treatments: FinTreatment[]
   txs: FinTx[]
   installments: FinInstallment[]
   clinicName: string
+  branches: { id: number; name: string }[]
   onPatientClick: (id: number) => void
   onPayClick: (id: number) => void
 }) {
@@ -165,8 +168,8 @@ export default function BalanceDashboard({ patients, doctors, treatments, txs, i
   const [riskFilter, setRiskFilter] = useState<'all' | Risk>('all')
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [direction, setDirection] = useState<SortDirection>('asc')
-  const rows = useMemo(() => buildRows({ patients, doctors, treatments, txs, installments, clinicName, today }), [patients, doctors, treatments, txs, installments, clinicName, today])
-  const filtered = rows.filter((row) => (doctorFilter === 'all' || row.doctorIds.includes(Number(doctorFilter))) && (clinicFilter === 'all' || row.clinic === clinicFilter) && (riskFilter === 'all' || row.risk === riskFilter))
+  const rows = useMemo(() => buildRows({ patients, doctors, treatments, txs, installments, clinicName, branchNames: new Map(branches.map((b) => [b.id, b.name])), today }), [patients, doctors, treatments, txs, installments, clinicName, branches, today])
+  const filtered = rows.filter((row) => (doctorFilter === 'all' || row.doctorIds.includes(Number(doctorFilter))) && (clinicFilter === 'all' || row.branchId === Number(clinicFilter)) && (riskFilter === 'all' || row.risk === riskFilter))
   const sorted = [...filtered].sort((a, b) => {
     const av = sortKey === 'risk' ? RISK_ORDER[a.risk] : sortKey === 'installment' ? (a.nextInstallment ?? '') : sortKey === 'delay' ? a.delayDays : sortKey === 'delivery' ? a.delivery : a[sortKey]
     const bv = sortKey === 'risk' ? RISK_ORDER[b.risk] : sortKey === 'installment' ? (b.nextInstallment ?? '') : sortKey === 'delay' ? b.delayDays : sortKey === 'delivery' ? b.delivery : b[sortKey]
@@ -187,7 +190,7 @@ export default function BalanceDashboard({ patients, doctors, treatments, txs, i
     {overdue45.length > 0 && <div className="flex items-start gap-3 rounded-[20px] border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800 shadow-sm"><span className="text-lg">⚠</span><div><p className="font-black">45 günden uzun süredir ödeme yapmayan hastalar var.</p><p className="mt-1 font-semibold">{overdue45.length} hastanın vadesi geçmiş bakiyesini kontrol ediniz. Toplam risk: {money(overdue45.reduce((s, r) => s + r.balance, 0))}</p></div></div>}
 
     <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><h2 className="text-base font-black text-[#142536]">Bakiye ve Tahsilat Analizi</h2><p className="mt-1 text-xs font-semibold text-slate-400">Hekim ve klinik bazında aktif tahsilat takibi</p></div><div className="flex flex-wrap gap-3"><Filter label="Hekim" value={doctorFilter} onChange={setDoctorFilter}><option value="all">Tüm hekimler</option>{doctors.map((d) => <option key={d.id} value={d.id}>Dt. {d.name}</option>)}</Filter><Filter label="Klinik" value={clinicFilter} onChange={setClinicFilter}><option value="all">Tüm klinikler</option><option value={clinicName}>{clinicName}</option></Filter><Filter label="Risk" value={riskFilter} onChange={(v) => setRiskFilter(v as 'all' | Risk)}><option value="all">Tüm riskler</option><option value="overdue">Vadesi geçmiş</option><option value="high">Yüksek risk</option><option value="medium">Orta risk</option><option value="low">Düşük risk</option></Filter></div></div>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><h2 className="text-base font-black text-[#142536]">Bakiye ve Tahsilat Analizi</h2><p className="mt-1 text-xs font-semibold text-slate-400">Hekim ve klinik bazında aktif tahsilat takibi</p></div><div className="flex flex-wrap gap-3"><Filter label="Hekim" value={doctorFilter} onChange={setDoctorFilter}><option value="all">Tüm hekimler</option>{doctors.map((d) => <option key={d.id} value={d.id}>Dt. {d.name}</option>)}</Filter><Filter label="Şube" value={clinicFilter} onChange={setClinicFilter}><option value="all">Tüm şubeler</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Filter><Filter label="Risk" value={riskFilter} onChange={(v) => setRiskFilter(v as 'all' | Risk)}><option value="all">Tüm riskler</option><option value="overdue">Vadesi geçmiş</option><option value="high">Yüksek risk</option><option value="medium">Orta risk</option><option value="low">Düşük risk</option></Filter></div></div>
       <div className="mt-5 grid gap-3 sm:grid-cols-2"><Metric label="Bakiye (Toplam Hasta Borcu)" value={totalReceivable} tone="red" /><Metric label="Gecikmiş Ödemeler" value={overduePayments} tone="amber" /></div>
     </section>
 
@@ -199,7 +202,7 @@ export default function BalanceDashboard({ patients, doctors, treatments, txs, i
     <section className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
       <Header title="Hasta Bakiye Tablosu" subtitle="Başlıklara tıklayarak artan veya azalan sıralama yapabilirsiniz" badge={`${sorted.length} hasta`} />
       <div className="overflow-x-auto"><table className="w-full min-w-[1900px] text-xs"><thead className="bg-slate-50"><tr>{([
-        ['Hasta adı','name'],['Hekim','doctor'],['Klinik','clinic'],['İşlem başlangıç tarihi','startDate'],['Son ödeme tarihi','dueDate'],['Toplam işlem tutarı','owed'],['Yapılan ödeme','paid'],['Kalan bakiye','balance'],['Taksit durumu','installment'],['Tedavi teslim durumu','delivery'],['Gecikme süresi','delay'],['Risk durumu','risk'],['Açıklama','description'],
+        ['Hasta adı','name'],['Hekim','doctor'],['Şube','clinic'],['İşlem başlangıç tarihi','startDate'],['Son ödeme tarihi','dueDate'],['Toplam işlem tutarı','owed'],['Yapılan ödeme','paid'],['Kalan bakiye','balance'],['Taksit durumu','installment'],['Tedavi teslim durumu','delivery'],['Gecikme süresi','delay'],['Risk durumu','risk'],['Açıklama','description'],
       ] as Array<[string, SortKey]>).map(([label,key]) => <SortHeader key={key} label={label} active={sortKey === key} direction={direction} onClick={() => sort(key)} />)}<th className="px-4 py-4 text-right font-black uppercase tracking-wide text-slate-400">İşlem</th></tr></thead><tbody>{sorted.length === 0 ? <tr><td colSpan={14}><Empty /></td></tr> : sorted.map((row) => <tr key={row.id} className={`border-t border-slate-100 ${row.risk === 'overdue' ? 'bg-red-50/50' : 'hover:bg-slate-50/70'}`}><td className="px-4 py-4"><button onClick={() => onPatientClick(row.id)} className="font-black text-[#142536] hover:underline">{row.name}</button><p className="mt-1 text-[10px] font-semibold text-slate-400">Kayıt: {dateLabel(row.createdAt)}</p></td><td className="px-4 py-4 font-bold text-slate-600">{row.doctor}</td><td className="px-4 py-4 font-semibold text-slate-500">{row.clinic}</td><td className="px-4 py-4 font-semibold text-slate-500">{dateLabel(row.startDate)}</td><td className="px-4 py-4 font-bold text-slate-600">{dateLabel(row.dueDate)}</td><td className="px-4 py-4 text-right font-black text-slate-700">{money(row.owed)}</td><td className="px-4 py-4 text-right font-black text-emerald-600">{money(row.paid)}</td><td className="px-4 py-4 text-right"><span className="rounded-full bg-red-50 px-2.5 py-1.5 font-black text-red-600">{money(row.balance)}</span></td><td className="px-4 py-4 font-semibold text-slate-500">{row.installmentText}</td><td className="px-4 py-4"><span className={`rounded-full px-2.5 py-1 font-bold ${row.delivery === 'Teslim edildi' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>{row.delivery}</span></td><td className="px-4 py-4 font-black text-slate-600">{row.delayDays ? `${row.delayDays} gün` : '—'}</td><td className="px-4 py-4"><RiskBadge risk={row.risk} /></td><td className="max-w-[220px] px-4 py-4"><p className="truncate font-bold text-slate-600" title={row.recommendation}>{row.description}</p><p className="mt-1 truncate text-[10px] font-semibold text-violet-500">{row.recommendation}</p></td><td className="px-4 py-4 text-right"><button onClick={() => onPayClick(row.id)} className="rounded-xl bg-[#1EAEA0] px-3 py-2 font-black text-white">Ödeme Al</button></td></tr>)}</tbody></table></div>
     </section>
   </div>

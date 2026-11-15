@@ -80,7 +80,7 @@ export default async function FinancePage() {
       .order('name'),
     supabase
       .from('patients')
-      .select('id, name, surname, created_at')
+      .select('id, name, surname, created_at, branch_id')
       .eq('clinic_id', clinicId),
     supabase
       .from('doctor_payments')
