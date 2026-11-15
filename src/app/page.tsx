@@ -5,7 +5,7 @@ import Sidebar from './Sidebar'
 import DashboardBell from './DashboardBell'
 import MissingInvoiceAlert, { type MissingInvoiceRow } from './MissingInvoiceAlert'
 import DashboardNewPatientButton from './DashboardNewPatientButton'
-import { computeSummary } from '@/lib/finance/hakedis'
+import { computeReceivable } from '@/lib/finance/hakedis'
 import { getFinansNavPermission, canSeeAyarlarNav } from '@/lib/permissions'
 
 interface AppointmentRow {
@@ -144,7 +144,7 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase
       .from('doctors')
-      .select('id, name, color, specialty, commission_rate_bps, payment_model, monthly_salary, guarantee_amount, bonus_amount, per_transaction_amount, salary_day, payment_account, is_mesul_mudur, guarantee_active, guarantee_period, guarantee_method, guarantee_note')
+      .select('id, name, color, specialty, commission_rate_bps, payment_model, monthly_salary, guarantee_amount, bonus_amount, per_transaction_amount, salary_day, start_date, payment_account, is_mesul_mudur, guarantee_active, guarantee_period, guarantee_method, guarantee_note')
       .eq('clinic_id', clinicId)
       .eq('status', 'active')
       .order('name'),
@@ -162,8 +162,7 @@ export default async function DashboardPage() {
     supabase
       .from('doctor_payments')
       .select('doctor_id, amount, payment_date, earning_period, payment_type')
-      .eq('clinic_id', clinicId)
-      .or(`earning_period.eq.${monthKey},and(earning_period.is.null,payment_date.gte.${monthStartISO},payment_date.lt.${nextMonthStartISO})`),
+      .eq('clinic_id', clinicId),
     supabase
       .from('transactions')
       .select('transaction_date, amount, type, patient_id, treatment_id, method, branch_id')
@@ -269,7 +268,7 @@ export default async function DashboardPage() {
   const vatBps = vatRow?.vat_rate ?? 1000
 
   const ownSummary = currentDoctor
-    ? computeSummary(
+    ? computeReceivable(
         currentDoctor,
         doctorShares,
         treatments.map((t) => ({ ...t, fee: t.fee ?? 0, cost: t.cost ?? 0 })),
@@ -282,13 +281,11 @@ export default async function DashboardPage() {
           earning_period: payment.earning_period,
           payment_type: payment.payment_type,
         })),
-        monthKey,
-        profitByMonth,
         vatBps
       )
     : null
 
-  const hakedisLabel = 'Kalan Hakedişim'
+  const hakedisLabel = 'Hakediş Alacağım'
   const hakedisValue = Math.max(ownSummary?.remaining ?? 0, 0)
 
   const activePatientIds = new Set(((activePatientsRaw ?? []) as { id: number }[]).map((p) => p.id))
@@ -428,7 +425,7 @@ export default async function DashboardPage() {
               href="/finance?tab=hakedis"
               label={hakedisLabel}
               value={`₺${fmt(hakedisValue)}`}
-              detail={currentDoctor ? `Bu ay hakediş ₺${fmt(ownSummary?.entitlement ?? 0)} − ödenen ₺${fmt(ownSummary?.paid ?? 0)}` : 'Hekim hesabıyla eşleşme yok'}
+              detail={currentDoctor ? `Biriken hakediş ₺${fmt(ownSummary?.entitlement ?? 0)} − ödenen ₺${fmt(ownSummary?.paid ?? 0)}` : 'Hekim hesabıyla eşleşme yok'}
               tone="purple"
               icon={<IconLiraTile />}
             />

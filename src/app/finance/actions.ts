@@ -833,8 +833,8 @@ export async function getHekimHakedis(input: {
 
   // Hangi doktorlar hesaplanacak
   const doctorFilter = canSeeAll && !input.hekim_id
-    ? supabase.from('doctors').select('id, name, specialty, color, commission_rate_bps, payment_model, monthly_salary, guarantee_amount, bonus_amount, per_transaction_amount, salary_day, payment_account, guarantee_active, guarantee_period, guarantee_method, guarantee_note').eq('clinic_id', clinicId).eq('status', 'active')
-    : supabase.from('doctors').select('id, name, specialty, color, commission_rate_bps, payment_model, monthly_salary, guarantee_amount, bonus_amount, per_transaction_amount, salary_day, payment_account, guarantee_active, guarantee_period, guarantee_method, guarantee_note').eq('clinic_id', clinicId).eq('id', targetId)
+    ? supabase.from('doctors').select('id, name, specialty, color, commission_rate_bps, payment_model, monthly_salary, guarantee_amount, bonus_amount, per_transaction_amount, salary_day, start_date, payment_account, guarantee_active, guarantee_period, guarantee_method, guarantee_note').eq('clinic_id', clinicId).eq('status', 'active')
+    : supabase.from('doctors').select('id, name, specialty, color, commission_rate_bps, payment_model, monthly_salary, guarantee_amount, bonus_amount, per_transaction_amount, salary_day, start_date, payment_account, guarantee_active, guarantee_period, guarantee_method, guarantee_note').eq('clinic_id', clinicId).eq('id', targetId)
 
   const [
     { data: doctors, error: docErr },

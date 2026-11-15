@@ -6,7 +6,7 @@ import { localDateValue } from '@/lib/format'
 import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
 import { addDoctorPayment, deleteDoctorPayment } from './actions'
 import type { DoctorPayment, FinDoctor, FinDoctorShare, FinInstallment, FinPatient, FinTreatment, FinTx } from './FinanceClient'
-import { computeSummary, type DoctorSummary } from '@/lib/finance/hakedis'
+import { computeRange, computeReceivable, type DoctorSummary } from '@/lib/finance/hakedis'
 
 const MODEL_LABEL: Record<string, string> = {
   salary: 'Sabit Ödeme', commission: 'Komisyon', hybrid: 'Sabit + Komisyon',
@@ -18,7 +18,7 @@ const METHOD_LABEL: Record<string, string> = { cash: 'Nakit / Kasa', transfer: '
 function money(value: number) { return `₺${(value / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }
 function dateText(value: string | null) { return value ? new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString('tr-TR') : '—' }
 
-export default function EarningsDashboard({ doctors, doctorShares, treatments, patients, txs, payments, installments, profitByMonth, vatBps, monthKey, canSeeAll, canManagePayments, onNeedFrom, currentDoctorId, onChanged, onPatientClick }: {
+export default function EarningsDashboard({ doctors, doctorShares, treatments, patients, txs, payments, installments, vatBps, monthKey, canSeeAll, canManagePayments, onNeedFrom, currentDoctorId, onChanged, onPatientClick }: {
   doctors: FinDoctor[]
   doctorShares: FinDoctorShare[]
   treatments: FinTreatment[]
@@ -37,34 +37,49 @@ export default function EarningsDashboard({ doctors, doctorShares, treatments, p
   onChanged: () => void
   onPatientClick: (id: number) => void
 }) {
-  const [detailPeriod,setDetailPeriod]=useState('selected')
-  const [customStart,setCustomStart]=useState(monthKey)
-  const [customEnd,setCustomEnd]=useState(monthKey)
-  const activeMonthKeys=useMemo(()=>{
-    if(detailPeriod==='selected')return[monthKey]
-    const now=new Date();let start=new Date(now.getFullYear(),now.getMonth(),1);let end=new Date(start)
-    if(detailPeriod==='last'){start.setMonth(start.getMonth()-1);end=new Date(start)}
-    else if(detailPeriod==='3')start.setMonth(start.getMonth()-2)
-    else if(detailPeriod==='6')start.setMonth(start.getMonth()-5)
-    else if(detailPeriod==='year')start=new Date(now.getFullYear(),0,1)
-    else if(detailPeriod==='custom'){
-      start=new Date(`${customStart}-01T12:00:00`);end=new Date(`${customEnd}-01T12:00:00`)
-      if (start > end) [start, end] = [end, start]
+  const today = localDateValue()
+  const [detailPeriod, setDetailPeriod] = useState('selected')
+  const [customStart, setCustomStart] = useState(`${monthKey}-01`)
+  const [customEnd, setCustomEnd] = useState(today)
+  // Alt (yeşil) kutu ve ayrıntılar bu tarih aralığı içindir: bugün, bu hafta, son 7 gün, ay, birkaç ay, yıl veya serbest aralık
+  const range = useMemo(() => {
+    const d = new Date(`${today}T12:00:00`)
+    const iso = (x: Date) => localDateValue(x)
+    if (detailPeriod === 'today') return { start: today, end: today }
+    if (detailPeriod === 'week') {
+      const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
+      return { start: iso(mon), end: iso(sun) }
     }
-    const keys:string[]=[];const cursor=new Date(start);while(cursor<=end){keys.push(`${cursor.getFullYear()}-${String(cursor.getMonth()+1).padStart(2,'0')}`);cursor.setMonth(cursor.getMonth()+1)}return keys
-  },[detailPeriod,monthKey,customStart,customEnd])
-  useEffect(() => {
-    const oldest = [...activeMonthKeys].sort()[0]
-    if (oldest) void onNeedFrom(`${oldest}-01`)
-  }, [activeMonthKeys, onNeedFrom])
+    if (detailPeriod === 'last7') { const s0 = new Date(d); s0.setDate(d.getDate() - 6); return { start: iso(s0), end: today } }
+    if (detailPeriod === 'last') { const f0 = new Date(d.getFullYear(), d.getMonth() - 1, 1); return { start: iso(f0), end: iso(new Date(f0.getFullYear(), f0.getMonth() + 1, 0)) } }
+    if (detailPeriod === '3') return { start: iso(new Date(d.getFullYear(), d.getMonth() - 2, 1)), end: iso(new Date(d.getFullYear(), d.getMonth() + 1, 0)) }
+    if (detailPeriod === '6') return { start: iso(new Date(d.getFullYear(), d.getMonth() - 5, 1)), end: iso(new Date(d.getFullYear(), d.getMonth() + 1, 0)) }
+    if (detailPeriod === 'year') return { start: `${d.getFullYear()}-01-01`, end: `${d.getFullYear()}-12-31` }
+    if (detailPeriod === 'custom') {
+      const a = customStart || today
+      const b = customEnd || today
+      return a <= b ? { start: a, end: b } : { start: b, end: a }
+    }
+    const [y, mo] = monthKey.split('-').map(Number)
+    return { start: `${monthKey}-01`, end: iso(new Date(y, mo, 0)) }
+  }, [detailPeriod, monthKey, customStart, customEnd, today])
+  useEffect(() => { void onNeedFrom(range.start) }, [range.start, onNeedFrom])
+  // Alacak (üst kutular) işe başlangıçtan bugüne kadar biriken hakedişi gösterir; tüm geçmiş işlemler gerekir
+  useEffect(() => { void onNeedFrom('2000-01-01') }, [onNeedFrom])
   const visibleDoctors = useMemo(
     () => canSeeAll ? doctors : doctors.filter((doctor) => doctor.id === currentDoctorId),
     [canSeeAll, doctors, currentDoctorId]
   )
-  const summaries = useMemo(() => visibleDoctors.map((d) => {
-    const parts=activeMonthKeys.map(key=>computeSummary(d,doctorShares,treatments,patients,txs,payments,key,profitByMonth,vatBps));const first=parts[0]
-    return {...first,details:parts.flatMap(p=>p.details),gross:parts.reduce((s,p)=>s+p.gross,0),cost:parts.reduce((s,p)=>s+p.cost,0),net:parts.reduce((s,p)=>s+p.net,0),bonus:parts.reduce((s,p)=>s+p.bonus,0),entitlement:parts.reduce((s,p)=>s+p.entitlement,0),paid:parts.reduce((s,p)=>s+p.paid,0),remaining:parts.reduce((s,p)=>s+p.remaining,0),completedCount:parts.reduce((s,p)=>s+p.completedCount,0),fixedAmount:parts.reduce((s,p)=>s+p.fixedAmount,0),commissionAmount:parts.reduce((s,p)=>s+p.commissionAmount,0),guaranteeCompletion:parts.reduce((s,p)=>s+p.guaranteeCompletion,0),guaranteeAmount:parts.reduce((s,p)=>s+(p.doctor.guarantee_active ? (p.doctor.guarantee_amount ?? 0) : 0),0),clinicNetProfit:parts.reduce((s,p)=>s+p.clinicNetProfit,0),profitShare:parts.reduce((s,p)=>s+p.profitShare,0)}
-  }), [visibleDoctors, doctorShares, treatments, patients, txs, payments, profitByMonth, activeMonthKeys, vatBps])
+  const summaries = useMemo(
+    () => visibleDoctors.map((d) => computeRange(d, doctorShares, treatments, patients, txs, payments, range.start, range.end, vatBps)),
+    [visibleDoctors, doctorShares, treatments, patients, txs, payments, range, vatBps]
+  )
+  const receivables = useMemo(
+    () => new Map(visibleDoctors.map((d) => [d.id, computeReceivable(d, doctorShares, treatments, patients, txs, payments, vatBps)])),
+    [visibleDoctors, doctorShares, treatments, patients, txs, payments, vatBps]
+  )
+  const rcv = (id: number) => receivables.get(id) ?? { entitlement: 0, paid: 0, remaining: 0 }
   const firstId = canSeeAll ? summaries[0]?.doctor.id ?? null : currentDoctorId
   const [persistedSelectedId, setPersistedSelectedId] = usePersistedPreference<number | null>('dentsoft:last-doctor-filter-earnings', firstId)
   const selectedId =
@@ -143,8 +158,8 @@ export default function EarningsDashboard({ doctors, doctorShares, treatments, p
   if (!selected) return <div className="rounded-[24px] border border-dashed border-slate-300 bg-white p-10 text-center"><p className="font-black text-slate-700">Hakediş kaydıyla eşleşen hekim bulunamadı.</p><p className="mt-2 text-sm font-semibold text-slate-400">Ayarlar bölümünden kullanıcı hesabını bir hekimle eşleştirin.</p></div>
 
   return <div className="space-y-6">
-    <div className="flex flex-wrap items-end justify-between gap-3 rounded-[18px] border border-slate-200 bg-white p-4"><div><p className="text-sm font-black text-[#142536]">Tahsilat Detayları Dönemi</p><p className="mt-1 text-xs font-semibold text-slate-400">Eski ayların tahsilat ve hakediş kırılımlarına erişin</p></div><div className="flex flex-wrap gap-2"><select value={detailPeriod} onChange={e=>setDetailPeriod(e.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-600"><option value="selected">Seçili ay</option><option value="last">Geçen ay</option><option value="3">Son 3 ay</option><option value="6">Son 6 ay</option><option value="year">Bu yıl</option><option value="custom">Özel tarih aralığı</option></select>{detailPeriod==='custom'&&<><input type="month" value={customStart} onChange={e=>setCustomStart(e.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs font-bold"/><input type="month" value={customEnd} onChange={e=>setCustomEnd(e.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs font-bold"/></>}</div></div>
-    {canSeeAll && <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_12px_32px_rgba(15,23,42,0.05)]"><div className="mb-4"><h3 className="font-black text-[#142536]">Hekim Hakediş Kartları</h3><p className="mt-1 text-xs font-semibold text-slate-400">Detayını açmak istediğiniz hekimi seçin</p></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{summaries.map((row) => <button key={row.doctor.id} onClick={() => setSelectedId(row.doctor.id)} className={`rounded-[18px] border p-4 text-left transition ${selected.doctor.id === row.doctor.id ? 'border-[#2DD4BF] bg-[#E9FBF8] shadow-md' : 'border-slate-200 bg-slate-50 hover:border-slate-300'}`}><div className="flex items-start justify-between gap-3"><div><p className="font-black text-[#142536]">Dt. {row.doctor.name}</p><p className="mt-1 text-[11px] font-bold text-slate-400">{MODEL_LABEL[row.doctor.payment_model ?? ''] ?? 'Model tanımsız'}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${row.remaining >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{money(row.remaining)}</span></div><div className="mt-4 grid grid-cols-3 gap-2 text-xs"><Mini label="Ciro" value={money(row.gross)} /><Mini label="Hakediş" value={money(row.entitlement)} /><Mini label="Ödenen" value={money(row.paid)} /></div></button>)}</div></section>}
+    <div className="flex flex-wrap items-end justify-between gap-3 rounded-[18px] border border-slate-200 bg-white p-4"><div><p className="text-sm font-black text-[#142536]">Tahsilat Detayları Dönemi</p><p className="mt-1 text-xs font-semibold text-slate-400">Aşağıdaki yeşil kutu ve ayrıntılar seçtiğiniz dönem içindir (gün, hafta, ay veya serbest aralık)</p></div><div className="flex flex-wrap gap-2"><select value={detailPeriod} onChange={e=>setDetailPeriod(e.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-600"><option value="today">Bugün</option><option value="week">Bu hafta</option><option value="last7">Son 7 gün</option><option value="selected">Seçili ay</option><option value="last">Geçen ay</option><option value="3">Son 3 ay</option><option value="6">Son 6 ay</option><option value="year">Bu yıl</option><option value="custom">Özel tarih aralığı</option></select>{detailPeriod==='custom'&&<><input type="date" value={customStart} onChange={e=>setCustomStart(e.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs font-bold"/><input type="date" value={customEnd} onChange={e=>setCustomEnd(e.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs font-bold"/></>}<span className="flex h-10 items-center rounded-xl bg-slate-50 px-3 text-xs font-bold text-slate-500">{dateText(range.start)} – {dateText(range.end)}</span></div></div>
+    {canSeeAll && <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_12px_32px_rgba(15,23,42,0.05)]"><div className="mb-4"><h3 className="font-black text-[#142536]">Hekim Hakediş Kartları</h3><p className="mt-1 text-xs font-semibold text-slate-400">Her kart hekimin toplam alacağını gösterir (işe başlangıçtan bugüne biriken hakediş − yapılan tüm ödemeler). Dönemlik ayrıntı için hekimi seçin.</p></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{summaries.map((row) => <button key={row.doctor.id} onClick={() => setSelectedId(row.doctor.id)} className={`rounded-[18px] border p-4 text-left transition ${selected.doctor.id === row.doctor.id ? 'border-[#2DD4BF] bg-[#E9FBF8] shadow-md' : 'border-slate-200 bg-slate-50 hover:border-slate-300'}`}><div className="flex items-start justify-between gap-3"><div><p className="font-black text-[#142536]">Dt. {row.doctor.name}</p><p className="mt-1 text-[11px] font-bold text-slate-400">{MODEL_LABEL[row.doctor.payment_model ?? ''] ?? 'Model tanımsız'}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${rcv(row.doctor.id).remaining >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>Alacak {money(rcv(row.doctor.id).remaining)}</span></div><div className="mt-4 grid grid-cols-3 gap-2 text-xs"><Mini label="Toplam hakediş" value={money(rcv(row.doctor.id).entitlement)} /><Mini label="Ödenen" value={money(rcv(row.doctor.id).paid)} /><Mini label="Alacak" value={money(rcv(row.doctor.id).remaining)} /></div></button>)}</div></section>}
     <section className="overflow-hidden rounded-[26px] bg-[linear-gradient(135deg,#0F766E,#1EAEA0)] p-6 text-white shadow-[0_18px_42px_rgba(15,118,110,0.24)]">
       <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div>

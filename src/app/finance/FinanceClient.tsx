@@ -67,6 +67,7 @@ export interface FinDoctor {
   bonus_amount: number | null
   per_transaction_amount: number | null
   salary_day: number | null
+  start_date?: string | null
   payment_account: string | null
   guarantee_active: boolean
   guarantee_period: string

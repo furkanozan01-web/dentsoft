@@ -25,6 +25,7 @@ type DoctorPayload = {
   bonus_amount: number | null
   per_transaction_amount: number | null
   salary_day: number | null
+  start_date?: string | null
   payment_account: string | null
   work_hours_json: Record<string, DayHours> | null
   title?: string | null
@@ -104,6 +105,7 @@ function sanitizeDoctor(input: DoctorPayload): { error?: string; row?: Sanitized
       bonus_amount: Math.max(0, Math.round(input.bonus_amount ?? 0)),
       per_transaction_amount: null,
       salary_day: input.salary_day ? Math.min(31, Math.max(1, Math.round(input.salary_day))) : null,
+      start_date: /^\d{4}-\d{2}-\d{2}$/.test(input.start_date ?? '') ? input.start_date : null,
       payment_account: input.payment_account?.trim() || null,
       work_hours_json: input.work_hours_json ?? null,
       title: input.title?.trim() || 'Diş Hekimi',

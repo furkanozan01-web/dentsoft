@@ -94,6 +94,7 @@ export interface Doctor {
   bonus_amount: number | null
   per_transaction_amount: number | null
   salary_day: number | null
+  start_date: string | null
   payment_account: string | null
   work_hours_json: Record<string, DayHours> | null
   is_mesul_mudur: boolean

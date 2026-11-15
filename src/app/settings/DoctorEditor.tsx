@@ -55,6 +55,7 @@ export function DoctorEditor({
   const [guaranteeMethod, setGuaranteeMethod] = useState(doctor?.guarantee_method ?? 'minimum_total')
   const [guaranteeNote, setGuaranteeNote] = useState(doctor?.guarantee_note ?? '')
   const [salaryDay, setSalaryDay] = useState(doctor?.salary_day ? String(doctor.salary_day) : '')
+  const [startDate, setStartDate] = useState(doctor?.start_date ?? '')
   const [paymentAccount, setPaymentAccount] = useState(doctor?.payment_account ?? '')
   const [hours, setHours] = useState<Record<string, DayHours>>(() => {
     const base = emptyWorkHours()
@@ -101,6 +102,7 @@ export function DoctorEditor({
       guarantee_method: guaranteeMethod,
       guarantee_note: guaranteeNote || null,
       salary_day: salaryDay ? Number(salaryDay) : null,
+      start_date: startDate || null,
       payment_account: paymentAccount || null,
       work_hours_json: hours,
     }
@@ -257,6 +259,10 @@ export function DoctorEditor({
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-500">Maaş / Hakediş Günü</label>
             <input type="number" min="1" max="31" value={salaryDay} onChange={(e) => setSalaryDay(e.target.value)} placeholder="5" className={inputCls} />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-gray-500">Göreve Başlama Tarihi</label>
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputCls} />
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-500">Ödeme Kasası / Banka</label>

@@ -74,7 +74,7 @@ export default async function FinancePage() {
       .neq('status', 'cancelled'),
     supabase
       .from('doctors')
-      .select('id, name, specialty, color, commission_rate_bps, payment_model, monthly_salary, guarantee_amount, bonus_amount, per_transaction_amount, salary_day, payment_account, is_mesul_mudur, guarantee_active, guarantee_period, guarantee_method, guarantee_note')
+      .select('id, name, specialty, color, commission_rate_bps, payment_model, monthly_salary, guarantee_amount, bonus_amount, per_transaction_amount, salary_day, start_date, payment_account, is_mesul_mudur, guarantee_active, guarantee_period, guarantee_method, guarantee_note')
       .eq('clinic_id', clinicId)
       .eq('status', 'active')
       .order('name'),

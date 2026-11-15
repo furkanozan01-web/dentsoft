@@ -26,6 +26,8 @@ export interface HakedisDoctor {
   guarantee_period: string
   guarantee_method: string
   guarantee_note: string | null
+  /** Göreve başlama tarihi: sabit maaş birikimi bu tarihten başlar (boşsa bu aydan) */
+  start_date?: string | null
 }
 
 export interface HakedisDoctorShare {
@@ -117,65 +119,79 @@ export interface DoctorSummary {
   clinicNetProfit: number
   profitShare: number
   shareRate: number
+  /** Garantör sistemde, dönemdeki garanti tutarı (aylık garanti × kapsanan ay) */
+  guaranteeAmount: number
 }
 
-// ─── Ana hesaplama fonksiyonu ─────────────────────────────────────────────────
+// ─── Tarih yardımcıları ───────────────────────────────────────────────────────
+
+const pad2 = (n: number) => String(n).padStart(2, '0')
+const lastDayOf = (key: string) => {
+  const [y, m] = key.split('-').map(Number)
+  return new Date(y, m, 0).getDate()
+}
+const monthFirst = (key: string) => `${key}-01`
+const monthLast = (key: string) => `${key}-${pad2(lastDayOf(key))}`
+const localToday = () => new Date().toLocaleDateString('en-CA')
+
+/** Aralıkla kesişen ay anahtarları ('YYYY-MM'), eskiden yeniye */
+function monthsOverlapping(startISO: string, endISO: string): string[] {
+  const keys: string[] = []
+  let y = Number(startISO.slice(0, 4))
+  let m = Number(startISO.slice(5, 7))
+  const endKey = endISO.slice(0, 7)
+  for (let guard = 0; guard < 2400; guard++) {
+    const key = `${y}-${pad2(m)}`
+    if (key > endKey) break
+    keys.push(key)
+    m += 1
+    if (m > 12) { m = 1; y += 1 }
+  }
+  return keys
+}
+
+// ─── Çekirdek: bir tarih aralığında alınan paraya göre komisyon ───────────────
 
 /**
- * @param doctor   - Hesaplama yapılacak hekim
- * @param shares   - Kliniğin tüm hekim hisseleri (fonksiyon içinde doctor.id filtresi uygular; her satırın kendi branch_id'si var)
- * @param treatments - Kliniğin tüm tedavileri (fonksiyon içinde doctor.id + monthKey filtresi uygular)
- * @param patients - Kliniğin tüm hastaları
- * @param txs      - Kliniğin tüm işlemleri (payment tipindekiler kullanılır)
- * @param payments - Tüm hekim ödemeleri
- * @param monthKey - 'YYYY-MM' formatında ay (örn. '2026-06')
- * @param profitByMonth - `${branch_id}:${monthKey}` anahtarlı şube net kâr tablosu (bkz. finance/page.tsx)
+ * Komisyon: ALINAN PARAYA göre (işin yapıldığı tarihe bakılmaz).
+ * Aralıkta alınan ödeme, hastanın tüm (iptal olmayan) işleri üzerinden hekimlere iş payı oranında dağıtılır.
+ * Hekim, kendi payının komisyon oranını alır; masraf (lab/malzeme + KDV) tahsil edilen oranda düşülür.
+ * Hastanın toplam ücretini aşan ödeme (alacak) hakediş doğurmaz.
  */
-export function computeSummary(
+function commissionCore(
   doctor: HakedisDoctor,
-  shares: HakedisDoctorShare[],
   treatments: HakedisTreatment[],
   patients: HakedisPatient[],
   txs: HakedisTx[],
-  payments: HakedisDoctorPayment[],
-  monthKey: string,
-  profitByMonth: Record<string, number>,
-  /** Klinik KDV oranı (baz puan, örn. 1000 = %10). Tedavi ücretleri KDV dahildir; KDV hekime masraf olarak gösterilir. */
-  vatBps = 0
-): DoctorSummary {
+  startISO: string,
+  endISO: string,
+  vatBps: number
+) {
   const patientMap = new Map(patients.map((p) => [p.id, p]))
-  const periodTreatments = treatments.filter(
-    (t) => t.doctor_id === doctor.id && t.treatment_date?.startsWith(monthKey)
-  )
-  const completedTreatments = periodTreatments.filter((t) => t.status === 'done')
-  const completedCount = completedTreatments.length
   const rate = doctor.commission_rate_bps ?? 0
-  // Prim kaldırıldı: hekim üç kalemden alır: sabit maaş, kâr payı (hisse), komisyon. Komisyon masraf düşüldükten sonraki kâr üzerinden hesaplanır.
+  const inRange = (date: string) => date >= startISO && date <= endISO
+  const periodTreatments = treatments.filter(
+    (t) => t.doctor_id === doctor.id && t.treatment_date != null && inRange(t.treatment_date.slice(0, 10))
+  )
 
-  // ── Komisyon: ALINAN PARAYA göre (işin yapıldığı aya bakılmaz) ──
-  // O ay alınan ödeme, hastanın tüm (iptal olmayan) işleri üzerinden hekimlere iş payı oranında dağıtılır.
-  // Hekim, kendi payının komisyon oranını alır; masraf, tahsil edilen oranda düşülür.
-  // Hastanın toplam ücretini aşan ödeme (alacak) hakediş doğurmaz.
-  const firstOfMonth = `${monthKey}-01`
-  const inMonth = (date: string) => date.startsWith(monthKey)
   const payTxs = txs.filter((tx) => tx.type === 'payment' && tx.patient_id != null)
   const patientIds = new Set<number>()
-  for (const tx of payTxs) if (inMonth(tx.transaction_date)) patientIds.add(tx.patient_id as number)
+  for (const tx of payTxs) if (inRange(tx.transaction_date)) patientIds.add(tx.patient_id as number)
   for (const t of periodTreatments) if (t.patient_id != null) patientIds.add(t.patient_id)
 
-  const collectedBy = new Map<number, number>() // tedavi id -> bu ay tahsil edilen (kuruş)
+  const collectedBy = new Map<number, number>() // tedavi id -> aralıkta tahsil edilen (kuruş)
   const lastCollection = new Map<number, { date: string; method: string | null }>() // hasta -> son tahsilat
   for (const pid of patientIds) {
     const pTreatments = treatments.filter((t) => t.patient_id === pid)
     const totalFee = pTreatments.reduce((s, t) => s + (t.fee ?? 0), 0)
     if (totalFee <= 0) continue
     const pPays = payTxs.filter((tx) => tx.patient_id === pid)
-    const monthPays = pPays.filter((tx) => inMonth(tx.transaction_date))
-    if (monthPays.length === 0) continue
-    const priorPaid = pPays.filter((tx) => tx.transaction_date < firstOfMonth).reduce((s, tx) => s + tx.amount, 0)
+    const rangePays = pPays.filter((tx) => inRange(tx.transaction_date))
+    if (rangePays.length === 0) continue
+    const priorPaid = pPays.filter((tx) => tx.transaction_date < startISO).reduce((s, tx) => s + tx.amount, 0)
     const capacity = Math.max(totalFee - priorPaid, 0)
-    const linked = monthPays.filter((tx) => tx.treatment_id != null)
-    const unlinkedTotal = monthPays.filter((tx) => tx.treatment_id == null).reduce((s, tx) => s + tx.amount, 0)
+    const linked = rangePays.filter((tx) => tx.treatment_id != null)
+    const unlinkedTotal = rangePays.filter((tx) => tx.treatment_id == null).reduce((s, tx) => s + tx.amount, 0)
     const pool = Math.min(unlinkedTotal, capacity)
     for (const tr of pTreatments) {
       const fromPool = Math.round((pool * (tr.fee ?? 0)) / totalFee)
@@ -183,11 +199,11 @@ export function computeSummary(
       const value = Math.min(tr.fee ?? 0, fromPool + fromLinked)
       if (value > 0) collectedBy.set(tr.id, value)
     }
-    const latest = [...monthPays].sort((a, b) => a.transaction_date.localeCompare(b.transaction_date)).at(-1)
+    const latest = [...rangePays].sort((a, b) => a.transaction_date.localeCompare(b.transaction_date)).at(-1)
     if (latest) lastCollection.set(pid, { date: latest.transaction_date, method: latest.method ?? null })
   }
 
-  // Satırlar: bu hekimin, o ay tahsilat alan tedavileri + o ay yapılan (henüz tahsilatı olmayan) tedavileri
+  // Satırlar: bu hekimin, aralıkta tahsilat alan tedavileri + aralıkta yapılan (henüz tahsilatı olmayan) tedavileri
   const periodIds = new Set(periodTreatments.map((t) => t.id))
   const doctorRows = treatments.filter(
     (t) => t.doctor_id === doctor.id && (periodIds.has(t.id) || (collectedBy.get(t.id) ?? 0) > 0)
@@ -198,7 +214,6 @@ export function computeSummary(
     const collected = collectedBy.get(treatment.id) ?? 0
     const gross = collected
     // Masraf = lab/malzeme (tahsil edilen oranda) + KDV (ücret KDV dahildir; KDV klinik geliri değildir).
-    // Komisyon, masraflar düşüldükten sonraki kâr üzerinden hesaplanır.
     const materialCost = treatmentFee > 0 ? Math.round((treatment.cost ?? 0) * (collected / treatmentFee)) : 0
     const vat = vatBps > 0 ? Math.round((collected * vatBps) / (10000 + vatBps)) : 0
     const cost = materialCost + vat
@@ -234,65 +249,155 @@ export function computeSummary(
     }
   })
 
-  const gross = details.reduce((s, r) => s + r.gross, 0)
-  const cost = details.reduce((s, r) => s + r.cost, 0)
-  const net = details.reduce((s, r) => s + r.net, 0)
-  const detailBonus = details.reduce((s, r) => s + r.bonus, 0)
-  const variable = details.reduce((s, r) => s + r.earning, 0)
+  return {
+    details,
+    periodTreatments,
+    gross: details.reduce((s, r) => s + r.gross, 0),
+    cost: details.reduce((s, r) => s + r.cost, 0),
+    net: details.reduce((s, r) => s + r.net, 0),
+    variable: details.reduce((s, r) => s + r.earning, 0),
+    rate,
+  }
+}
 
-  const currentMonth = new Date().toLocaleDateString('en-CA').slice(0, 7)
-  const fixedDue = monthKey < currentMonth || (
-    monthKey === currentMonth && (!doctor.salary_day || new Date().getDate() >= doctor.salary_day)
-  )
-  const fixedAmount = fixedDue ? (doctor.monthly_salary ?? 0) : 0
-  const periodBonus = 0 // prim yok
-  const calculatedBeforeGuarantee = fixedAmount + variable + periodBonus
-  const guaranteeBase = doctor.guarantee_method === 'commission_only'
-    ? variable + periodBonus
-    : calculatedBeforeGuarantee
-  const guaranteeCompletion = doctor.guarantee_active && fixedDue
-    ? Math.max((doctor.guarantee_amount ?? 0) - guaranteeBase, 0)
-    : 0
+// ─── Ana hesaplama: tarih aralığı ─────────────────────────────────────────────
 
-  // Kâr payı HAKEDİŞE DAHİL DEĞİLDİR: hakediş yalnızca yapılan işten komisyon + sabit maaş/prim/garantidir.
-  // Kâr payı, Kasa > "Kâr Payı Öde" ile kasadan hissedarlara hisse oranında dağıtılır (doctor_payments.payment_type='kar_payi').
-  // Burada yalnızca bilgi olarak o dönemde dağıtılan tutar ve hisse oranı gösterilir.
-  const monthStart = `${monthKey}-01`
-  const monthEnd = `${monthKey}-31`
-  const activeShares = shares.filter((s) =>
-    s.doctor_id === doctor.id && s.is_active &&
-    (!s.start_date || s.start_date <= monthEnd) && (!s.end_date || s.end_date >= monthStart)
-  )
+/**
+ * Bir tarih aralığı için hakediş (gün, hafta, ay, yıl veya serbest aralık).
+ *
+ * - Komisyon: aralıkta ALINAN paraya göre (bkz. commissionCore).
+ * - Sabit maaş: maaş günü (boşsa ayın 1'i) aralığa düşen her ay için bir kez, tam tutar. Birikim,
+ *   hekimin "göreve başlama tarihinden" başlar (boşsa içinde bulunulan aydan). Maaş günü gelmemişse sayılmaz.
+ * - Garanti tamamlama: ayın tamamı aralıktaysa (veya aralık bu ayın başından bugüne kadarsa) aylık hesaplanır.
+ * - Kâr payı hakedişe dahil değildir (Kasa > "Kâr Payı Öde" ile dağıtılır).
+ *
+ * @param startISO / endISO 'YYYY-MM-DD' (dahil)
+ */
+export function computeRange(
+  doctor: HakedisDoctor,
+  shares: HakedisDoctorShare[],
+  treatments: HakedisTreatment[],
+  patients: HakedisPatient[],
+  txs: HakedisTx[],
+  payments: HakedisDoctorPayment[],
+  startISO: string,
+  endISO: string,
+  /** Klinik KDV oranı (baz puan, örn. 1000 = %10). Tedavi ücretleri KDV dahildir; KDV hekime masraf olarak gösterilir. */
+  vatBps = 0,
+  todayISO: string = localToday()
+): DoctorSummary {
+  const core = commissionCore(doctor, treatments, patients, txs, startISO, endISO, vatBps)
+  const completedCount = core.periodTreatments.filter((t) => t.status === 'done').length
+  const currentMonth = todayISO.slice(0, 7)
+  const salary = doctor.monthly_salary ?? 0
+  const accrualFrom = doctor.start_date ? doctor.start_date.slice(0, 10) : monthFirst(currentMonth)
+
+  const salaryDueDate = (key: string) => `${key}-${pad2(Math.min(doctor.salary_day || 1, lastDayOf(key)))}`
+  const fixedDueIn = (key: string) => {
+    if (salary <= 0) return false
+    const due = salaryDueDate(key)
+    return due <= todayISO && due >= accrualFrom
+  }
+
+  const months = monthsOverlapping(startISO, endISO)
+  let fixedAmount = 0
+  let guaranteeCompletion = 0
+  let guaranteeAmount = 0
+  for (const key of months) {
+    const due = salaryDueDate(key)
+    if (fixedDueIn(key) && due >= startISO && due <= endISO) fixedAmount += salary
+
+    // Garanti tamamlama: yalnızca tam kapsanan aylar (veya bu ay, aralık ayın başından bugüne kadarsa)
+    const fullyCovered = startISO <= monthFirst(key) && endISO >= monthLast(key)
+    const currentCovered = key === currentMonth && startISO <= monthFirst(key) && endISO >= todayISO
+    if (doctor.guarantee_active && (fullyCovered || currentCovered) && (salary <= 0 ? due <= todayISO : fixedDueIn(key))) {
+      const m = fullyCovered && startISO === monthFirst(key) && endISO === monthLast(key)
+        ? core
+        : commissionCore(doctor, treatments, patients, txs, monthFirst(key), monthLast(key), vatBps)
+      const monthFixed = fixedDueIn(key) ? salary : 0
+      const base = doctor.guarantee_method === 'commission_only' ? m.variable : monthFixed + m.variable
+      guaranteeCompletion += Math.max((doctor.guarantee_amount ?? 0) - base, 0)
+      guaranteeAmount += doctor.guarantee_amount ?? 0
+    }
+  }
+
+  const calculatedBeforeGuarantee = fixedAmount + core.variable
+  const entitlement = calculatedBeforeGuarantee + guaranteeCompletion
+
+  // Ödemeler: tek tam ay seçiliyse "hakediş dönemi"ne (earning_period), aksi halde ödeme tarihine göre
+  const singleFullMonth =
+    months.length === 1 && startISO === monthFirst(months[0]) && endISO === monthLast(months[0])
+  const inPeriod = (p: HakedisDoctorPayment) =>
+    singleFullMonth
+      ? (p.earning_period ?? p.payment_date.slice(0, 7)) === months[0]
+      : p.payment_date.slice(0, 10) >= startISO && p.payment_date.slice(0, 10) <= endISO
   const isProfitPayment = (p: HakedisDoctorPayment) => p.payment_type === 'kar_payi'
-  const inPeriod = (p: HakedisDoctorPayment) => (p.earning_period ?? p.payment_date.slice(0, 7)) === monthKey
   const profitShare = payments
     .filter((p) => p.doctor_id === doctor.id && isProfitPayment(p) && inPeriod(p))
     .reduce((sum, p) => sum + p.amount, 0)
-  void profitByMonth // kâr payı hakedişe girmez; parametre uyumluluk için duruyor
-  const clinicNetProfit = 0
-  const entitlement = calculatedBeforeGuarantee + guaranteeCompletion
-
   const paid = payments
     .filter((p) => p.doctor_id === doctor.id && !isProfitPayment(p) && inPeriod(p))
     .reduce((s, p) => s + p.amount, 0)
 
+  const activeShares = shares.filter(
+    (s) => s.doctor_id === doctor.id && s.is_active && (!s.start_date || s.start_date <= endISO) && (!s.end_date || s.end_date >= startISO)
+  )
+
   return {
     doctor,
-    details,
-    gross,
-    cost,
-    net,
-    bonus: periodBonus || detailBonus,
+    details: core.details,
+    gross: core.gross,
+    cost: core.cost,
+    net: core.net,
+    bonus: 0,
     entitlement,
     paid,
     remaining: entitlement - paid,
-    rate,
+    rate: core.rate,
     completedCount,
     fixedAmount,
-    commissionAmount: variable,
+    commissionAmount: core.variable,
     guaranteeCompletion,
-    clinicNetProfit,
+    clinicNetProfit: 0,
     profitShare,
     shareRate: activeShares.reduce((s, sh) => s + sh.rate_bps, 0),
+    guaranteeAmount,
   }
+}
+
+/**
+ * Aylık hakediş ('YYYY-MM'): computeRange'in ay sarmalayıcısı.
+ * @param profitByMonth kullanılmıyor (kâr payı hakedişe girmez); çağıranlarla uyumluluk için duruyor
+ */
+export function computeSummary(
+  doctor: HakedisDoctor,
+  shares: HakedisDoctorShare[],
+  treatments: HakedisTreatment[],
+  patients: HakedisPatient[],
+  txs: HakedisTx[],
+  payments: HakedisDoctorPayment[],
+  monthKey: string,
+  profitByMonth: Record<string, number>,
+  vatBps = 0
+): DoctorSummary {
+  void profitByMonth
+  return computeRange(doctor, shares, treatments, patients, txs, payments, monthFirst(monthKey), monthLast(monthKey), vatBps)
+}
+
+/**
+ * Hekimin ALACAĞI: işe başladığından bugüne kadar biriken hakediş − bugüne kadar yapılan tüm ödemeler
+ * (maaş, avans, komisyon ödemeleri; kâr payı hariç). Birkaç aylık birikmiş tutar olabilir.
+ */
+export function computeReceivable(
+  doctor: HakedisDoctor,
+  shares: HakedisDoctorShare[],
+  treatments: HakedisTreatment[],
+  patients: HakedisPatient[],
+  txs: HakedisTx[],
+  payments: HakedisDoctorPayment[],
+  vatBps = 0
+): { entitlement: number; paid: number; remaining: number } {
+  const today = localToday()
+  const s = computeRange(doctor, shares, treatments, patients, txs, payments, '1900-01-01', today, vatBps, today)
+  return { entitlement: s.entitlement, paid: s.paid, remaining: s.remaining }
 }
