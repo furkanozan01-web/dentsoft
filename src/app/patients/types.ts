@@ -193,6 +193,7 @@ export interface TreatmentPlanItem {
   order_index: number
   notes: string | null
   copied_from_id: number | null
+  doctor_id?: number | null
   created_at: string
 }
 

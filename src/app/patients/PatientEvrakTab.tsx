@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { getDoctorTc, getPatientTc, updateAnamnesis } from './actions'
-import { toTitleCase } from '@/lib/format'
+import { toTitleCase, cleanMoney, kurusToInput } from '@/lib/format'
 import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
 import { DISEASES, DISEASE_LABELS, type Anamnesis } from '@/lib/anamnesis'
 import type { ClinicInfo, DoctorOption, Patient, Transaction, Treatment } from './types'
@@ -126,7 +126,7 @@ const money = (kurus: number) => tl(kurus / 100)
 
 /** Bono (kompakt) + altında hastanın hesap özeti ve tedavi dökümü: tek A4 sayfa */
 function senetPage(s: S, acct: Acct) {
-  const top = parseFloat(str(s, 'p_toplam')) || 0, pes = parseFloat(str(s, 'p_pesin')) || 0, sen = Math.max(0, top - pes)
+  const top = parseFloat(cleanMoney(str(s, 'p_toplam'))) || 0, pes = parseFloat(cleanMoney(str(s, 'p_pesin'))) || 0, sen = Math.max(0, top - pes)
   const y = s.p_borclu === 'yakin'
   const b = y ? { ad: s.v_ad, tc: s.v_tc, adres: s.v_adres || s.h_adres, tel: s.v_tel } : { ad: s.h_ad, tc: s.h_tc, adres: s.h_adres, tel: s.h_tel }
   const vade = s.p_vade ? fd(str(s, 'p_vade')) : '', lira = Math.floor(sen + 1e-9), kr = Math.round((sen - lira) * 100)
@@ -251,7 +251,7 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
     const owed = treatments.reduce((s, t) => s + (t.fee ?? 0), 0)
     // Evrak bonosu: ilk anlaşmada hastaya bildirilen toplam tedavi ücreti (ödemeler düşülmez).
     // Kalan borç üzerinden senet, Hesap sekmesindeki Senet Robotu ile yazılır.
-    a.p_toplam = owed > 0 ? String(owed / 100) : ''
+    a.p_toplam = owed > 0 ? kurusToInput(owed) : ''
     a.p_pesin = ''
     a.p_duz = today()
     a.p_vade = addMonths(today(), 12)
@@ -374,9 +374,9 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
   }
 
   // Not: bunlar bileşen DEĞİL, düz fonksiyondur (her render'da yeni bileşen türü oluşup yazarken odak kaybolmasın)
-  const fld = (id: string, label: string, o: { type?: string; full?: boolean; placeholder?: string } = {}) => (
+  const fld = (id: string, label: string, o: { type?: string; full?: boolean; placeholder?: string; money?: boolean } = {}) => (
     <label key={id} className={`block text-xs font-bold text-slate-500 ${o.full ? 'col-span-2' : ''}`}>{label}
-      <input type={o.type ?? 'text'} value={txt(id)} placeholder={o.placeholder} onChange={(e) => set(id, e.target.value)} className={inputCls} />
+      <input type={o.money ? 'text' : o.type ?? 'text'} {...(o.money ? { inputMode: 'decimal' as const, 'data-money': '' } : {})} value={txt(id)} placeholder={o.placeholder} onChange={(e) => set(id, e.target.value)} className={inputCls} />
     </label>
   )
   const chk = (id: string, label: string) => (
@@ -396,8 +396,8 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
     </label>
   )
 
-  const top = parseFloat(txt('p_toplam')) || 0
-  const pes = parseFloat(txt('p_pesin')) || 0
+  const top = parseFloat(cleanMoney(txt('p_toplam'))) || 0
+  const pes = parseFloat(cleanMoney(txt('p_pesin'))) || 0
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
@@ -452,8 +452,8 @@ export default function PatientEvrakTab({ patient, clinic, doctors, anamnesis, t
         </Sec>
 
         <Sec title="Senet (bono)" open={on('pg_senet')}>
-          {fld('p_toplam', 'Anlaşılan toplam tedavi ücreti (TL)', { type: 'number' })}
-          {fld('p_pesin', 'Peşinat / alınan (TL)', { type: 'number' })}
+          {fld('p_toplam', 'Anlaşılan toplam tedavi ücreti (TL)', { money: true })}
+          {fld('p_pesin', 'Peşinat / alınan (TL)', { money: true })}
           <div className="col-span-2 rounded-lg bg-[#E6FFFA] px-3 py-2 font-mono text-sm text-[#142536]">
             {top ? `${tl(Math.max(0, top - pes))} TL · ${tutarYazi(Math.max(0, top - pes))}` : 'Toplam ücreti girin'}
           </div>

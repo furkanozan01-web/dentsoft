@@ -244,7 +244,7 @@ export function DistributeModal({
         {error && <div className="mb-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-600">{error}</div>}
         <div className="space-y-3">
           <label className="block text-xs font-bold text-slate-500">Toplam tutar (₺)
-            <input value={amountStr} onChange={(e) => setAmountStr(e.target.value)} placeholder="0" className={`mt-1.5 ${inputCls}`} autoFocus />
+            <input data-money value={amountStr} onChange={(e) => setAmountStr(e.target.value)} placeholder="0" className={`mt-1.5 ${inputCls}`} autoFocus />
           </label>
           <label className="block text-xs font-bold text-slate-500">Tarih
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={`mt-1.5 ${inputCls}`} />

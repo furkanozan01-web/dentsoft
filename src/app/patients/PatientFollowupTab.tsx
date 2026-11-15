@@ -3,7 +3,7 @@
 import { useState, useEffect, useTransition } from 'react'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ConfirmModal'
-import { createFollowup, updateFollowupStep, deleteFollowup, getFollowupsForPatient } from './followup-actions'
+import { createFollowup, updateFollowupStep, deleteFollowup, getFollowupsForPatient, addFollowupStep, updateFollowupStepInfo, deleteFollowupStep } from './followup-actions'
 import type { Followup, FollowupStep, Patient } from './types'
 
 const TEMPLATES = [
@@ -57,6 +57,36 @@ export default function TakipTab({ patient }: { patient: Patient }) {
             : f
         )
       )
+    })
+  }
+
+  const handleAddStep = (followupId: number, title: string, date: string | null, done: () => void) => {
+    startTransition(async () => {
+      const res = await addFollowupStep(followupId, title, date)
+      if (res.error || !res.data) { toast.error(res.error ?? 'Eklenemedi'); return }
+      const step = res.data
+      setFollowups((prev) => prev.map((f) => (f.id === followupId ? { ...f, steps: [...f.steps, step] } : f)))
+      toast.success('Eklendi')
+      done()
+    })
+  }
+
+  const handleEditStep = (followupId: number, step: FollowupStep, title: string, date: string | null, done: () => void) => {
+    startTransition(async () => {
+      const res = await updateFollowupStepInfo(step.id, { title, scheduled_date: date })
+      if (res?.error) { toast.error(res.error); return }
+      setFollowups((prev) => prev.map((f) => (f.id === followupId ? { ...f, steps: f.steps.map((s) => (s.id === step.id ? { ...s, title: title.trim(), scheduled_date: date } : s)) } : f)))
+      done()
+    })
+  }
+
+  const handleDeleteStep = async (followupId: number, step: FollowupStep) => {
+    const ok = await confirm({ title: 'Adımı Sil', message: `"${step.title}" adımı silinecek. Emin misiniz?`, confirmText: 'Sil' })
+    if (!ok) return
+    startTransition(async () => {
+      const res = await deleteFollowupStep(step.id)
+      if (res?.error) { toast.error(res.error); return }
+      setFollowups((prev) => prev.map((f) => (f.id === followupId ? { ...f, steps: f.steps.filter((s) => s.id !== step.id) } : f)))
     })
   }
 
@@ -121,6 +151,9 @@ export default function TakipTab({ patient }: { patient: Patient }) {
               key={followup.id}
               followup={followup}
               onToggleStep={(step) => handleToggleStep(followup.id, step)}
+              onAddStep={(title, date, done) => handleAddStep(followup.id, title, date, done)}
+              onEditStep={(step, title, date, done) => handleEditStep(followup.id, step, title, date, done)}
+              onDeleteStep={(step) => handleDeleteStep(followup.id, step)}
               onDelete={() => handleDelete(followup)}
               isPending={isPending}
             />
@@ -145,13 +178,20 @@ export default function TakipTab({ patient }: { patient: Patient }) {
 
 // ---- Takip Kartı ----
 function FollowupCard({
-  followup, onToggleStep, onDelete, isPending,
+  followup, onToggleStep, onAddStep, onEditStep, onDeleteStep, onDelete, isPending,
 }: {
   followup: Followup
   onToggleStep: (step: FollowupStep) => void
+  onAddStep: (title: string, date: string | null, done: () => void) => void
+  onEditStep: (step: FollowupStep, title: string, date: string | null, done: () => void) => void
+  onDeleteStep: (step: FollowupStep) => void
   onDelete: () => void
   isPending: boolean
 }) {
+  const [adding, setAdding] = useState(false)
+  const [newTitle, setNewTitle] = useState('')
+  const [newDate, setNewDate] = useState('')
+  const [editingId, setEditingId] = useState<number | null>(null)
   const total = followup.steps.length
   const completed = followup.steps.filter((s) => s.completed_at).length
   const progress = total > 0 ? Math.round((completed / total) * 100) : 0
@@ -211,15 +251,47 @@ function FollowupCard({
         {[...followup.steps]
           .sort((a, b) => a.step_order - b.step_order)
           .map((step) => (
-            <StepRow
-              key={step.id}
-              step={step}
-              onToggle={() => onToggleStep(step)}
-              isPending={isPending}
-            />
+            editingId === step.id ? (
+              <StepEditor
+                key={step.id}
+                initialTitle={step.title}
+                initialDate={step.scheduled_date ?? ''}
+                isPending={isPending}
+                onCancel={() => setEditingId(null)}
+                onSave={(title, date) => onEditStep(step, title, date, () => setEditingId(null))}
+              />
+            ) : (
+              <StepRow
+                key={step.id}
+                step={step}
+                onToggle={() => onToggleStep(step)}
+                onEdit={() => setEditingId(step.id)}
+                onDelete={() => onDeleteStep(step)}
+                isPending={isPending}
+              />
+            )
           ))}
         {followup.steps.length === 0 && (
           <p className="py-3 text-xs text-slate-400">Adım eklenmemiş</p>
+        )}
+        {adding ? (
+          <StepEditor
+            initialTitle={newTitle}
+            initialDate={newDate}
+            isPending={isPending}
+            saveLabel="Ekle"
+            onCancel={() => { setAdding(false); setNewTitle(''); setNewDate('') }}
+            onSave={(title, date) => onAddStep(title, date, () => { setAdding(false); setNewTitle(''); setNewDate('') })}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="mt-1 flex items-center gap-1.5 rounded-xl px-2 py-2 text-xs font-bold text-[#0F766E] transition-colors hover:bg-[#E9FBF8]"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+            İşlem / Seans Ekle
+          </button>
         )}
       </div>
     </div>
@@ -228,18 +300,21 @@ function FollowupCard({
 
 // ---- Adım Satırı ----
 function StepRow({
-  step, onToggle, isPending,
+  step, onToggle, onEdit, onDelete, isPending,
 }: {
   step: FollowupStep
   onToggle: () => void
+  onEdit: () => void
+  onDelete: () => void
   isPending: boolean
 }) {
   const done = Boolean(step.completed_at)
   return (
+    <div className="group/row flex items-center gap-1 rounded-xl hover:bg-slate-50">
     <button
       onClick={onToggle}
       disabled={isPending}
-      className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-slate-50 transition-colors group disabled:opacity-60"
+      className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors group disabled:opacity-60"
     >
       {/* Checkbox */}
       <div
@@ -271,6 +346,48 @@ function StepRow({
         )}
       </div>
     </button>
+    <button type="button" onClick={onEdit} disabled={isPending} aria-label="Adımı düzenle" title="Düzenle" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-[#E9FBF8] hover:text-[#0F766E] disabled:opacity-40">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+    </button>
+    <button type="button" onClick={onDelete} disabled={isPending} aria-label="Adımı sil" title="Sil" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-40">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+    </button>
+    </div>
+  )
+}
+
+// ---- Adım ekleme / düzenleme satırı ----
+function StepEditor({
+  initialTitle, initialDate, isPending, saveLabel = 'Kaydet', onSave, onCancel,
+}: {
+  initialTitle: string
+  initialDate: string
+  isPending: boolean
+  saveLabel?: string
+  onSave: (title: string, date: string | null) => void
+  onCancel: () => void
+}) {
+  const [title, setTitle] = useState(initialTitle)
+  const [date, setDate] = useState(initialDate)
+  return (
+    <div className="my-1 flex flex-wrap items-center gap-2 rounded-xl border border-[#BFEFE8] bg-[#F4FFFD] p-2">
+      <input
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && title.trim()) onSave(title, date || null); if (e.key === 'Escape') onCancel() }}
+        placeholder="İşlem / seans adı (örn. 2. Seans, Ek Kontrol)"
+        className="h-9 min-w-[180px] flex-1 rounded-lg border border-[#D9E4EA] bg-white px-3 text-sm font-semibold text-[#0F2B3D] outline-none focus:border-[#2DD4BF]"
+      />
+      <input
+        type="date"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+        className="h-9 rounded-lg border border-[#D9E4EA] bg-white px-2 text-xs font-semibold text-[#0F2B3D] outline-none focus:border-[#2DD4BF]"
+      />
+      <button type="button" disabled={isPending || !title.trim()} onClick={() => onSave(title, date || null)} className="h-9 rounded-lg bg-[#0F766E] px-3 text-xs font-black text-white hover:bg-[#0B5F59] disabled:opacity-40">{saveLabel}</button>
+      <button type="button" onClick={onCancel} className="h-9 rounded-lg border border-[#E7ECF2] bg-white px-3 text-xs font-black text-slate-500 hover:bg-slate-50">İptal</button>
+    </div>
   )
 }
 

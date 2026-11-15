@@ -11,6 +11,34 @@ import type { FinTx, FinTreatment } from './FinanceClient'
 // ---- Bilgi ----
 const PIE_COLORS = ['#2DD4BF', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444', '#10B981', '#6366F1', '#EC4899']
 
+// Pasta etiketi: dilimden çıkan ok çizgisi + tedavi adı ve adedi. Küçük (<%6) dilimlerin etiketleri çakışmasın diye kademeli uzatılır.
+function renderPieLabel(props: {
+  cx?: number; cy?: number; midAngle?: number; outerRadius?: number; percent?: number; index?: number
+  name?: string; value?: number
+}) {
+  const { cx = 0, cy = 0, midAngle = 0, outerRadius = 0, percent = 0, index = 0, name = '', value = 0 } = props
+  const RAD = Math.PI / 180
+  const cos = Math.cos(-midAngle * RAD)
+  const sin = Math.sin(-midAngle * RAD)
+  const stagger = percent < 0.06 ? (index % 2) * 14 : 0
+  const sx = cx + outerRadius * cos
+  const sy = cy + outerRadius * sin
+  const mx = cx + (outerRadius + 14 + stagger) * cos
+  const my = cy + (outerRadius + 14 + stagger) * sin
+  const ex = mx + (cos >= 0 ? 1 : -1) * 14
+  const anchor = cos >= 0 ? 'start' : 'end'
+  const color = PIE_COLORS[index % PIE_COLORS.length]
+  return (
+    <g>
+      <polyline points={`${sx},${sy} ${mx},${my} ${ex},${my}`} fill="none" stroke={color} strokeWidth={1.4} />
+      <circle cx={sx} cy={sy} r={2.2} fill={color} />
+      <text x={ex + (cos >= 0 ? 4 : -4)} y={my} textAnchor={anchor} dominantBaseline="central" fontSize={11} fontWeight={700} fill="#475569">
+        {name.length > 15 ? name.slice(0, 14) + '…' : name} <tspan fill={color} fontWeight={900}>{value}</tspan>
+      </text>
+    </g>
+  )
+}
+
 function BarTip({ active, payload, label }: {
   active?: boolean
   payload?: { name?: string; value?: number }[]
@@ -142,8 +170,8 @@ export default function BilgiTab({
           ) : (
             <>
               <div className="relative mt-4">
-                <ResponsiveContainer width="100%" height={250}>
-                  <PieChart>
+                <ResponsiveContainer width="100%" height={360}>
+                  <PieChart margin={{ top: 16, right: 86, bottom: 16, left: 86 }}>
                     <Pie
                       data={treatmentDist}
                       dataKey="value"
@@ -151,8 +179,11 @@ export default function BilgiTab({
                       cx="50%"
                       cy="50%"
                       innerRadius={64}
-                      outerRadius={92}
+                      outerRadius={94}
                       paddingAngle={3}
+                      label={renderPieLabel}
+                      labelLine={false}
+                      isAnimationActive={false}
                     >
                       {treatmentDist.map((_, i) => (
                         <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
@@ -170,14 +201,6 @@ export default function BilgiTab({
                     <p className="text-[10px] font-black uppercase text-slate-400">Tedavi</p>
                   </div>
                 </div>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {treatmentDist.map((item, i) => (
-                  <span key={item.name} className="inline-flex items-center gap-1.5 rounded-full border border-[#E7ECF2] bg-[#FAFBFC] px-2.5 py-1 text-xs font-bold text-slate-500">
-                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
-                    {item.name}
-                  </span>
-                ))}
               </div>
             </>
           )}

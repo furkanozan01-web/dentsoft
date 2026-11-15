@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ConfirmModal'
-import { parseToKurus, formatAmount } from '@/lib/format'
+import { parseToKurus, formatAmount, kurusToInput } from '@/lib/format'
 import { applyTreatmentAdjustment, closeTreatmentAccount } from './actions'
 import type { Treatment } from './types'
 import { IconPrint } from '@/components/icons'
@@ -237,7 +237,7 @@ export function TreatmentHistoryCard({
                         <span className="text-gray-400">₺</span>
                         <input
                           autoFocus
-                          value={editingFee.val}
+                          data-money value={editingFee.val}
                           onChange={(e) => onEditFee({ id: t.id, val: e.target.value })}
                           onKeyDown={(e) => { if (e.key === 'Enter') onSaveFee(t); if (e.key === 'Escape') onEditFee(null) }}
                           onBlur={() => onSaveFee(t)}
@@ -256,7 +256,7 @@ export function TreatmentHistoryCard({
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() => onEditFee({ id: t.id, val: String(t.fee / 100) })}
+                        onClick={() => onEditFee({ id: t.id, val: kurusToInput(t.fee) })}
                         disabled={disabled}
                         className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-[#E9FBF8] hover:text-[#0F766E] disabled:opacity-40"
                         title="Ücreti düzenle"
@@ -344,7 +344,7 @@ export function TreatmentHistoryCard({
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setAdjustmentType('fixed'); setAdjustmentValue(String(openTotal / 100)) }}
+                    onClick={() => { setAdjustmentType('fixed'); setAdjustmentValue(kurusToInput(openTotal)) }}
                     className={`rounded-lg px-3 py-2 text-xs font-black transition ${adjustmentType === 'fixed' ? 'bg-[#142536] text-white' : 'text-slate-500 hover:bg-slate-50'}`}
                   >
                     Sabit Tutar
@@ -378,7 +378,7 @@ export function TreatmentHistoryCard({
                   <span className="mb-1.5 block text-[11px] font-black text-slate-500">Yeni Toplam (₺)</span>
                   <input
                     type="text"
-                    inputMode="decimal"
+                    inputMode="decimal" data-money
                     value={adjustmentValue}
                     onChange={(event) => setAdjustmentValue(event.target.value)}
                     className="h-11 w-full rounded-xl border border-[#D9E4EA] bg-white px-3 text-sm font-black text-[#142536] outline-none focus:border-[#2DD4BF]"

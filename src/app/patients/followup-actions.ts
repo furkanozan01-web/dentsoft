@@ -153,3 +153,60 @@ export async function getUpcomingFollowupSteps(days = 7): Promise<{
 
   return { data: mapped }
 }
+
+// Mevcut takip kutusuna ek işlem / seans ekler (sona eklenir)
+export async function addFollowupStep(
+  followupId: number,
+  title: string,
+  scheduledDate: string | null
+): Promise<{ data: FollowupStep | null; error?: string }> {
+  const { supabase, clinicId } = await getClinicId()
+  if (!clinicId) return { data: null, error: 'Yetkisiz erişim' }
+  const cleanTitle = title?.trim()
+  if (!cleanTitle) return { data: null, error: 'İşlem / seans adı zorunludur' }
+  if (cleanTitle.length > 200) return { data: null, error: 'Ad en fazla 200 karakter olabilir' }
+  const date = scheduledDate && /^\d{4}-\d{2}-\d{2}$/.test(scheduledDate) ? scheduledDate : null
+
+  const { data: followup } = await supabase.from('treatment_followups').select('id').eq('id', followupId).eq('clinic_id', clinicId).maybeSingle()
+  if (!followup) return { data: null, error: 'Takip bulunamadı' }
+
+  const { data: last } = await supabase
+    .from('followup_steps')
+    .select('step_order')
+    .eq('followup_id', followupId)
+    .eq('clinic_id', clinicId)
+    .order('step_order', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const { data, error } = await supabase
+    .from('followup_steps')
+    .insert({ clinic_id: clinicId, followup_id: followupId, title: cleanTitle, scheduled_date: date, step_order: (last?.step_order ?? 0) + 1 })
+    .select('id, followup_id, title, scheduled_date, completed_at, notes, step_order, created_at')
+    .single()
+  if (error || !data) return { data: null, error: error?.message ?? 'Adım eklenemedi' }
+  return { data: data as FollowupStep }
+}
+
+// Adımın adını / planlanan tarihini değiştirir
+export async function updateFollowupStepInfo(
+  stepId: number,
+  data: { title: string; scheduled_date: string | null }
+): Promise<{ error?: string } | null> {
+  const { supabase, clinicId } = await getClinicId()
+  if (!clinicId) return { error: 'Yetkisiz erişim' }
+  const title = data.title?.trim()
+  if (!title) return { error: 'İşlem / seans adı zorunludur' }
+  const date = data.scheduled_date && /^\d{4}-\d{2}-\d{2}$/.test(data.scheduled_date) ? data.scheduled_date : null
+  const { error } = await supabase.from('followup_steps').update({ title: title.slice(0, 200), scheduled_date: date }).eq('id', stepId).eq('clinic_id', clinicId)
+  if (error) return { error: error.message }
+  return null
+}
+
+export async function deleteFollowupStep(stepId: number): Promise<{ error?: string } | null> {
+  const { supabase, clinicId } = await getClinicId()
+  if (!clinicId) return { error: 'Yetkisiz erişim' }
+  const { error } = await supabase.from('followup_steps').delete().eq('id', stepId).eq('clinic_id', clinicId)
+  if (error) return { error: error.message }
+  return null
+}

@@ -12,6 +12,10 @@ export async function addTreatment(input: {
   tooth: number | null
   doctorId: number | null
   treatmentDate?: string
+  /** Planlamadan aktarımda: indirimli net ücret (kuruş); verilmezse tarife fiyatı */
+  fee?: number
+  /** Planlamadan aktarımda: indirim öncesi ücret (kuruş) */
+  originalFee?: number
 }): Promise<{ success?: boolean; error?: string }> {
   const ctx = await getCtx()
   if (!ctx) return { error: 'Yetkisiz erişim' }
@@ -74,8 +78,8 @@ export async function addTreatment(input: {
     tooth: input.tooth,
     treatment_name: tariff.treatment_name,
     category: tariff.category,
-    fee: tariff.price,
-    original_fee: tariff.price,
+    fee: input.fee != null && Number.isSafeInteger(input.fee) && input.fee >= 0 ? input.fee : tariff.price,
+    original_fee: input.originalFee != null && Number.isSafeInteger(input.originalFee) && input.originalFee >= 0 ? input.originalFee : tariff.price,
     cost: tariff.cost ?? 0, // tarifedeki masraf (lab, malzeme): komisyon masraf düşüldükten sonra hesaplanır
     is_closed: false,
     treatment_date: input.treatmentDate ?? localDateValue(),
@@ -284,7 +288,7 @@ export async function getPatientTreatmentHistory(
     .eq('clinic_id', clinicId)
     .eq('patient_id', patientId)
     .neq('status', 'cancelled')
-    .order('treatment_date', { ascending: false })
+    .order('id', { ascending: false })
     .limit(Math.min(limit, 200))
 
   if (baslangicTarihi) {

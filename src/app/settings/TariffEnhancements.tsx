@@ -13,6 +13,7 @@ export const VISUAL_SCHEMAS = [
   ['crown', 'Porselen Kuron'], ['zirconium', 'Zirkonyum Kuron'], ['emax', 'E-max'], ['extraction', 'Diş çekimi'],
   ['surgery', 'Cerrahi işlem'], ['implant', 'İmplant'], ['whitening', 'Beyazlatma'], ['orthodontics', 'Ortodonti'],
   ['bone-graft', 'Greft'], ['sinus-lift', 'Sinüs lift'],
+  ['bridge', 'Köprü'], ['post-core', 'Post-kor'],
   ['prosthesis', 'Protez'], ['removable', 'Hareketli protez'], ['total-prosthesis', 'Total protez'], ['night-guard', 'Gece plağı'],
   ['smile', 'Gülüş tasarımı'], ['pedo', 'Pedodonti'], ['periodontal', 'Periodontal tedavi'],
 ] as const
@@ -25,6 +26,7 @@ const COLORS: Record<string, string> = {
   surgery: 'from-rose-50 to-red-100 text-rose-700', implant: 'from-indigo-50 to-violet-100 text-indigo-700',
   'bone-graft': 'from-orange-50 to-amber-100 text-orange-700', 'sinus-lift': 'from-cyan-50 to-blue-100 text-cyan-700',
   whitening: 'from-white to-cyan-50 text-cyan-600', orthodontics: 'from-purple-50 to-violet-100 text-purple-700',
+  bridge: 'from-sky-50 to-blue-100 text-sky-700', 'post-core': 'from-yellow-50 to-slate-100 text-slate-700',
   prosthesis: 'from-blue-50 to-indigo-100 text-blue-700', removable: 'from-pink-50 to-rose-100 text-pink-700',
   'total-prosthesis': 'from-violet-50 to-purple-100 text-violet-700', 'night-guard': 'from-slate-50 to-blue-100 text-slate-700',
   smile: 'from-pink-50 to-fuchsia-100 text-pink-700', pedo: 'from-lime-50 to-emerald-100 text-lime-700',
@@ -35,6 +37,8 @@ export function inferTariffVisual(item: Pick<Tariff, 'visual_schema' | 'treatmen
   if (item.visual_schema) return item.visual_schema
   const text = `${item.treatment_name} ${item.category ?? ''}`.toLocaleLowerCase('tr-TR')
   if (/implant|abutment|all-on/.test(text)) return 'implant'
+  if (/\bpost\b|pivo/.test(text)) return 'post-core'
+  if (/köprü|kopru/.test(text) && !/tamir|simantasyon/.test(text)) return 'bridge'
   if (/kanal|endodont|fiber post/.test(text)) return 'root-canal'
   if (/dolgu|inley|onley|restor/.test(text)) return 'filling'
   if (/greft/.test(text)) return 'bone-graft'
@@ -54,8 +58,9 @@ export function TreatmentVisual({ schema, className = '' }: { schema: string | n
   const schemas = (schema || 'exam').split('+').filter(Boolean)
   const key = schemas[0] || 'exam'
   if (key === 'bone-graft') return <div className={`relative flex items-center justify-center overflow-hidden bg-gradient-to-br ${COLORS[key]} ${className}`} aria-label="Greft"><svg viewBox="0 0 120 80" className="h-full w-full"><path d="M8 48 Q60 28 112 48 L112 68 Q60 52 8 68Z" fill="#E9C9B8" stroke="#C58E7B" strokeWidth="2"/>{[24,34,45,57,68,80,91].map((x,index)=><circle key={x} cx={x} cy={48+(index%2)*7} r={index%3===0?4:3} fill="white" stroke="#A8B2BC" strokeWidth="1.2"/>)}</svg></div>
+  if (key === 'bridge') return <div className={`relative flex items-center justify-center overflow-hidden bg-gradient-to-br ${COLORS[key]} ${className}`} aria-label="Köprü"><svg viewBox="0 0 160 80" className="h-full w-full"><path d="M12 52 Q80 30 148 52" fill="none" stroke="#E9A8AF" strokeWidth="7" strokeLinecap="round"/><line x1="36" y1="34" x2="124" y2="34" stroke="#3B82C4" strokeWidth="9" strokeLinecap="round"/><line x1="36" y1="34" x2="124" y2="34" stroke="#93C5FD" strokeWidth="6" strokeLinecap="round"/>{[36,80,124].map((x,i)=><g key={x}><path d={`M${x-14} 22 Q${x} 14 ${x+14} 22 L${x+11} 46 Q${x} 52 ${x-11} 46Z`} fill="#93C5FD" stroke="#3B82C4" strokeWidth="1.6"/>{i!==1&&<path d={`M${x-6} 50 L${x-4} 70 M${x+6} 50 L${x+4} 70`} stroke="#C9A97C" strokeWidth="4" strokeLinecap="round"/>}</g>)}</svg></div>
   if (key === 'removable' || key === 'total-prosthesis') return <div className={`relative flex items-center justify-center overflow-hidden bg-gradient-to-br ${COLORS[key]} ${className}`} aria-label="Hareketli protez"><svg viewBox="0 0 160 72" className="h-full w-full"><path d="M13 45 Q80 8 147 45" fill="none" stroke="#E9A8AF" strokeWidth="8" strokeLinecap="round"/>{Array.from({length:14},(_,index)=>{const x=19+index*9.4;const y=39-Math.sin((index/13)*Math.PI)*20;return <path key={index} d={`M${x-4} ${y} Q${x} ${y-5} ${x+4} ${y} L${x+3} ${y+10} Q${x} ${y+13} ${x-3} ${y+10}Z`} fill="#FCFBF6" stroke="#B9A982" strokeWidth="1"/>})}</svg></div>
-  const oralTypes = schemas.map((item): OralTreatmentSymbolType | null => item === 'implant' ? 'implant' : item === 'crown' || item === 'zirconium' || item === 'emax' || item === 'prosthesis' ? 'crown' : item === 'filling' ? 'filling' : item === 'root-canal' ? 'root-canal' : item === 'exam' ? 'natural' : null).filter((item): item is OralTreatmentSymbolType => item !== null)
+  const oralTypes = schemas.map((item): OralTreatmentSymbolType | null => item === 'implant' ? 'implant' : item === 'crown' || item === 'zirconium' || item === 'emax' || item === 'prosthesis' ? 'crown' : item === 'filling' ? 'filling' : item === 'root-canal' ? 'root-canal' : item === 'post-core' ? 'post-core' : item === 'exam' ? 'natural' : null).filter((item): item is OralTreatmentSymbolType => item !== null)
   if (oralTypes.length) return <div className={`relative overflow-hidden bg-gradient-to-br ${COLORS[key] ?? COLORS.exam} ${className}`} aria-label="Tedavi şeması"><OralTreatmentSymbol types={oralTypes} crownMaterial={schemas.includes('zirconium') ? 'zirconium' : 'porcelain'} className="h-full w-full" /></div>
   const implant = key === 'implant'
   const ortho = key === 'orthodontics'

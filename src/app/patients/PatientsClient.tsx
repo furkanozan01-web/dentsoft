@@ -205,7 +205,8 @@ export default function PatientsClient({
               .eq('clinic_id', clinicId)
               .eq('patient_id', patientId)
               .neq('status', 'cancelled')
-              .order('treatment_date', { ascending: false })
+              // Kayıt sırası: en son girilen işlem en üstte (tarih sırası değil, giriş sırası)
+              .order('id', { ascending: false })
               .overrideTypes<Treatment[], { merge: false }>(),
             supabase
               .from('payment_plans')

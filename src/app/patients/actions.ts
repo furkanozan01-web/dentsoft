@@ -33,6 +33,8 @@ export {
   deletePayment,
   addPaymentWithCurrency,
   createPromissoryPlan,
+  recordPaperInvoice,
+  removeInvoiceRecord,
 } from './paymentActions'
 
 export {

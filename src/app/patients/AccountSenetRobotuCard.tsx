@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { createPromissoryPlan } from './actions'
-import { formatAmount } from '@/lib/format'
+import { formatAmount, cleanMoney } from '@/lib/format'
 import SenetPrint, { printSenetPlan, type SenetRow } from './SenetPrint'
 import type { ClinicInfo, Patient } from './types'
 import { SectionHeader, IconPrint } from './accountShared'
@@ -52,7 +52,7 @@ export function SenetRobotuCard({
   )
 
   const senetPreview = (() => {
-    const principal = parseFloat(senetPrincipal) * 100
+    const principal = parseFloat(cleanMoney(senetPrincipal)) * 100
     const months = parseInt(senetMonths, 10)
     const rate = parseFloat(senetRate)
     if (isNaN(principal) || isNaN(months) || isNaN(rate) || principal <= 0 || months < 1) return []
@@ -107,8 +107,9 @@ export function SenetRobotuCard({
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-black uppercase tracking-wide text-[#7C3AED]">Tutar (₺)</label>
           <input
-            type="number"
-            min={1}
+            type="text"
+            inputMode="decimal"
+            data-money
             value={senetPrincipal}
             onChange={(e) => setSenetPrincipal(e.target.value)}
             placeholder="0"

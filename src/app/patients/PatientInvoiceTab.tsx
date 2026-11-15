@@ -6,6 +6,7 @@ import { getNextInvoiceNo, getPatientTc, sendInvoiceToInstitution } from './acti
 import { escapeHtml, toTitleCase, formatAmount, cleanMoney } from '@/lib/format'
 import type { ClinicInfo, Patient, Transaction, Treatment } from './types'
 import { IconFileText, IconInfo } from '@/components/icons'
+import PaperInvoicePanel from './PaperInvoicePanel'
 
 function parseKurus(value: string): number {
   const raw = cleanMoney(value)
@@ -41,6 +42,7 @@ function FaturaTab({
   loading: boolean
   onChanged: () => void
 }) {
+  const [mode, setMode] = useState<'efatura' | 'kagit'>('efatura')
   const [tcNo, setTcNo] = useState<string | null>(null)
   const [generatedInvoice, setGeneratedInvoice] = useState<{ patientId: number; invoiceNo: string | null } | null>(null)
   const [invoiceNoDraft, setInvoiceNoDraft] = useState<string | null>(null)
@@ -205,6 +207,12 @@ function FaturaTab({
 
   return (
     <div className="max-w-6xl space-y-6">
+      <div className="inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+        <button type="button" onClick={() => setMode('efatura')} className={`rounded-xl px-4 py-2 text-xs font-black transition ${mode === 'efatura' ? 'bg-[#142536] text-white' : 'text-slate-500 hover:bg-slate-50'}`}>E-Fatura / Taslak</button>
+        <button type="button" onClick={() => setMode('kagit')} className={`rounded-xl px-4 py-2 text-xs font-black transition ${mode === 'kagit' ? 'bg-[#142536] text-white' : 'text-slate-500 hover:bg-slate-50'}`}>Kağıt Fatura Kesildi</button>
+      </div>
+      {mode === 'kagit' && <PaperInvoicePanel patient={patient} transactions={transactions} treatments={treatments} onChanged={onChanged} />}
+      {mode === 'efatura' && <>
       <section className="rounded-[24px] border border-slate-200/90 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <SectionHeader
@@ -228,7 +236,7 @@ function FaturaTab({
           </Field>
           <Field label="Alınan Ücret (₺)">
             <input
-              value={amountStr}
+              data-money value={amountStr}
               onChange={(e) => setAmountDraft(e.target.value)}
               className="h-12 w-full rounded-2xl border border-[#E7ECF2] bg-white px-4 text-[15px] font-semibold text-[#142536] outline-none transition focus:border-[#2DD4BF] focus:shadow-[0_0_0_4px_rgba(45,212,191,0.12)]"
             />
@@ -396,6 +404,7 @@ function FaturaTab({
           </div>
         </div>
       </section>
+      </>}
     </div>
   )
 }

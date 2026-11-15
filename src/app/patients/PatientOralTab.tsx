@@ -19,6 +19,8 @@ import {
   removePlanItem,
   copyPlanItems,
   reorderPlanItem,
+  applyPlanDiscount,
+  copyPlanItemsToTreatments,
 } from './treatment-plan-actions'
 import { FDI } from './constants'
 import ToothChart, { classifyTreatment, classifyDiagnosis } from './ToothChart'
@@ -35,7 +37,7 @@ import type {
   TreatmentPlan,
   TreatmentPlanItem,
 } from './types'
-import { ActivePlanTab, BRANCH_ORDER, tariffBranch, isUpperTooth, parseTab, DIAGNOSIS_ITEMS, PLANLAMA_COLORS, FAZ_COLORS, getMarkerColor } from './oralShared'
+import { ActivePlanTab, BRANCH_ORDER, tariffBranch, isUpperTooth, parseTab, DIAGNOSIS_ITEMS, PLANLAMA_COLORS, FAZ_COLORS } from './oralShared'
 import { PlanItemsCard, PlanTabBtn } from './OralPlanParts'
 import { TreatmentHistoryCard } from './OralTreatmentHistoryCard'
 import { IconAlertTriangle, IconSearch } from '@/components/icons'
@@ -150,19 +152,6 @@ function OralTab({
     [plans, parsedTab]
   )
 
-  // ── Şemada işaretlenecek dişler ──
-  const markedTeeth = useMemo(() => {
-    const set = new Set<number>()
-    if (parsedTab.kind === 'tedavi') return set
-    if (!currentPlan) return set
-    for (const item of currentPlan.items) {
-      if (item.tooth_no) set.add(item.tooth_no)
-    }
-    return set
-  }, [currentPlan, parsedTab])
-
-  const markerColor = getMarkerColor(parsedTab.kind, parsedTab.num)
-
   // ── Çekilen dişler (2E) ──
   // ── Mevcut tedaviler için diş sembolleri ──
   const toothStates = useMemo(() => {
@@ -170,7 +159,11 @@ function OralTab({
     for (const t of treatments) {
       if (!t.tooth) continue
       const next = treatmentFlags(t.tariff?.visual_schema, t.treatment_name)
-      if (next.totalProsthesis || next.removableProsthesis) {
+      if (next.fullArch) {
+        // Tüm çene porselen/zirkonyum: tek işlem, çenedeki tüm dişlere kron çizilir
+        const jaw = isUpperTooth(t.tooth) ? FDI.upperPermanent : FDI.lowerPermanent
+        for (const tooth of jaw) m.set(tooth, { ...(m.get(tooth) ?? {}), crown: true, crownMaterial: next.crownMaterial })
+      } else if (next.totalProsthesis || next.removableProsthesis) {
         // Protez tek dişe değil tüm çeneye aittir: tam protezde tüm dişler, parsiyelde eksik dişler protezle çizilir
         const jaw = isUpperTooth(t.tooth) ? FDI.upperPermanent : FDI.lowerPermanent
         const key = next.totalProsthesis ? 'totalProsthesis' : 'removableProsthesis'
@@ -357,6 +350,20 @@ function OralTab({
         else { toast.success('Tedavi eklendi'); onChanged() }
       })
     } else {
+      // Mantıksal bağlantı: gerçek tedaviler + tanıdaki çekim + bu plandaki önceki kalemler (çekim → implant → kron akışı serbest; çekilmişe kanal, implanta implant yok)
+      const existing: ToothFlags = { ...(toothStates.get(toothNum) ?? {}) }
+      if (diagToothStates.get(toothNum)?.extracted) existing.extracted = true
+      for (const it of currentPlan?.items ?? []) {
+        if (it.tooth_no !== toothNum) continue
+        const tf = tariffs.find((x) => x.id === it.tariff_item_id)
+        Object.assign(existing, treatmentFlags(tf?.visual_schema, it.treatment_name))
+      }
+      const incomingPlan = treatmentFlags(selectedTariffItem.visual_schema, selectedTariffItem.treatment_name)
+      const planCompat = checkTreatmentCompatibility(existing, incomingPlan)
+      if (!planCompat.ok) {
+        toast.error(planCompat.error)
+        return
+      }
       startTransition(async () => {
         const res = await addPlanItem(
           patient.id,
@@ -367,6 +374,7 @@ function OralTab({
             treatmentName: selectedTariffItem.treatment_name,
             tariffItemId: selectedTariffItem.id,
             fee: selectedTariffItem.price,
+            doctorId,
           }
         )
         if (res.error) toast.error(res.error)
@@ -473,6 +481,32 @@ function OralTab({
         setSelectedItemIds(new Set())
         void loadPlans()
       }
+    })
+  }
+
+  // ── Plan: indirim ──
+  const handleApplyDiscount = (type: 'percent' | 'fixed', value: number) => {
+    if (!currentPlan) return
+    startTransition(async () => {
+      const res = await applyPlanDiscount(currentPlan.id, { type, value })
+      if (res.error) toast.error(res.error)
+      else { toast.success(value === 0 ? 'İndirim kaldırıldı' : 'İndirim uygulandı'); void loadPlans() }
+    })
+  }
+
+  // ── Plan → Tedavi aktarımı ──
+  const [transferModal, setTransferModal] = useState<{ date: string } | null>(null)
+  const [transferPending, startTransferTransition] = useTransition()
+  const handleTransferConfirm = () => {
+    if (!transferModal) return
+    startTransferTransition(async () => {
+      const res = await copyPlanItemsToTreatments(Array.from(selectedItemIds), { treatmentDate: transferModal.date, fallbackDoctorId: doctorId })
+      if (res.error) { toast.error(res.error); return }
+      toast.success(`${res.added} kalem Tedavi sekmesine aktarıldı`)
+      if (res.errors && res.errors.length > 0) toast.warning(`Aktarılamayanlar: ${res.errors.join(' | ')}`, { duration: 9000 })
+      setTransferModal(null)
+      setSelectedItemIds(new Set())
+      onChanged()
     })
   }
 
@@ -623,8 +657,6 @@ function OralTab({
                 selected={null}
                 states={displayStates}
                 hiddenTeeth={extractedTeeth}
-                markedTeeth={markedTeeth}
-                markerColor={markerColor}
                 onSelect={handleToothClick}
               />
             ) : (
@@ -634,8 +666,6 @@ function OralTab({
                 selected={null}
                 states={displayStates}
                 hiddenTeeth={extractedTeeth}
-                markedTeeth={markedTeeth}
-                markerColor={markerColor}
                 onSelect={handleToothClick}
               />
             )}
@@ -661,8 +691,16 @@ function OralTab({
               onReorder={handleReorder}
               copyTargets={copyTargets}
               onOpenCopyModal={(type, num) =>
-                setCopyModal({ targetPlanType: type, targetPlanNumber: num, includeFee: true, includeDiscount: false })
+                setCopyModal({ targetPlanType: type, targetPlanNumber: num, includeFee: true, includeDiscount: true })
               }
+              doctors={doctors}
+              patientName={`${patient.name} ${patient.surname}`}
+              clinicName={clinic?.clinic_name ?? 'Klinik'}
+              onSelectAll={(ids) =>
+                setSelectedItemIds((prev) => (ids.length > 0 && ids.every((id) => prev.has(id)) ? new Set() : new Set(ids)))
+              }
+              onApplyDiscount={handleApplyDiscount}
+              onTransfer={() => setTransferModal({ date: treatmentDate })}
             />
           )}
 
@@ -910,6 +948,30 @@ function OralTab({
               >
                 {copyPending ? 'Kopyalanıyor...' : 'Kopyala'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {transferModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-[24px] bg-white p-6 shadow-2xl">
+            <h3 className="mb-1 text-base font-black text-[#0F2B3D]">Tedaviye Aktar</h3>
+            <p className="mb-4 text-xs font-medium text-slate-500">
+              {selectedItemIds.size} kalem, Tedavi sekmesine yapılmış işlem olarak eklenecek. Kalemin hekimi varsa o, yoksa sağ paneldeki hekim yazılır; ücret indirimli tutardır.
+            </p>
+            <label className="mb-5 block">
+              <span className="mb-1.5 block text-[11px] font-black uppercase tracking-wide text-slate-400">İşlem Tarihi</span>
+              <input
+                type="date"
+                value={transferModal.date}
+                onChange={(e) => setTransferModal({ date: e.target.value })}
+                className="h-10 w-full rounded-[12px] border border-[#E7ECF2] bg-white px-3 text-sm font-semibold text-[#0F2B3D] outline-none focus:border-[#2DD4BF]"
+              />
+            </label>
+            <div className="flex gap-3">
+              <button onClick={() => setTransferModal(null)} className="h-11 flex-1 rounded-[14px] border border-[#E7ECF2] text-sm font-black text-slate-500 transition hover:bg-slate-50">İptal</button>
+              <button onClick={handleTransferConfirm} disabled={transferPending} className="h-11 flex-1 rounded-[14px] bg-[#0F766E] text-sm font-black text-white transition hover:bg-[#0B5F59] disabled:opacity-50">{transferPending ? 'Aktarılıyor...' : 'Aktar'}</button>
             </div>
           </div>
         </div>

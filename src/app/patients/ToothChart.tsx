@@ -314,7 +314,7 @@ function canalPath(g: Geo, c: Canal): string {
 
 // ─── Tek diş ────────────────────────────────────────────────────────────────
 
-function ToothGraphic({ num, jaw, flags, fit = false, prosthetic = false }: { num: number; jaw: Jaw; flags: ToothFlags; /** true: kapsayıcıya sığacak şekilde ölçeklenir (tarife simgeleri) */ fit?: boolean; /** true: eksik dişin yerine parsiyel protez dişi çizilir */ prosthetic?: boolean }) {
+function ToothGraphic({ num, jaw, flags, fit = false, prosthetic = false, pontic = false }: { num: number; jaw: Jaw; flags: ToothFlags; /** true: eksik dişin yerine köprü gövdesi (pontik) çizilir */ pontic?: boolean; /** true: kapsayıcıya sığacak şekilde ölçeklenir (tarife simgeleri) */ fit?: boolean; /** true: eksik dişin yerine parsiyel protez dişi çizilir */ prosthetic?: boolean }) {
   const height = TOOTH_HEIGHT
   const g = geo(num)
   const { cx, cw, J, H, L, vbw, type } = g
@@ -322,7 +322,7 @@ function ToothGraphic({ num, jaw, flags, fit = false, prosthetic = false }: { nu
   const extracted = flags.extracted && !flags.implant
 
   // Çekilmiş/eksik diş (veya tam protezli çene) → boş slot
-  if (extracted && !prosthetic) {
+  if (extracted && !prosthetic && !pontic) {
     return <svg width={w} height={height} viewBox={`0 0 ${n2(vbw)} ${VBH}`} style={{ overflow: 'visible' }} />
   }
 
@@ -345,6 +345,13 @@ function ToothGraphic({ num, jaw, flags, fit = false, prosthetic = false }: { nu
       <path key="pcrown" d={crownD} fill="url(#tc-denture-tooth)" stroke="#B8AC92" strokeWidth={0.8} strokeLinejoin="round" />,
       <path key="ptint" d={crownD} fill="url(#tc-enamel-tint)" stroke="none" />,
       gloss('pgloss', 0.9)
+    )
+  } else if (pontic) {
+    // ---- KÖPRÜ GÖVDESİ (pontik): kökü olmayan, komşu ayaklara bağlı yapay taç ----
+    inner.push(
+      <path key="pontic" d={crownD} fill={crownColor} stroke={crownStroke} strokeWidth={1} strokeLinejoin="round" />,
+      <path key="pmargin" d={`M ${n2(cx - g.nw / 2 - 0.6)} ${n2(J + H * 0.1)} Q ${n2(cx)} ${n2(J + H * 0.02)} ${n2(cx + g.nw / 2 + 0.6)} ${n2(J + H * 0.1)}`} fill="none" stroke={crownStroke} strokeWidth={0.9} strokeOpacity={0.9} />,
+      gloss('pontgloss', 0.75)
     )
   } else if (flags.implant) {
     // ---- İMPLANT: kök yerine titanyum vida ----
@@ -414,8 +421,8 @@ function ToothGraphic({ num, jaw, flags, fit = false, prosthetic = false }: { nu
       }
       // Pulpa + kanallar: sağlıklı dişte dişin içinden hafifçe seçilir; kanal tedavisinde dolgu olarak belirginleşir
       const treated = flags.canal || flags.poorCanal
-      const pulpFill = flags.poorCanal ? '#1A1A1A' : flags.canal ? '#FFFBF0' : '#CF5565'
-      const pulpStroke = flags.poorCanal ? '#000000' : flags.canal ? '#A39574' : 'none'
+      const pulpFill = flags.poorCanal ? '#1A1A1A' : flags.canal ? '#F6DE8D' : '#CF5565'
+      const pulpStroke = flags.poorCanal ? '#000000' : flags.canal ? '#A67C1F' : 'none'
       inner.push(
         <g key="pulp-root" opacity={flags.poorCanal ? 0.85 : flags.canal ? 1 : 0.5} clipPath={resect ? `url(#${keepId})` : undefined}>
           {roots.canals.map((c, i) => <path key={`cn${i}`} d={canalPath(g, c)} fill={pulpFill} stroke={pulpStroke} strokeWidth={treated ? 0.5 : 0} />)}
@@ -433,8 +440,8 @@ function ToothGraphic({ num, jaw, flags, fit = false, prosthetic = false }: { nu
         inner.push(
           <path
             key="pulp-crown" d={pulpChamberPath(g)} clipPath={`url(#${clipId})`}
-            fill={flags.poorCanal ? '#1A1A1A' : flags.canal ? '#FFFBF0' : '#CF5565'}
-            stroke={flags.poorCanal ? '#000000' : flags.canal ? '#A39574' : 'none'} strokeWidth={treated ? 0.5 : 0}
+            fill={flags.poorCanal ? '#1A1A1A' : flags.canal ? '#F6DE8D' : '#CF5565'}
+            stroke={flags.poorCanal ? '#000000' : flags.canal ? '#A67C1F' : 'none'} strokeWidth={treated ? 0.5 : 0}
             opacity={flags.poorCanal ? 0.8 : flags.canal ? 0.95 : 0.13}
           />
         )
@@ -447,8 +454,38 @@ function ToothGraphic({ num, jaw, flags, fit = false, prosthetic = false }: { nu
 
     // ---- Tedavi sembolleri ----
     if (flags.filling) {
+      // Dolgu: çiğneme yüzeyinde üç loblu, kenarı belirgin gümüş dolgu + parlama
+      const posterior = type === 'molar' || type === 'premolar'
+      const fx = cx - g.ms * cw * 0.04
+      const fy = J + H * (posterior ? 0.8 : 0.74)
+      const fw = cw * (posterior ? 0.6 : 0.42)
+      const fh = H * (posterior ? 0.2 : 0.17)
       inner.push(
-        <ellipse key="fill" cx={n2(cx - g.ms * cw * 0.04)} cy={n2(J + H * (type === 'molar' || type === 'premolar' ? 0.8 : 0.72))} rx={n2(cw * 0.27)} ry={n2(H * 0.16)} fill="url(#tc-amalgam)" stroke="#69747E" strokeWidth={0.5} clipPath={`url(#${clipId})`} />
+        <path
+          key="fill" clipPath={`url(#${clipId})`}
+          d={`M ${n2(fx - fw / 2)} ${n2(fy)} C ${n2(fx - fw / 2)} ${n2(fy - fh)} ${n2(fx - fw * 0.18)} ${n2(fy - fh * 1.15)} ${n2(fx)} ${n2(fy - fh * 0.6)} C ${n2(fx + fw * 0.18)} ${n2(fy - fh * 1.15)} ${n2(fx + fw / 2)} ${n2(fy - fh)} ${n2(fx + fw / 2)} ${n2(fy)} C ${n2(fx + fw / 2)} ${n2(fy + fh * 0.9)} ${n2(fx)} ${n2(fy + fh * 1.05)} ${n2(fx - fw / 2)} ${n2(fy)} Z`}
+          fill="url(#tc-amalgam)" stroke="#4F5B66" strokeWidth={0.9} strokeLinejoin="round"
+        />,
+        <ellipse key="fillshine" cx={n2(fx - fw * 0.14)} cy={n2(fy - fh * 0.25)} rx={n2(fw * 0.14)} ry={n2(fh * 0.22)} fill="#FFFFFF" fillOpacity={0.7} clipPath={`url(#${clipId})`} />
+      )
+    }
+    if (flags.post && showInternals) {
+      // Post-kor: pulpa odasından kanalın içine uzanan pim (metal: gümüş, fiber: krem)
+      const c = roots.canals[0]
+      const floor = J - 4
+      const f = 0.62
+      const x1 = c.topX
+      const y1 = J + H * 0.42
+      const x2 = c.topX + (c.tipX - c.topX) * f
+      const y2 = floor - (floor - c.tipY) * f
+      const inFill = flags.postFiber ? '#F3E7B8' : '#D5DBE0'
+      const inEdge = flags.postFiber ? '#9C8B52' : '#4F5B66'
+      inner.push(
+        <g key="post">
+          <path d={`M ${n2(x1)} ${n2(y1)} L ${n2(x1)} ${n2(floor)} L ${n2(x2)} ${n2(y2)}`} fill="none" stroke={inEdge} strokeWidth={3.6} strokeLinecap="round" strokeLinejoin="round" />
+          <path d={`M ${n2(x1)} ${n2(y1)} L ${n2(x1)} ${n2(floor)} L ${n2(x2)} ${n2(y2)}`} fill="none" stroke={inFill} strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round" />
+          <rect x={n2(x1 - 3.4)} y={n2(y1 - 1.2)} width={6.8} height={3} rx={1.2} fill={inFill} stroke={inEdge} strokeWidth={0.7} />
+        </g>
       )
     }
     if (flags.crown) {
@@ -560,7 +597,7 @@ function ToothDefs() {
   )
 }
 
-export type OralTreatmentSymbolType = 'natural' | 'implant' | 'crown' | 'filling' | 'root-canal'
+export type OralTreatmentSymbolType = 'natural' | 'implant' | 'crown' | 'filling' | 'root-canal' | 'post-core'
 
 export function OralTreatmentSymbol({ types, crownMaterial = 'porcelain', className = '' }: { types: OralTreatmentSymbolType[]; crownMaterial?: 'porcelain' | 'zirconium'; className?: string }) {
   const flags: ToothFlags = {}
@@ -569,12 +606,13 @@ export function OralTreatmentSymbol({ types, crownMaterial = 'porcelain', classN
     else if (type === 'crown') { flags.crown = true; flags.crownMaterial = crownMaterial }
     else if (type === 'filling') flags.filling = true
     else if (type === 'root-canal') flags.canal = true
+    else if (type === 'post-core') { flags.canal = true; flags.post = true }
   }
   return <div className={`relative flex items-center justify-center ${className}`}><ToothDefs /><ToothGraphic num={14} jaw="upper" flags={flags} fit /></div>
 }
 
 const hasTx = (f: ToothFlags) =>
-  f.canal || f.filling || f.crown || f.implant || f.extracted ||
+  f.canal || f.filling || f.crown || f.implant || f.extracted || f.bridge || f.post ||
   f.graft || f.removableProsthesis || f.totalProsthesis || f.apicalResection || f.mineCaryo || f.dentinCaryo || f.kret || f.nerve || f.periapical || f.poorCanal
 
 const cellWidth = (n: number) => geo(n).vbw * K
@@ -714,6 +752,38 @@ function GingivaOverlay({ teeth, jaw, states, hiddenTeeth, prosthetic, uid }: { 
   )
 }
 
+/** Köprü üyesi komşu dişleri birbirine bağlayan çubuk (iskelet) */
+function BridgeOverlay({ teeth, jaw, states }: { teeth: number[]; jaw: Jaw; states: Map<number, ToothFlags> }) {
+  const cells = teeth.reduce<{ g: Geo; x: number; w: number; sm: number; flags: ToothFlags }[]>((acc, n, i) => {
+    const prev = acc[acc.length - 1]
+    const g = geo(n)
+    acc.push({ g, x: prev ? prev.x + prev.w : 0, w: g.vbw * K, sm: smileOffset(i, teeth.length), flags: states.get(n) ?? {} })
+    return acc
+  }, [])
+  const links = cells.slice(0, -1).map((a, i) => ({ a, b: cells[i + 1] })).filter(({ a, b }) => a.flags.bridge && b.flags.bridge)
+  if (links.length === 0) return null
+  const total = cells[cells.length - 1].x + cells[cells.length - 1].w
+  return (
+    <svg className="pointer-events-none absolute left-0 top-0" width={total} height={TOOTH_HEIGHT} viewBox={`0 0 ${n2(total)} ${TOOTH_HEIGHT}`} style={{ overflow: 'visible' }} aria-hidden="true">
+      <g transform={jaw === 'lower' ? `translate(0 ${TOOTH_HEIGHT}) scale(1 -1)` : undefined}>
+        {links.map(({ a, b }, i) => {
+          const zr = a.flags.crownMaterial === 'zirconium'
+          const y1 = (a.g.J + a.g.H * 0.5) * K + a.sm
+          const y2 = (b.g.J + b.g.H * 0.5) * K + b.sm
+          const x1 = a.x + a.w / 2
+          const x2 = b.x + b.w / 2
+          return (
+            <g key={i}>
+              <line x1={n2(x1)} y1={n2(y1)} x2={n2(x2)} y2={n2(y2)} stroke={zr ? '#B7791F' : '#3B82C4'} strokeWidth={9} strokeLinecap="round" />
+              <line x1={n2(x1)} y1={n2(y1)} x2={n2(x2)} y2={n2(y2)} stroke={zr ? '#FCD34D' : '#93C5FD'} strokeWidth={6} strokeLinecap="round" />
+            </g>
+          )
+        })}
+      </g>
+    </svg>
+  )
+}
+
 function TeethRow({
   teeth, jaw, selected, states, onSelect, hiddenTeeth, markedTeeth, markerColor, uid,
 }: {
@@ -748,7 +818,9 @@ function TeethRow({
         {teeth.map((n, i) => {
           const flags = states.get(n) ?? {}
           const isSel = selected === n
-          const hidden = hiddenTeeth?.has(n) && !flags.implant && !prosthetic.has(n)
+          // Köprü gövdesi (pontik): eksik dişin yerinde yapay taç çizilir
+          const pontic = Boolean(flags.bridge && (hiddenTeeth?.has(n) || flags.extracted) && !flags.implant)
+          const hidden = hiddenTeeth?.has(n) && !flags.implant && !prosthetic.has(n) && !pontic
           const marked = markedTeeth?.has(n)
           const width = cellWidth(n)
           const smile = smileOffset(i, teeth.length)
@@ -760,7 +832,6 @@ function TeethRow({
                 width,
                 minWidth: width,
                 transform: `translateY(${jaw === 'upper' ? smile : -smile}px)`,
-                ...(hidden ? { visibility: 'hidden' as const, pointerEvents: 'none' as const } : {}),
                 ...(marked && markerColor ? { boxShadow: `0 0 0 2.5px ${markerColor}`, borderRadius: '12px' } : {}),
               }}
               className={`group flex shrink-0 items-center justify-center rounded-xl p-0 transition-[background-color,box-shadow] duration-150 hover:bg-[#E6FFFA]/60 ${
@@ -768,10 +839,13 @@ function TeethRow({
               }`}
               title={`Diş ${n}${hasTx(flags) ? ' • işlem var' : ''}`}
             >
-              <ToothGraphic num={n} jaw={jaw} flags={flags} prosthetic={prosthetic.has(n)} />
+              <span style={hidden ? { visibility: 'hidden' } : undefined} className="flex">
+                <ToothGraphic num={n} jaw={jaw} flags={flags} prosthetic={prosthetic.has(n)} pontic={pontic} />
+              </span>
             </button>
           )
         })}
+        <BridgeOverlay teeth={teeth} jaw={jaw} states={states} />
       </div>
     </div>
   )

@@ -46,6 +46,16 @@ export function parseToKurus(input: string): number {
   return isNaN(tl) ? 0 : Math.round(tl * 100)
 }
 
+/** Para girdisini yazarken biçimlendirir: "100000" → "100.000", "1500,5" → "1.500,5" (ondalık yalnızca virgülle, en fazla 2 hane). */
+export function formatMoneyInput(raw: string): string {
+  const noDots = raw.replace(/[^\d,.]/g, '').replace(/\./g, '')
+  const idx = noDots.indexOf(',')
+  const intRaw = idx === -1 ? noDots : noDots.slice(0, idx)
+  const decRaw = idx === -1 ? null : noDots.slice(idx + 1).replace(/,/g, '').slice(0, 2)
+  const int = intRaw.replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return decRaw === null ? int : `${int || '0'},${decRaw}`
+}
+
 export function localDateValue(date = new Date(), timeZone = 'Europe/Istanbul'): string {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,

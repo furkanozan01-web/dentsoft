@@ -15,6 +15,13 @@ export interface ToothFlags {
   totalProsthesis?: boolean
   /** Apikal rezeksiyon — kök ucu kesik çizilir */
   apicalResection?: boolean
+  /** Tüm çene porselen / zirkonyum restorasyon: çenedeki tüm dişlere kron çizilir (tek işlem, tek ücret) */
+  fullArch?: boolean
+  /** Köprü üyesi (ayak veya gövde): komşu köprü üyeleriyle bağlantı çubuğu çizilir; eksik dişte gövde (pontik) çizilir */
+  bridge?: boolean
+  /** Post-kor: kanal içine pim (metal veya fiber) çizilir */
+  post?: boolean
+  postFiber?: boolean
   // Diyagnoz sembolleri
   mineCaryo?: boolean
   dentinCaryo?: boolean
@@ -41,6 +48,9 @@ export function classifyDiagnosis(name: string): ToothBooleanFlag | null {
 // Tedavi adından sembol türünü sınıflandırır
 export function classifyTreatment(name: string): ToothBooleanFlag | null {
   const s = name.toLocaleLowerCase('tr')
+  // İmplant ÜSTÜ yapılar (kron, veneer, üst yapı) implant yerleştirme değildir; implant rehberi (cerrahi şablon) hiçbir sembol çizmez
+  if (/implant\s*(üstü|üzeri|destekli)/.test(s) || s.includes('abutment')) return 'crown'
+  if (s.includes('implant rehberi')) return null
   if (s.includes('implant')) return 'implant'
   if (s.includes('çekim') || s.includes('cekim') || s.includes('ekstraksiyon')) return 'extracted'
   if (s.includes('kanal') || s.includes('endo')) return 'canal'
@@ -70,6 +80,26 @@ export function classifyTreatment(name: string): ToothBooleanFlag | null {
 function applyNameHints(flags: ToothFlags, name: string): ToothFlags {
   const s = name.toLocaleLowerCase('tr')
   if (s.includes('rezeksiyon')) flags.apicalResection = true
+  // İmplant üstü kron/üst yapı: implant değil, implantın ÜSTÜNE yapılan restorasyondur (implant varsa eklenebilir)
+  if (/implant\s*(üstü|üzeri|destekli)/.test(s) || s.includes('abutment')) { delete flags.implant; flags.crown = true; flags.crownMaterial = flags.crownMaterial ?? (s.includes('zirkon') ? 'zirconium' : 'porcelain') }
+  if (s.includes('implant rehberi')) { delete flags.implant; delete flags.crown; delete flags.crownMaterial }
+  // Tüm çene porselen / zirkonyum: çenedeki tüm dişlerin restorasyonu (tam protez gibi tek işlem)
+  if (/(tüm|tam)\s*çene/.test(s) && /porselen|zirkon/.test(s) && !s.includes('protez')) {
+    flags.fullArch = true
+    flags.crown = true
+    flags.crownMaterial = s.includes('zirkon') ? 'zirconium' : 'porcelain'
+  }
+  // Köprü (tamir / simantasyon işlemleri hariç): ayak ve gövde dişlerini birbirine bağlar. Adeziv (Maryland/Roach) köprüde ayak dişi doğal kalır.
+  if (/köprü|kopru/.test(s) && !/tamir|simantasyon/.test(s)) {
+    flags.bridge = true
+    if (!/adeziv|maryland|roach/.test(s)) { flags.crown = true; flags.crownMaterial = flags.crownMaterial ?? (s.includes('zirkon') ? 'zirconium' : 'porcelain') }
+  }
+  // Post-kor / pivo: kanal içine pim
+  if (/\bpost\b|pivo/.test(s)) {
+    flags.post = true
+    flags.canal = true
+    if (s.includes('fiber')) flags.postFiber = true
+  }
   if (s.includes('zirkon')) { flags.crown = true; flags.crownMaterial = 'zirconium' }
   const total = s.includes('tam protez') || s.includes('total protez')
   const partial = s.includes('bölümlü protez') || s.includes('parsiyel') || s.includes('hareketli protez') || s.includes('hassas tutuculu')
@@ -103,6 +133,8 @@ export function treatmentFlags(schema: string | null | undefined, name: string):
     else if (item === 'bone-graft') flags.graft = true
     else if (item === 'removable') flags.removableProsthesis = true
     else if (item === 'total-prosthesis') flags.totalProsthesis = true
+    else if (item === 'bridge') { flags.bridge = true; flags.crown = true; flags.crownMaterial = 'porcelain' }
+    else if (item === 'post-core') { flags.post = true; flags.canal = true }
   }
   return applyNameHints(flags, name)
 }
@@ -132,6 +164,9 @@ export function checkTreatmentCompatibility(
 ): { ok: true } | { ok: false; error: string } {
   const block = (reason: string): { ok: false; error: string } => ({ ok: false, error: reason })
 
+  // Tüm çene restorasyonu tek dişe değil çeneye aittir; diş bazlı kural uygulanmaz
+  if (incoming.fullArch) return { ok: true }
+
   if (incoming.extracted) {
     if (existing.extracted) return block('Bu diş zaten çekilmiş.')
     // Doğal diş üzerinde herhangi bir işlem olsa da çekim her zaman yapılabilir.
@@ -144,7 +179,7 @@ export function checkTreatmentCompatibility(
     }
   }
 
-  if (incoming.crown) {
+  if (incoming.crown && !incoming.bridge) {
     if (existing.extracted && !existing.implant) {
       return block('Bu diş çekilmiş; kron için önce implant eklenmeli.')
     }
@@ -153,8 +188,12 @@ export function checkTreatmentCompatibility(
     }
   }
 
+  if (incoming.bridge) {
+    if (existing.implant) return { ok: true }
+  }
+
   if (incoming.filling || incoming.canal) {
-    const label = TREATMENT_LABEL[incoming.filling ? 'filling' : 'canal']
+    const label = incoming.post ? 'post-kor' : TREATMENT_LABEL[incoming.filling ? 'filling' : 'canal']
     if (existing.extracted && !existing.implant) return block(`Bu diş çekilmiş; ${label} eklenemez.`)
     if (existing.implant) return block(`İmplantlı dişe ${label} eklenemez.`)
     if (existing.graft) return block(`Bu dişte greft var; ${label} eklenemez.`)

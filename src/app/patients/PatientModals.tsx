@@ -266,7 +266,7 @@ export function AddPaymentModal({
   // TL karşılığı canlı hesaplama
   const computedTry = (() => {
     if (currency === 'TRY') return null
-    const amt = parseFloat(forexAmount.replace(',', '.'))
+    const amt = parseFloat(cleanMoney(forexAmount))
     const rate = parseFloat(exchangeRate.replace(',', '.'))
     if (!isNaN(amt) && !isNaN(rate) && amt > 0 && rate > 0)
       return Math.round(amt * rate * 100)
@@ -306,7 +306,7 @@ export function AddPaymentModal({
       const res = await addPaymentWithCurrency(patientId, {
         amountKurus,
         originalCurrency: currency,
-        originalAmount: currency !== 'TRY' ? Math.round(parseFloat(forexAmount.replace(',', '.')) * 100) : null,
+        originalAmount: currency !== 'TRY' ? Math.round(parseFloat(cleanMoney(forexAmount)) * 100) : null,
         exchangeRate: currency !== 'TRY' ? parseFloat(exchangeRate.replace(',', '.')) : null,
         paymentMethod: method,
         partnerId: method === 'firma_odemesi' ? partnerId : null,
@@ -359,7 +359,7 @@ export function AddPaymentModal({
             <input
               type="text"
               inputMode="decimal"
-              value={tryAmount}
+              data-money value={tryAmount}
               onChange={(e) => setTryAmount(e.target.value)}
               required
               placeholder="1500"
@@ -379,7 +379,7 @@ export function AddPaymentModal({
                 <input
                   type="text"
                   inputMode="decimal"
-                  value={forexAmount}
+                  data-money value={forexAmount}
                   onChange={(e) => setForexAmount(e.target.value)}
                   required
                   placeholder="100"

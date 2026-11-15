@@ -163,7 +163,7 @@ export default function LabPortal({
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Porselen kron" className={`mt-1.5 ${field}`} />
             </label>
             <label className="text-xs font-black text-slate-500">Birim fiyat (₺)
-              <input value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} inputMode="decimal" placeholder="0,00" className={`mt-1.5 ${field}`} />
+              <input value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} inputMode="decimal" data-money placeholder="0,00" className={`mt-1.5 ${field}`} />
             </label>
             <label className="text-xs font-black text-slate-500">Adet
               <input value={quantity} onChange={(e) => setQuantity(e.target.value)} inputMode="numeric" className={`mt-1.5 ${field}`} />
@@ -201,7 +201,7 @@ export default function LabPortal({
               <input value={newItemName} onChange={(e) => setNewItemName(e.target.value)} placeholder="Porselen" className={`mt-1.5 w-56 ${field}`} />
             </label>
             <label className="text-xs font-black text-slate-500">Birim fiyat (₺)
-              <input value={newItemPrice} onChange={(e) => setNewItemPrice(e.target.value)} inputMode="decimal" placeholder="0,00" className={`mt-1.5 w-36 ${field}`} />
+              <input value={newItemPrice} onChange={(e) => setNewItemPrice(e.target.value)} inputMode="decimal" data-money placeholder="0,00" className={`mt-1.5 w-36 ${field}`} />
             </label>
             <button type="button" disabled={pending || !newItemName.trim()} onClick={saveItem} className="h-11 rounded-xl border border-[#BFEFE8] bg-[#E9FBF8] px-4 text-xs font-black text-[#0F766E] disabled:opacity-50">+ Kalem Ekle</button>
           </div>

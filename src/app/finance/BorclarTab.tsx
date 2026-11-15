@@ -163,7 +163,7 @@ export default function BorclarTab({
                       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">₺</span>
                       <input
                         type="text"
-                        inputMode="decimal"
+                        inputMode="decimal" data-money
                         value={payStr}
                         onChange={(e) => setPayStr(e.target.value)}
                         placeholder={`Maks. ₺${formatAmountRounded(remaining)}`}
@@ -268,7 +268,7 @@ function DebtFormModal({
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-500 mb-1.5">Toplam Tutar (₺) *</label>
-            <input type="text" inputMode="decimal" value={amountStr} onChange={(e) => setAmountStr(e.target.value)} placeholder="50000" className={inputCls} />
+            <input type="text" inputMode="decimal" data-money value={amountStr} onChange={(e) => setAmountStr(e.target.value)} placeholder="50000" className={inputCls} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

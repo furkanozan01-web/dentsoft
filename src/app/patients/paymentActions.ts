@@ -392,3 +392,85 @@ export async function createPromissoryPlan(
   revalidatePath('/patients')
   return { success: true }
 }
+
+/**
+ * Elle (kağıt) kesilen faturayı sisteme düşer. Faturanın tutarı seçilen ödemelerin toplamından küçük olabilir:
+ * tutarın tamamına fatura kesmek zorunlu değildir (KDV yalnızca faturalanan tutar için hesaplanır).
+ */
+export async function recordPaperInvoice(input: {
+  patientId: number
+  transactionIds: number[]
+  invoiceNo: string
+  invoiceDate: string
+  amountKurus: number
+  lineDescription?: string
+}): Promise<{ success?: boolean; error?: string }> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Yetkisiz erişim' }
+  const { supabase, clinicId } = ctx
+
+  const patientId = Number(input.patientId)
+  const ids = Array.from(new Set((input.transactionIds ?? []).map(Number))).filter(Boolean)
+  const invoiceNo = input.invoiceNo?.trim()
+  const amount = Math.round(Number(input.amountKurus))
+  if (!patientId || ids.length === 0) return { error: 'Faturalanacak ödeme seçilmedi' }
+  if (!invoiceNo) return { error: 'Fatura numarası zorunludur' }
+  if (invoiceNo.length > 40) return { error: 'Fatura numarası en fazla 40 karakter olabilir' }
+  if (!Number.isFinite(amount) || amount <= 0) return { error: 'Geçerli bir fatura tutarı girin' }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.invoiceDate ?? '')) return { error: 'Fatura tarihi geçersiz' }
+  if (input.invoiceDate > localDateValue()) return { error: 'Fatura tarihi ileri bir tarih olamaz' }
+
+  const patientError = await validatePatient(supabase, clinicId, patientId)
+  if (patientError) return { error: patientError }
+
+  const [{ data: txs }, { data: clash }, { data: clinic }] = await Promise.all([
+    supabase.from('transactions').select('id, amount, invoice_no').eq('clinic_id', clinicId).eq('patient_id', patientId).eq('type', 'payment').in('id', ids),
+    supabase.from('transactions').select('id').eq('clinic_id', clinicId).eq('invoice_no', invoiceNo).neq('patient_id', patientId).limit(1),
+    supabase.from('clinic_settings').select('vat_rate').eq('id', clinicId).single(),
+  ])
+  if ((txs ?? []).length !== ids.length) return { error: 'Ödeme kayıtları doğrulanamadı' }
+  if ((clash ?? []).length > 0) return { error: 'Bu fatura numarası başka bir hastada kullanılmış' }
+  const total = (txs ?? []).reduce((s, t) => s + (t.amount ?? 0), 0)
+  if (amount > total) return { error: 'Fatura tutarı seçilen ödemelerin toplamından büyük olamaz' }
+
+  const { error } = await supabase
+    .from('transactions')
+    .update({
+      invoice_no: invoiceNo,
+      invoice_sent_at: `${input.invoiceDate}T12:00:00+03:00`,
+      invoice_institution: 'Kağıt fatura',
+      invoice_line_description: input.lineDescription?.trim().slice(0, 300) || null,
+      invoice_amount: amount,
+      invoice_vat_rate: clinic?.vat_rate ?? 1000,
+    })
+    .eq('clinic_id', clinicId)
+    .eq('patient_id', patientId)
+    .eq('type', 'payment')
+    .in('id', ids)
+  if (error) return { error: error.message }
+
+  revalidatePath('/patients')
+  revalidatePath('/finance')
+  return { success: true }
+}
+
+/** Yanlış girilen faturayı geri alır: o fatura numarasına bağlı ödemeler yeniden "faturasız" olur. */
+export async function removeInvoiceRecord(patientId: number, invoiceNo: string): Promise<{ success?: boolean; error?: string }> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Yetkisiz erişim' }
+  const { supabase, clinicId } = ctx
+  const patientError = await validatePatient(supabase, clinicId, Number(patientId))
+  if (patientError) return { error: patientError }
+  if (!invoiceNo?.trim()) return { error: 'Fatura numarası gerekli' }
+  const { error } = await supabase
+    .from('transactions')
+    .update({ invoice_no: null, invoice_sent_at: null, invoice_institution: null, invoice_line_description: null, invoice_amount: null, invoice_vat_rate: null })
+    .eq('clinic_id', clinicId)
+    .eq('patient_id', Number(patientId))
+    .eq('type', 'payment')
+    .eq('invoice_no', invoiceNo.trim())
+  if (error) return { error: error.message }
+  revalidatePath('/patients')
+  revalidatePath('/finance')
+  return { success: true }
+}
