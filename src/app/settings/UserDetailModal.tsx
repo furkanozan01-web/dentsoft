@@ -103,8 +103,8 @@ export function UserDetailModal({
           <section>
             <h3 className="mb-3 text-sm font-black text-[#142536]">{isSelf ? 'Şifremi Belirle' : 'Yeni Şifre Belirle'}</h3>
             <form onSubmit={(e) => { e.preventDefault(); savePassword(new FormData(e.currentTarget)) }} className="space-y-3" autoComplete="off">
-              <input name="password" type="password" required minLength={10} maxLength={72} autoComplete="new-password" placeholder="Yeni şifre (en az 10 karakter)" className={inputCls} />
-              <input name="password2" type="password" required minLength={10} maxLength={72} autoComplete="new-password" placeholder="Yeni şifre (tekrar)" className={inputCls} />
+              <input name="password" type="password" required minLength={6} maxLength={72} autoComplete="new-password" placeholder="Yeni şifre (en az 6 karakter)" className={inputCls} />
+              <input name="password2" type="password" required minLength={6} maxLength={72} autoComplete="new-password" placeholder="Yeni şifre (tekrar)" className={inputCls} />
               <button type="submit" disabled={pending} className={btnCls}>Şifreyi Kaydet</button>
             </form>
           </section>

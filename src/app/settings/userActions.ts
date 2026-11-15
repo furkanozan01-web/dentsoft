@@ -72,7 +72,7 @@ function normalizeUsername(raw: unknown): { value?: string; error?: string } {
 }
 
 function passwordError(pw: string): string | null {
-  if (pw.length < 10) return 'Şifre en az 10 karakter olmalı'
+  if (pw.length < 6) return 'Şifre en az 6 karakter olmalı'
   if (pw.length > 72) return 'Şifre en fazla 72 karakter olabilir'
   return null
 }

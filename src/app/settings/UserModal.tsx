@@ -37,7 +37,7 @@ export function UserModal({
         {(state as R)?.error && <ErrBox msg={(state as R)!.error!} />}
         <SettField label="Ad Soyad" name="full_name" placeholder="Ayşe Yılmaz" />
         <SettField label="Kullanıcı Adı *" name="username" required placeholder="ayse.yilmaz" />
-        <SettField label="Şifre * (en az 10 karakter)" name="password" type="password" required placeholder="••••••••••" />
+        <SettField label="Şifre * (en az 6 karakter)" name="password" type="password" required placeholder="••••••" />
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1.5">Rol</label>
           <select

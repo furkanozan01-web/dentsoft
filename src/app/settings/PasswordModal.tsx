@@ -42,12 +42,12 @@ export function PasswordModal({
       <form onSubmit={(e) => { e.preventDefault(); submit(new FormData(e.currentTarget)) }} className="p-6 space-y-4" autoComplete="off">
         {error && <ErrBox msg={error} />}
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1.5">Yeni şifre (en az 10 karakter)</label>
-          <input name="password" type="password" required minLength={10} maxLength={72} autoComplete="new-password" className={cls} />
+          <label className="block text-xs font-medium text-gray-500 mb-1.5">Yeni şifre (en az 6 karakter)</label>
+          <input name="password" type="password" required minLength={6} maxLength={72} autoComplete="new-password" className={cls} />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1.5">Yeni şifre (tekrar)</label>
-          <input name="password2" type="password" required minLength={10} maxLength={72} autoComplete="new-password" className={cls} />
+          <input name="password2" type="password" required minLength={6} maxLength={72} autoComplete="new-password" className={cls} />
         </div>
         <MActions onCancel={onClose} pending={pending} label="Şifreyi Kaydet" />
       </form>
