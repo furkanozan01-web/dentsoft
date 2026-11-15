@@ -157,9 +157,8 @@ export default async function DashboardPage() {
       .from('treatments')
       .select('id, fee, cost, doctor_id, patient_id, treatment_date, status, treatment_name, is_closed')
       .eq('clinic_id', clinicId)
-      .neq('status', 'cancelled')
-      // Yalnızca bu ay (hakediş) veya hesabı kapatılmamış (devam eden hasta sayısı) tedaviler
-      .or(`is_closed.eq.false,and(treatment_date.gte.${monthStartISO},treatment_date.lt.${nextMonthStartISO})`),
+      // Hakediş alınan paraya göre ve hastanın tüm işleri üzerinden dağıtıldığı için tüm (iptal olmayan) tedaviler gerekir
+      .neq('status', 'cancelled'),
     supabase
       .from('doctor_payments')
       .select('doctor_id, amount, payment_date, earning_period, payment_type')
@@ -169,7 +168,7 @@ export default async function DashboardPage() {
       .from('transactions')
       .select('transaction_date, amount, type, patient_id, treatment_id, method, branch_id')
       .eq('clinic_id', clinicId)
-      .gte('transaction_date', monthStartISO)
+      // Ay sonuna kadar tüm işlemler: önceki aylardaki ödemeler fazla ödeme (alacak) sınırı için gerekir
       .lt('transaction_date', nextMonthStartISO),
     supabase
       .from('appointments')
@@ -259,7 +258,7 @@ export default async function DashboardPage() {
   const doctorShares = (doctorSharesRaw ?? []) as DoctorShareRow[]
   const profitByMonth: Record<string, number> = {}
   for (const tx of monthlyPaymentTxRaw ?? []) {
-    if (!tx.branch_id) continue
+    if (!tx.branch_id || tx.transaction_date < monthStartISO) continue
     const signed = tx.type === 'payment' ? tx.amount : -tx.amount
     const key = `${tx.branch_id}:${monthKey}`
     profitByMonth[key] = (profitByMonth[key] ?? 0) + signed
@@ -269,7 +268,7 @@ export default async function DashboardPage() {
     ? computeSummary(
         currentDoctor,
         doctorShares,
-        scopedTreatments.map((t) => ({ ...t, fee: t.fee ?? 0, cost: t.cost ?? 0 })),
+        treatments.map((t) => ({ ...t, fee: t.fee ?? 0, cost: t.cost ?? 0 })),
         [],
         monthlyPaymentTxRaw ?? [],
         (doctorPaymentsRaw ?? []).map((payment) => ({

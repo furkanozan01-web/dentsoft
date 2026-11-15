@@ -733,14 +733,13 @@ export async function getHekimHakedis(input: {
       .from('treatments')
       .select('id, treatment_date, fee, cost, doctor_id, status, treatment_name, patient_id')
       .eq('clinic_id', clinicId)
-      .neq('status', 'cancelled')
-      .gte('treatment_date', rangeStart)
-      .lt('treatment_date', rangeEnd),
+      // Hakediş alınan paraya göre ve hastanın tüm işleri üzerinden dağıtılır: tüm (iptal olmayan) tedaviler
+      .neq('status', 'cancelled'),
     supabase
       .from('transactions')
       .select('transaction_date, amount, type, patient_id, treatment_id, method, branch_id')
       .eq('clinic_id', clinicId)
-      .gte('transaction_date', rangeStart)
+      // Dönem sonuna kadar tüm işlemler (önceki ödemeler fazla ödeme sınırı için gerekir)
       .lt('transaction_date', rangeEnd),
     supabase
       .from('patients')
@@ -769,7 +768,7 @@ export async function getHekimHakedis(input: {
 
   const profitByMonth: Record<string, number> = {}
   for (const tx of txs ?? []) {
-    if (!tx.branch_id) continue
+    if (!tx.branch_id || tx.transaction_date < rangeStart) continue
     const signed = tx.type === 'payment' ? tx.amount : -tx.amount
     const key = `${tx.branch_id}:${monthKey}`
     profitByMonth[key] = (profitByMonth[key] ?? 0) + signed

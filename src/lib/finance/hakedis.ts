@@ -147,57 +147,57 @@ export function computeSummary(
   const completedCount = completedTreatments.length
   const rate = doctor.commission_rate_bps ?? 0
   // Prim kaldırıldı: hekim üç kalemden alır: sabit maaş, kâr payı (hisse), komisyon. Komisyon masraf düşüldükten sonraki kâr üzerinden hesaplanır.
-  const bonusPool = 0
-  const baseBonus = completedCount > 0 ? Math.floor(bonusPool / completedCount) : 0
-  const bonusRemainder = completedCount > 0 ? bonusPool % completedCount : 0
 
-  const details = periodTreatments.map((treatment): DetailRow => {
+  // ── Komisyon: ALINAN PARAYA göre (işin yapıldığı aya bakılmaz) ──
+  // O ay alınan ödeme, hastanın tüm (iptal olmayan) işleri üzerinden hekimlere iş payı oranında dağıtılır.
+  // Hekim, kendi payının komisyon oranını alır; masraf, tahsil edilen oranda düşülür.
+  // Hastanın toplam ücretini aşan ödeme (alacak) hakediş doğurmaz.
+  const firstOfMonth = `${monthKey}-01`
+  const inMonth = (date: string) => date.startsWith(monthKey)
+  const payTxs = txs.filter((tx) => tx.type === 'payment' && tx.patient_id != null)
+  const patientIds = new Set<number>()
+  for (const tx of payTxs) if (inMonth(tx.transaction_date)) patientIds.add(tx.patient_id as number)
+  for (const t of periodTreatments) if (t.patient_id != null) patientIds.add(t.patient_id)
+
+  const collectedBy = new Map<number, number>() // tedavi id -> bu ay tahsil edilen (kuruş)
+  const lastCollection = new Map<number, { date: string; method: string | null }>() // hasta -> son tahsilat
+  for (const pid of patientIds) {
+    const pTreatments = treatments.filter((t) => t.patient_id === pid)
+    const totalFee = pTreatments.reduce((s, t) => s + (t.fee ?? 0), 0)
+    if (totalFee <= 0) continue
+    const pPays = payTxs.filter((tx) => tx.patient_id === pid)
+    const monthPays = pPays.filter((tx) => inMonth(tx.transaction_date))
+    if (monthPays.length === 0) continue
+    const priorPaid = pPays.filter((tx) => tx.transaction_date < firstOfMonth).reduce((s, tx) => s + tx.amount, 0)
+    const capacity = Math.max(totalFee - priorPaid, 0)
+    const linked = monthPays.filter((tx) => tx.treatment_id != null)
+    const unlinkedTotal = monthPays.filter((tx) => tx.treatment_id == null).reduce((s, tx) => s + tx.amount, 0)
+    const pool = Math.min(unlinkedTotal, capacity)
+    for (const tr of pTreatments) {
+      const fromPool = Math.round((pool * (tr.fee ?? 0)) / totalFee)
+      const fromLinked = linked.filter((tx) => tx.treatment_id === tr.id).reduce((s, tx) => s + tx.amount, 0)
+      const value = Math.min(tr.fee ?? 0, fromPool + fromLinked)
+      if (value > 0) collectedBy.set(tr.id, value)
+    }
+    const latest = [...monthPays].sort((a, b) => a.transaction_date.localeCompare(b.transaction_date)).at(-1)
+    if (latest) lastCollection.set(pid, { date: latest.transaction_date, method: latest.method ?? null })
+  }
+
+  // Satırlar: bu hekimin, o ay tahsilat alan tedavileri + o ay yapılan (henüz tahsilatı olmayan) tedavileri
+  const periodIds = new Set(periodTreatments.map((t) => t.id))
+  const doctorRows = treatments.filter(
+    (t) => t.doctor_id === doctor.id && (periodIds.has(t.id) || (collectedBy.get(t.id) ?? 0) > 0)
+  )
+  const details = doctorRows.map((treatment): DetailRow => {
     const patient = treatment.patient_id ? patientMap.get(treatment.patient_id) : null
-    // Orantılı tahsilat: hastanın o aydaki tüm tedavileri üzerinden dağıtım
-    const patientTreatments = treatment.patient_id == null
-      ? [treatment]
-      : treatments.filter(
-          (t) => t.patient_id === treatment.patient_id && t.treatment_date?.startsWith(monthKey)
-        )
-    const totalPatientFee = patientTreatments.reduce((s, t) => s + (t.fee ?? 0), 0)
-    const patientPayments = txs.filter(
-      (tx) =>
-        tx.type === 'payment' &&
-        (tx.treatment_id === treatment.id ||
-          (treatment.patient_id != null && tx.patient_id === treatment.patient_id)) &&
-        tx.transaction_date.startsWith(monthKey)
-    )
-    const exactPayments = patientPayments.filter((tx) => tx.treatment_id === treatment.id)
-    const unlinkedPayments = treatment.patient_id == null
-      ? []
-      : patientPayments.filter((tx) => tx.treatment_id == null)
-    const exactCollected = exactPayments.reduce((s, tx) => s + tx.amount, 0)
-    const unlinkedPatientCollected = unlinkedPayments.reduce((s, tx) => s + tx.amount, 0)
-    const proportionalCollected = totalPatientFee > 0
-      ? Math.round(unlinkedPatientCollected * ((treatment.fee ?? 0) / totalPatientFee))
-      : 0
-    const collected = Math.min(treatment.fee ?? 0, exactCollected + proportionalCollected)
-
+    const treatmentFee = treatment.fee ?? 0
+    const collected = collectedBy.get(treatment.id) ?? 0
     const gross = collected
     // Masraf (lab, malzeme): tahsil edilen oranda düşülür; komisyon kalan kâr üzerinden hesaplanır
-    const treatmentFee = treatment.fee ?? 0
     const cost = treatmentFee > 0 ? Math.round((treatment.cost ?? 0) * (collected / treatmentFee)) : 0
     const net = Math.max(gross - cost, 0)
-    const completedIndex = treatment.status === 'done'
-      ? completedTreatments.findIndex((item) => item.id === treatment.id)
-      : -1
-    const bonus =
-      completedIndex >= 0
-        ? baseBonus + (completedIndex < bonusRemainder ? 1 : 0)
-        : 0
-
     const earning = rate > 0 ? Math.round((net * rate) / 10000) : 0
-
-    const relevantPayments = [...exactPayments, ...unlinkedPayments]
-    const latestCollection = relevantPayments.sort((a, b) =>
-      a.transaction_date.localeCompare(b.transaction_date)
-    ).at(-1)
-    const collectionDate = latestCollection?.transaction_date ?? null
+    const collection = treatment.patient_id != null ? lastCollection.get(treatment.patient_id) : undefined
 
     return {
       id: treatment.id,
@@ -206,15 +206,15 @@ export function computeSummary(
       surname: patient?.surname ?? '',
       treatmentDate: treatment.treatment_date,
       treatment: treatment.treatment_name,
-      collectionDate,
-      paymentMethod: latestCollection?.method ?? null,
-      treatmentAmount: treatment.fee ?? 0,
+      collectionDate: collected > 0 ? collection?.date ?? null : null,
+      paymentMethod: collected > 0 ? collection?.method ?? null : null,
+      treatmentAmount: treatmentFee,
       collected,
       gross,
       cost,
       net,
       rate,
-      bonus,
+      bonus: 0,
       earning,
       status: collected > 0 ? 'Tahsil edildi' : 'Tahsilat bekliyor',
       description:

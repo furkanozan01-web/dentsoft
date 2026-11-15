@@ -153,7 +153,8 @@ export default async function FinancePage() {
     ? (treatments ?? [])
     : (treatments ?? []).map((treatment) => treatment.doctor_id === profile.doctor_id
         ? treatment
-        : ({ ...treatment, doctor_id: null, cost: 0, fee: 0 }))
+        // Diğer hekimlerin tedavileri: ücret kalır (hasta işi paylaşımı için gerekli), hekim kimliği ve masraf gizlenir
+        : ({ ...treatment, doctor_id: null, cost: 0 }))
   const creatorNames = new Map((paymentCreators ?? []).map((creator) => [creator.id, creator.full_name]))
   const namedDoctorPayments = (doctorPayments ?? []).map((payment) => ({
     ...payment,
