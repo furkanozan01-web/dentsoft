@@ -1,12 +1,12 @@
 'use client'
 
 import { useActionState } from 'react'
-import { staffLogin, type LoginState } from './actions'
+import { credentialsLogin, type LoginState } from './actions'
 import { createClient } from '@/lib/supabase/client'
 
 export default function LoginForm() {
   const [state, action, pending] = useActionState<LoginState, FormData>(
-    staffLogin,
+    credentialsLogin,
     null
   )
 
@@ -20,39 +20,19 @@ export default function LoginForm() {
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-      {/* Başhekim Girişi */}
-      <div className="mb-6">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-          Başhekim Girişi
-        </p>
-        <button
-          onClick={handleGoogleSignIn}
-          type="button"
-          className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors font-medium text-gray-700 text-sm"
-        >
-          <GoogleIcon />
-          Google ile Giriş Yap
-        </button>
-      </div>
-
-      {/* Divider */}
-      <div className="relative my-6">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-gray-100" />
-        </div>
-        <div className="relative flex justify-center text-xs">
-          <span className="bg-white px-3 text-gray-400 uppercase tracking-wider">
-            veya
-          </span>
-        </div>
-      </div>
-
-      {/* Personel Girişi */}
       <div>
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-          Personel Girişi
+          Giriş
         </p>
         <form action={action} className="space-y-3">
+          <input
+            name="email"
+            type="email"
+            placeholder="Klinik e-postası"
+            autoComplete="email"
+            required
+            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF] transition-colors"
+          />
           <input
             name="username"
             type="text"
@@ -80,6 +60,19 @@ export default function LoginForm() {
             {pending ? 'Giriş yapılıyor…' : 'Giriş Yap'}
           </button>
         </form>
+      </div>
+
+      {/* GEÇİCİ: Ana hesap Ayarlar'da şifresini belirleyene kadar Google girişi açık kalır; sonra kaldırılacak */}
+      <div className="mt-6 border-t border-gray-100 pt-5">
+        <p className="mb-3 text-xs text-gray-400">Şifreniz henüz yoksa (geçici):</p>
+        <button
+          onClick={handleGoogleSignIn}
+          type="button"
+          className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors font-medium text-gray-700 text-sm"
+        >
+          <GoogleIcon />
+          Google ile Giriş Yap
+        </button>
       </div>
     </div>
   )

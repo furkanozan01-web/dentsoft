@@ -109,6 +109,7 @@ export interface Doctor {
 export interface Profile {
   id: string
   full_name: string | null
+  username?: string | null
   role: string
   created_at: string
   doctor_id: number | null

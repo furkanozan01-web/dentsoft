@@ -29,6 +29,10 @@ export {
 } from './doctorActions'
 
 export {
+  createStaffUser,
+  resetUserPassword,
+  setMyPassword,
+  updateUsername,
   addUserToAllowlist,
   syncDoctorsToUsers,
   updateUserRole,

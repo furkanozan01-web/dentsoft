@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ConfirmModal'
 import { updateUserRole, setUserActive, type RolePermissionRow } from './actions'
+import { PasswordModal } from './PasswordModal'
 import { ASSIGNABLE_ROLES, ROLE_LABEL } from './constants'
 import {
   SettingsIconBox,
@@ -45,6 +46,8 @@ export default function KullaniciTab({
   const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
   const [permissionUser, setPermissionUser] = useState<Profile | null>(null)
+  // Şifre penceresi: 'self' = kendi şifrem, Profile = o çalışanın şifresini sıfırla
+  const [passwordTarget, setPasswordTarget] = useState<'self' | Profile | null>(null)
 
   const doctorName = (id: number | null) =>
     id ? doctors.find((d) => d.id === id)?.name ?? null : null
@@ -112,15 +115,24 @@ export default function KullaniciTab({
               <p className="mt-1 text-sm font-medium text-slate-400">Sisteme erişebilen kullanıcılar ve yetki rolleri</p>
             </div>
           </div>
-          {isAdmin && (
+          <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={onAdd}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-[14px] bg-[linear-gradient(135deg,#5FD3C1,#1EAEA0)] px-4 text-sm font-black text-white shadow-[0_10px_20px_rgba(30,174,160,0.18)] transition hover:-translate-y-0.5 hover:brightness-105"
+              onClick={() => setPasswordTarget('self')}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-[14px] border border-[#E7ECF2] bg-white px-4 text-sm font-black text-[#142536] transition hover:bg-[#F7FAFC]"
             >
-              <IconPlus />
-              Kullanıcı Ekle
+              <IconKey />
+              Şifremi Belirle
             </button>
-          )}
+            {isAdmin && (
+              <button
+                onClick={onAdd}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-[14px] bg-[linear-gradient(135deg,#5FD3C1,#1EAEA0)] px-4 text-sm font-black text-white shadow-[0_10px_20px_rgba(30,174,160,0.18)] transition hover:-translate-y-0.5 hover:brightness-105"
+              >
+                <IconPlus />
+                Kullanıcı Ekle
+              </button>
+            )}
+          </div>
         </div>
         {profiles.length === 0 ? (
           <div className="p-6">
@@ -144,7 +156,7 @@ export default function KullaniciTab({
             <thead className="bg-[#FAFBFC]">
               <tr className="h-14 border-b border-[#EEF2F6] text-slate-400">
                 <th className="px-5 text-left text-xs font-black uppercase tracking-wide">Ad Soyad</th>
-                <th className="px-5 text-left text-xs font-black uppercase tracking-wide">E-posta</th>
+                <th className="px-5 text-left text-xs font-black uppercase tracking-wide">Kullanıcı Adı</th>
                 <th className="px-5 text-left text-xs font-black uppercase tracking-wide">Rol</th>
                 <th className="px-5 text-left text-xs font-black uppercase tracking-wide">Son Giriş</th>
                 <th className="px-5 text-left text-xs font-black uppercase tracking-wide">Durum</th>
@@ -181,7 +193,7 @@ export default function KullaniciTab({
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-xs font-semibold text-slate-500">{p.email ?? 'E-posta yok'}</td>
+                    <td className="px-5 py-4 text-xs font-semibold text-slate-500">{p.username ?? (p.is_pending ? 'Davet bekliyor' : '—')}</td>
                     <td className="px-5 py-4">
                       {canManage ? (
                         <select
@@ -226,6 +238,14 @@ export default function KullaniciTab({
                             className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-[#5FD3C1]/10 hover:text-[#1EAEA0]"
                           >
                             <IconKey />
+                          </button>
+                        )}
+                        {canManage && (
+                          <button
+                            onClick={() => setPasswordTarget(p)}
+                            className="inline-flex h-9 items-center justify-center rounded-xl px-3 text-xs font-black text-slate-400 transition hover:bg-[#5FD3C1]/10 hover:text-[#1EAEA0]"
+                          >
+                            Şifre Sıfırla
                           </button>
                         )}
                         {canManage ? (
@@ -292,6 +312,13 @@ export default function KullaniciTab({
           </section>
         </aside>
       </div>
+      {passwordTarget && (
+        <PasswordModal
+          userId={passwordTarget === 'self' ? undefined : passwordTarget.id}
+          userLabel={passwordTarget === 'self' ? undefined : (passwordTarget.full_name ?? passwordTarget.username ?? undefined)}
+          onClose={() => setPasswordTarget(null)}
+        />
+      )}
     </div>
   )
 }

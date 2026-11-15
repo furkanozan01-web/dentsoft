@@ -1,7 +1,7 @@
 'use client'
 
 import { useActionState, useEffect, useState } from 'react'
-import { addUserToAllowlist } from './actions'
+import { createStaffUser } from './actions'
 import { ErrBox, MActions, SettField, SModal } from './SettingsSharedUI'
 import type { Branch, Doctor, R } from './types'
 // ---- Modals ----
@@ -16,7 +16,7 @@ export function UserModal({
   onClose: () => void
   onSuccess: () => void
 }) {
-  const [state, action, pending] = useActionState(addUserToAllowlist, null as R)
+  const [state, action, pending] = useActionState(createStaffUser, null as R)
   const [role, setRole] = useState('asistan')
 
   useEffect(() => {
@@ -26,11 +26,12 @@ export function UserModal({
   const activeDoctors = doctors.filter((d) => d.status === 'active')
 
   return (
-    <SModal title="Kullanıcı Davet Et" subtitle="E-posta izin listesine ekler. Kişi Google ile ilk girişinde hesabı oluşturulur." onClose={onClose}>
-      <form action={action} className="p-6 space-y-4">
+    <SModal title="Kullanıcı Ekle" subtitle="Kişi, klinik e-postası + bu kullanıcı adı + şifre ile giriş yapar. Şifreyi çalışana siz iletirsiniz." onClose={onClose}>
+      <form action={action} className="p-6 space-y-4" autoComplete="off">
         {(state as R)?.error && <ErrBox msg={(state as R)!.error!} />}
         <SettField label="Ad Soyad" name="full_name" placeholder="Ayşe Yılmaz" />
-        <SettField label="Google E-postası *" name="email" type="email" required placeholder="personel@gmail.com" />
+        <SettField label="Kullanıcı Adı *" name="username" required placeholder="ayse.yilmaz" />
+        <SettField label="Şifre * (en az 10 karakter)" name="password" type="password" required placeholder="••••••••••" />
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1.5">Rol</label>
           <select
@@ -77,7 +78,7 @@ export function UserModal({
             <option value="all">Tüm şubeler</option>
           </select>
         </div>
-        <MActions onCancel={onClose} pending={pending} label="Davet Et" />
+        <MActions onCancel={onClose} pending={pending} label="Kullanıcıyı Ekle" />
       </form>
     </SModal>
   )

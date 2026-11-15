@@ -60,6 +60,143 @@ export async function syncDoctorsToUsers(): Promise<R & { synced?: number }> {
   return { success: true, synced }
 }
 
+// ---- Kullanıcı adı + şifre ile giriş ----
+// Giriş e-postası klinik sahibinindir (clinic_settings.owner_email); diğer kullanıcılar aynı e-posta + kendi kullanıcı adıyla girer.
+// Supabase Auth tarafında her kullanıcının benzersiz (sentetik) bir e-postası vardır; kullanıcı bunu hiç görmez.
+const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{2,29}$/
+
+function normalizeUsername(raw: unknown): { value?: string; error?: string } {
+  const value = String(raw ?? '').trim().toLowerCase()
+  if (!USERNAME_RE.test(value)) return { error: 'Kullanıcı adı 3-30 karakter olmalı; yalnızca küçük harf (a-z), rakam, nokta, tire veya alt çizgi içerebilir' }
+  return { value }
+}
+
+function passwordError(pw: string): string | null {
+  if (pw.length < 10) return 'Şifre en az 10 karakter olmalı'
+  if (pw.length > 72) return 'Şifre en fazla 72 karakter olabilir'
+  return null
+}
+
+export async function createStaffUser(_prev: R, formData: FormData): Promise<R> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Yetkisiz erişim' }
+  const adminErr = requireAdmin(ctx)
+  if (adminErr) return adminErr
+
+  const { value: username, error: usernameErr } = normalizeUsername(formData.get('username'))
+  if (usernameErr || !username) return { error: usernameErr }
+  const password = String(formData.get('password') ?? '')
+  const pwErr = passwordError(password)
+  if (pwErr) return { error: pwErr }
+
+  const fullName = (formData.get('full_name') as string)?.trim() || null
+  const role = (formData.get('role') as string) || 'asistan'
+  const branchId = Number(formData.get('branch_id')) || null
+  const accessLevel = formData.get('access_level') === 'all' ? 'all' : 'branch'
+  if (!VALID_ROLES.includes(role) || role === 'bashekim') return { error: 'Geçersiz rol' }
+
+  const admin = createAdminClient()
+  const { data: taken } = await admin.from('profiles').select('id').eq('clinic_id', ctx.clinicId).eq('username', username).maybeSingle()
+  if (taken) return { error: 'Bu kullanıcı adı bu klinikte zaten kullanılıyor' }
+
+  if (branchId) {
+    const { data: branch } = await ctx.supabase.from('branches').select('id').eq('id', branchId).eq('clinic_id', ctx.clinicId).maybeSingle()
+    if (!branch) return { error: 'Seçilen şube bu kliniğe ait değil' }
+  }
+
+  // Hekim rolü → bir doctors kaydıyla ilişkilendir (mevcut veya yeni)
+  let doctorId: number | null = null
+  if (role === 'hekim') {
+    const doctorChoice = (formData.get('doctor_id') as string) || ''
+    if (doctorChoice === 'new') {
+      const { data: newDoc, error: docErr } = await admin
+        .from('doctors')
+        .insert({ clinic_id: ctx.clinicId, name: fullName || username, status: 'active', branch_id: branchId })
+        .select('id')
+        .single()
+      if (docErr || !newDoc) return { error: docErr?.message ?? 'Hekim profili oluşturulamadı' }
+      doctorId = newDoc.id
+    } else if (doctorChoice) {
+      const { data: doc } = await admin.from('doctors').select('id').eq('id', Number(doctorChoice)).eq('clinic_id', ctx.clinicId).maybeSingle()
+      if (doc) doctorId = doc.id
+    }
+  }
+
+  // Profili handle_new_user tetikleyicisi user_metadata'dan oluşturur
+  const authEmail = `${username}.c${ctx.clinicId}@staff.dentsoft.local`
+  const { data: created, error: createErr } = await admin.auth.admin.createUser({
+    email: authEmail,
+    password,
+    email_confirm: true,
+    user_metadata: {
+      clinic_id: String(ctx.clinicId),
+      role,
+      full_name: fullName ?? username,
+      doctor_id: doctorId ? String(doctorId) : '',
+      branch_id: branchId ? String(branchId) : '',
+      access_level: accessLevel,
+    },
+  })
+  if (createErr || !created.user) return { error: createErr?.message?.includes('already') ? 'Bu kullanıcı adı zaten kullanılıyor' : (createErr?.message ?? 'Kullanıcı oluşturulamadı') }
+
+  const { error: profileErr } = await admin.from('profiles').update({ username, updated_at: new Date().toISOString() }).eq('id', created.user.id)
+  if (profileErr) {
+    await admin.auth.admin.deleteUser(created.user.id)
+    return { error: profileErr.message }
+  }
+  revalidatePath('/settings')
+  return { success: true }
+}
+
+// Başhekim, kendi klinik çalışanlarının şifresini sıfırlar (kendi şifresi için setMyPassword)
+export async function resetUserPassword(userId: string, newPassword: string): Promise<R> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Yetkisiz erişim' }
+  const adminErr = requireAdmin(ctx)
+  if (adminErr) return adminErr
+  if (!userId) return { error: 'Kullanıcı ID gerekli' }
+  if (userId === ctx.userId) return { error: 'Kendi şifrenizi "Şifremi Belirle" ile değiştirin' }
+  const pwErr = passwordError(newPassword)
+  if (pwErr) return { error: pwErr }
+
+  const admin = createAdminClient()
+  const { data: target } = await admin.from('profiles').select('id').eq('id', userId).eq('clinic_id', ctx.clinicId).maybeSingle()
+  if (!target) return { error: 'Kullanıcı bu klinikte bulunamadı' }
+  const { error } = await admin.auth.admin.updateUserById(userId, { password: newPassword })
+  if (error) return { error: error.message }
+  return { success: true }
+}
+
+// Giriş yapmış kullanıcı kendi şifresini belirler/değiştirir
+export async function setMyPassword(newPassword: string): Promise<R> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Yetkisiz erişim' }
+  const pwErr = passwordError(newPassword)
+  if (pwErr) return { error: pwErr }
+  const { error } = await ctx.supabase.auth.updateUser({ password: newPassword })
+  if (error) return { error: error.message }
+  return { success: true }
+}
+
+export async function updateUsername(userId: string, rawUsername: string): Promise<R> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Yetkisiz erişim' }
+  const adminErr = requireAdmin(ctx)
+  if (adminErr) return adminErr
+  const { value: username, error: usernameErr } = normalizeUsername(rawUsername)
+  if (usernameErr || !username) return { error: usernameErr }
+
+  const admin = createAdminClient()
+  const { data: target } = await admin.from('profiles').select('id').eq('id', userId).eq('clinic_id', ctx.clinicId).maybeSingle()
+  if (!target) return { error: 'Kullanıcı bu klinikte bulunamadı' }
+  const { data: taken } = await admin.from('profiles').select('id').eq('clinic_id', ctx.clinicId).eq('username', username).neq('id', userId).maybeSingle()
+  if (taken) return { error: 'Bu kullanıcı adı bu klinikte zaten kullanılıyor' }
+  const { error } = await admin.from('profiles').update({ username, updated_at: new Date().toISOString() }).eq('id', userId)
+  if (error) return { error: error.message }
+  revalidatePath('/settings')
+  return { success: true }
+}
+
 export async function addUserToAllowlist(_prev: R, formData: FormData): Promise<R> {
   const ctx = await getCtx()
   if (!ctx) return { error: 'Yetkisiz erişim' }

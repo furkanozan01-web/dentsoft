@@ -52,7 +52,7 @@ export default async function SettingsPage() {
       .order('name'),
     supabase
       .from('profiles')
-      .select('id, full_name, role, created_at, doctor_id, branch_id, active_branch_id, access_level')
+      .select('id, full_name, username, role, created_at, doctor_id, branch_id, active_branch_id, access_level')
       .eq('clinic_id', clinicId)
       .order('created_at'),
     supabase
