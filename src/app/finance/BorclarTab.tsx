@@ -109,6 +109,8 @@ export default function BorclarTab({
                         <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-black text-red-600">Vadesi Geçti</span>
                       )}
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{RECURRENCE_LABEL[d.recurrence] ?? d.recurrence}</span>
+                      {d.installment_total ? <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-black text-violet-700">Taksit {d.installment_no}/{d.installment_total} • aylık ₺{formatAmountRounded(d.total_amount)}</span> : null}
+                      {d.partner_id ? <span className="rounded-full bg-[#E9FBF8] px-2 py-0.5 text-[10px] font-black text-[#0F766E]">İş ortağı borcu</span> : null}
                     </div>
                     {d.due_date && (
                       <p className={`mt-0.5 text-xs font-semibold ${isOverdue ? 'text-red-500' : 'text-slate-400'}`}>

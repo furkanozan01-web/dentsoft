@@ -515,6 +515,118 @@ export async function addPartnerService(input: {
   return { success: true }
 }
 
+/**
+ * İş ortağından satın alma (örn. implant): tutar, ödeme şekli ve taksit.
+ * - 'pesin': hizmet kaydı + ödenmiş gider
+ * - 'taksit': hizmet kaydı + her taksit için Borçlar'da ayrı kalem (eşit bölünür, son taksite kuruş farkı eklenir)
+ * - 'bekliyor': yalnızca hizmet kaydı (ödeme sonra yapılır)
+ */
+export async function addPartnerPurchase(input: {
+  partnerId: number
+  serviceName: string
+  amount: string
+  serviceDate: string
+  vatStatus: string
+  invoiceStatus: string
+  description?: string
+  attachmentUrl?: string
+  patientId?: number | null
+  doctorId?: number | null
+  payment: 'pesin' | 'taksit' | 'bekliyor'
+  installments?: number
+  firstDueDate?: string | null
+  method?: string
+  accountName?: string
+}): Promise<R> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Yetkisiz erişim' }
+  const { supabase, clinicId } = ctx
+  const total = Math.round(parseFloat(cleanMoney(input.amount ?? '')) * 100)
+  if (!input.partnerId || !input.serviceName?.trim()) return { error: 'Firma ve ürün/hizmet adı zorunludur' }
+  if (!Number.isFinite(total) || total <= 0) return { error: 'Geçerli bir tutar girin' }
+  const { data: partner } = await supabase.from('business_partners').select('id, name').eq('id', input.partnerId).eq('clinic_id', clinicId).maybeSingle()
+  if (!partner) return { error: 'Firma bulunamadı' }
+
+  const n = Math.round(input.installments ?? 1)
+  if (input.payment === 'taksit' && (!Number.isInteger(n) || n < 2 || n > 60)) return { error: 'Taksit sayısı 2 ile 60 arasında olmalı' }
+  const serviceDate = input.serviceDate || localDateValue()
+  const firstDue = input.firstDueDate || addMonthsISO(serviceDate, 1)
+
+  const { data: svc, error: svcErr } = await supabase
+    .from('partner_services')
+    .insert({
+      clinic_id: clinicId,
+      partner_id: input.partnerId,
+      service_name: input.serviceName.trim(),
+      patient_id: input.patientId || null,
+      doctor_id: input.doctorId || null,
+      service_date: serviceDate,
+      due_date: input.payment === 'taksit' ? firstDue : null,
+      amount: total,
+      vat_status: input.vatStatus || 'kdv_dahil',
+      invoice_status: input.invoiceStatus || 'bekliyor',
+      payment_status: input.payment === 'pesin' ? 'odendi' : 'bekliyor',
+      description: input.description?.trim() || null,
+      attachment_url: input.attachmentUrl?.trim() || null,
+    })
+    .select('id')
+    .single()
+  if (svcErr || !svc) return { error: svcErr?.message ?? 'Kayıt oluşturulamadı' }
+
+  const rollback = async () => { await supabase.from('partner_services').delete().eq('id', svc.id).eq('clinic_id', clinicId) }
+
+  if (input.payment === 'pesin') {
+    const res = await addExpense({
+      amount: String(total / 100),
+      date: serviceDate,
+      description: `${partner.name} — ${input.serviceName.trim()}`,
+      category: 'Firma Ödemesi',
+      method: input.method || 'cash',
+      accountName: input.accountName,
+      partnerId: input.partnerId,
+      partnerServiceId: svc.id,
+      patientId: input.patientId ?? null,
+      invoiceStatus: input.invoiceStatus,
+      paymentStatus: 'odendi',
+    })
+    if (res?.error) { await rollback(); return res }
+  }
+
+  if (input.payment === 'taksit') {
+    const base = Math.floor(total / n)
+    const rows = Array.from({ length: n }, (_, i) => ({
+      clinic_id: clinicId,
+      title: `${partner.name} — ${input.serviceName.trim()} (${i + 1}/${n})`,
+      total_amount: i === n - 1 ? total - base * (n - 1) : base,
+      paid_amount: 0,
+      due_date: addMonthsISO(firstDue, i),
+      recurrence: 'tek_seferlik',
+      notes: input.description?.trim() || null,
+      status: 'active',
+      payment_method: input.method || null,
+      account_name: input.accountName?.trim() || null,
+      partner_id: input.partnerId,
+      partner_service_id: svc.id,
+      installment_no: i + 1,
+      installment_total: n,
+    }))
+    const { error: debtErr } = await supabase.from('clinic_debts').insert(rows)
+    if (debtErr) { await rollback(); return { error: debtErr.message } }
+  }
+
+  revalidatePath('/finance')
+  return { success: true }
+}
+
+// 'YYYY-MM-DD' tarihine ay ekler; ayın gününü korur (kısa aylarda ayın son gününe iner)
+function addMonthsISO(iso: string, months: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const target = new Date(Date.UTC(y, m - 1 + months, 1))
+  const last = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate()
+  target.setUTCDate(Math.min(d, last))
+  return target.toISOString().slice(0, 10)
+}
+
 // ---- Klinik Borçları ----
 
 export interface ClinicDebt {
@@ -531,6 +643,10 @@ export interface ClinicDebt {
   payment_method?: string | null
   account_name?: string | null
   last_paid_at?: string | null
+  partner_id?: number | null
+  partner_service_id?: number | null
+  installment_no?: number | null
+  installment_total?: number | null
 }
 
 export async function getClinicDebts(): Promise<{ data?: ClinicDebt[]; error?: string }> {
@@ -539,7 +655,7 @@ export async function getClinicDebts(): Promise<{ data?: ClinicDebt[]; error?: s
   const { supabase, clinicId } = ctx
   const { data, error } = await supabase
     .from('clinic_debts')
-    .select('id, title, total_amount, paid_amount, due_date, recurrence, notes, status, created_at, payment_day, payment_method, account_name, last_paid_at')
+    .select('id, title, total_amount, paid_amount, due_date, recurrence, notes, status, created_at, payment_day, payment_method, account_name, last_paid_at, partner_id, partner_service_id, installment_no, installment_total')
     .eq('clinic_id', clinicId)
     .neq('status', 'cancelled')
     .order('due_date', { ascending: true, nullsFirst: false })

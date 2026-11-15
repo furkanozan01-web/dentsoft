@@ -93,6 +93,10 @@ export interface ClinicDebt {
   payment_method: string | null
   account_name: string | null
   last_paid_at: string | null
+  partner_id?: number | null
+  partner_service_id?: number | null
+  installment_no?: number | null
+  installment_total?: number | null
 }
 export interface FinPatient {
   id: number
@@ -426,6 +430,7 @@ export default function FinanceClient({
             txs={txs}
             patients={patients}
             doctors={doctors}
+            debts={initialDebts}
             onChanged={() => {
               router.refresh()
             }}

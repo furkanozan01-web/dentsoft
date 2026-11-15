@@ -103,7 +103,7 @@ export default async function FinancePage() {
       .order('name'),
     supabase
       .from('clinic_debts')
-      .select('id, title, total_amount, paid_amount, due_date, recurrence, notes, status, created_at, payment_day, payment_method, account_name, last_paid_at')
+      .select('id, title, total_amount, paid_amount, due_date, recurrence, notes, status, created_at, payment_day, payment_method, account_name, last_paid_at, partner_id, partner_service_id, installment_no, installment_total')
       .eq('clinic_id', clinicId)
       .neq('status', 'cancelled')
       .order('due_date', { ascending: true, nullsFirst: false }),
