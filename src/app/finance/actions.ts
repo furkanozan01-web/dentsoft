@@ -254,6 +254,21 @@ export async function addDoctorPayment(input: {
   return { success: true }
 }
 
+// Kâr payı dağıtımını geri alır: dağıtımdaki tüm hissedar ödemeleri ve bağlı gider kayıtları silinir
+export async function deleteProfitDistribution(paymentIds: number[]): Promise<R> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Yetkisiz erişim' }
+  const { supabase } = ctx
+  const ids = Array.from(new Set((paymentIds ?? []).map(Number))).filter((n) => Number.isInteger(n) && n > 0)
+  if (ids.length === 0) return { error: 'Silinecek kayıt yok' }
+  for (const id of ids) {
+    const { error } = await supabase.rpc('delete_doctor_payment_link', { p_transaction_id: null, p_payment_id: id })
+    if (error) return { error: error.message }
+  }
+  revalidatePath('/finance')
+  return { success: true }
+}
+
 export async function deleteDoctorPayment(id: number): Promise<R> {
   const ctx = await getCtx()
   if (!ctx) return { error: 'Yetkisiz erişim' }

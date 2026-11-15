@@ -1,9 +1,12 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { localDateValue } from '@/lib/format'
 import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
+import { toast } from 'sonner'
+import { useConfirm } from '@/components/ConfirmModal'
 import { DistributeModal } from './KasaDashboard'
+import { deleteProfitDistribution } from './actions'
 import type { DoctorPayment, FinBranch, FinDoctor, FinDoctorShare } from './FinanceClient'
 
 function money(kurus: number) {
@@ -33,6 +36,8 @@ export default function ProfitShareCard({
   const [persistedBranchId, setPersistedBranchId] = usePersistedPreference<number | null>('dentsoft:last-branch-filter-karpayi', defaultBranchId)
   const branchId = persistedBranchId !== null && branches.some((b) => b.id === persistedBranchId) ? persistedBranchId : defaultBranchId
   const [showPay, setShowPay] = useState(false)
+  const [pending, begin] = useTransition()
+  const confirm = useConfirm()
   const today = localDateValue()
 
   const doctorMap = useMemo(() => new Map(doctors.map((d) => [d.id, d])), [doctors])
@@ -43,11 +48,30 @@ export default function ProfitShareCard({
     ),
     [doctorShares, branchId, today]
   )
-  const shareholderIds = useMemo(() => new Set(shareholders.map((s) => s.doctor_id)), [shareholders])
-  const history = useMemo(
-    () => payments.filter((p) => p.payment_type === 'kar_payi' && shareholderIds.has(p.doctor_id)).slice(0, 10),
-    [payments, shareholderIds]
-  )
+  // Bu şubede yapılmış kâr payı dağıtımları: aynı gün + aynı açıklama = tek dağıtım
+  const distributions = useMemo(() => {
+    const groups = new Map<string, { key: string; date: string; note: string | null; ids: number[]; lines: { doctorId: number; amount: number }[]; total: number }>()
+    for (const p of payments) {
+      if (p.payment_type !== 'kar_payi' || p.branch_id !== branchId) continue
+      const key = `${p.payment_date}|${p.note ?? ''}`
+      const g = groups.get(key) ?? { key, date: p.payment_date, note: p.note, ids: [], lines: [], total: 0 }
+      g.ids.push(p.id)
+      g.lines.push({ doctorId: p.doctor_id, amount: p.amount })
+      g.total += p.amount
+      groups.set(key, g)
+    }
+    return [...groups.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8)
+  }, [payments, branchId])
+
+  const undo = async (g: (typeof distributions)[number]) => {
+    const ok = await confirm({ title: 'Dağıtımı Geri Al', message: `${dateText(g.date)} tarihli ${money(g.total)} tutarındaki kâr payı dağıtımı silinecek (hissedarların ödemeleri ve Defter giderleri de silinir). Emin misiniz?`, confirmText: 'Geri Al' })
+    if (!ok) return
+    begin(async () => {
+      const res = await deleteProfitDistribution(g.ids)
+      if (res?.error) toast.error(res.error)
+      else { toast.success('Kâr payı dağıtımı geri alındı'); onChanged() }
+    })
+  }
   const monthProfit = branchId !== null ? profitByMonth[`${branchId}:${monthKey}`] ?? 0 : 0
 
   if (branches.length === 0) return null
@@ -98,20 +122,23 @@ export default function ProfitShareCard({
         </div>
         <div>
           <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Son Dağıtımlar</p>
-          {history.length === 0 ? (
+          {distributions.length === 0 ? (
             <p className="mt-3 rounded-xl bg-slate-50 px-3 py-3 text-xs font-bold text-slate-400">Bu şubede henüz kâr payı dağıtılmadı.</p>
           ) : (
-            <table className="mt-3 w-full text-xs">
-              <tbody>
-                {history.map((p) => (
-                  <tr key={p.id} className="border-t border-slate-100 first:border-0">
-                    <td className="py-2 font-semibold text-slate-500">{dateText(p.payment_date)}</td>
-                    <td className="py-2 font-bold text-slate-700">Dt. {doctorMap.get(p.doctor_id)?.name ?? `#${p.doctor_id}`}</td>
-                    <td className="py-2 text-right font-black text-red-600">{money(p.amount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="mt-3 space-y-2">
+              {distributions.map((g) => (
+                <div key={g.key} className="rounded-xl border border-[#EEF2F6] bg-[#FAFBFC] px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-black text-slate-600">{dateText(g.date)}{g.note ? ` · ${g.note}` : ''}</span>
+                    <span className="flex items-center gap-3">
+                      <span className="text-sm font-black text-red-600">{money(g.total)}</span>
+                      <button type="button" disabled={pending} onClick={() => undo(g)} className="text-[11px] font-black text-red-500 underline hover:text-red-700 disabled:opacity-40">Geri al</button>
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[11px] font-semibold text-slate-400">{g.lines.map((l) => `Dt. ${doctorMap.get(l.doctorId)?.name ?? `#${l.doctorId}`} ${money(l.amount)}`).join(' · ')}</p>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>

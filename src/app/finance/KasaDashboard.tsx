@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { localDateValue, cleanMoney } from '@/lib/format'
 import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
 import { distributeBranchProfit } from './actions'
-import type { FinBranch, FinDoctor, FinDoctorShare, FinTx } from './FinanceClient'
+import type { FinBranch, FinDoctor, FinDoctorShare, FinTx, PaymentAllocation } from './FinanceClient'
 
 function money(kurus: number) {
   return `₺${(kurus / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -19,7 +19,7 @@ function parseAmount(value: string) {
 }
 
 export default function KasaDashboard({
-  branches, txs, totals, methodTotals, doctorShares, doctors, onChanged,
+  branches, txs, totals, methodTotals, allocations, doctorShares, doctors, onChanged,
 }: {
   branches: FinBranch[]
   txs: FinTx[]
@@ -27,6 +27,8 @@ export default function KasaDashboard({
   totals: Record<string, { income: number; expense: number }>
   /** Şube → ödeme yöntemi → gelir/gider (finance_kasa_totals RPC'si) */
   methodTotals: Record<string, Record<string, { income: number; expense: number }>>
+  /** Hasta ödemelerinin şubelere paylaştırılmış payları */
+  allocations: PaymentAllocation[]
   doctorShares: FinDoctorShare[]
   doctors: FinDoctor[]
   onChanged: () => void
@@ -38,7 +40,23 @@ export default function KasaDashboard({
   const allBranches = branchId === 0
   const [showPay, setShowPay] = useState(false)
 
-  const branchTxs = useMemo(() => (allBranches ? txs : txs.filter((t) => t.branch_id === branchId)), [txs, branchId, allBranches])
+  // Hasta ödemesi, tedaviyi yapan hekimlerin şubelerine ücret payı oranında paylaştırılır: şubenin hareket listesinde yalnızca o şubenin payı görünür
+  const allocByTx = useMemo(() => {
+    const m = new Map<number, PaymentAllocation[]>()
+    for (const a of allocations) m.set(a.tx_id, [...(m.get(a.tx_id) ?? []), a])
+    return m
+  }, [allocations])
+  const branchTxs = useMemo(() => {
+    if (allBranches) return txs
+    const rows: FinTx[] = []
+    for (const t of txs) {
+      const parts = allocByTx.get(t.id)
+      if (!parts) { if (t.branch_id === branchId) rows.push(t); continue }
+      const mine = parts.filter((p) => p.branch_id === branchId).reduce((s, p) => s + p.amount, 0)
+      if (mine > 0) rows.push({ ...t, amount: mine, description: `${t.description ?? 'Hasta ödemesi'}${parts.length > 1 ? ' (şube payı)' : ''}` })
+    }
+    return rows
+  }, [txs, branchId, allBranches, allocByTx])
   const selectedKeys = allBranches ? branches.map((b) => String(b.id)) : branchId !== null ? [String(branchId)] : []
   const income = selectedKeys.reduce((s, k) => s + (totals[k]?.income ?? 0), 0)
   const expense = selectedKeys.reduce((s, k) => s + (totals[k]?.expense ?? 0), 0)

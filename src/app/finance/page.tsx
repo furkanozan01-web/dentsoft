@@ -84,7 +84,7 @@ export default async function FinancePage() {
       .eq('clinic_id', clinicId),
     supabase
       .from('doctor_payments')
-      .select('id, doctor_id, amount, payment_type, method, payment_date, note, transaction_id, account_name, created_by, earning_period')
+      .select('id, doctor_id, amount, payment_type, method, payment_date, note, transaction_id, account_name, created_by, earning_period, branch_id')
       .eq('clinic_id', clinicId)
       .order('payment_date', { ascending: false }),
     supabase
@@ -205,7 +205,10 @@ export default async function FinancePage() {
 
   // Kasa dökümü: şube → ödeme yöntemi → gelir/gider (tüm zamanlar). Yalnızca hakediş yetkisi olanlara.
   const kasaMethods: Record<string, Record<string, { income: number; expense: number }>> = {}
+  const payAllocations: { tx_id: number; branch_id: number | null; amount: number }[] = []
   if (canSeeAllHakedis) {
+    const { data: allocRows } = await supabase.rpc('alloc_payment_branches')
+    for (const row of (allocRows ?? []) as { tx_id: number; branch_id: number | null; amount: number }[]) payAllocations.push({ tx_id: Number(row.tx_id), branch_id: row.branch_id === null ? null : Number(row.branch_id), amount: Number(row.amount) })
     const { data: methodRows } = await supabase.rpc('finance_kasa_totals')
     for (const row of (methodRows ?? []) as { branch_id: number | null; method: string; type: string; total: number }[]) {
       if (!row.branch_id) continue
@@ -240,6 +243,7 @@ export default async function FinancePage() {
           profitByMonth={profitByMonth}
           kasaTotals={kasaTotals}
           kasaMethods={kasaMethods}
+          payAllocations={payAllocations}
           years={years}
           windowStart={windowStart}
         />

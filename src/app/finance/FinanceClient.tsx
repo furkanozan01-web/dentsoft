@@ -158,7 +158,10 @@ export interface DoctorPayment {
   created_by: string | null
   created_by_name?: string | null
   earning_period: string | null
+  branch_id?: number | null
 }
+/** Hasta ödemesinin şubelere paylaştırılmış payı (tedaviyi yapan hekimlerin şubeleri, ücret payı oranında) */
+export interface PaymentAllocation { tx_id: number; branch_id: number | null; amount: number }
 
 type Tab = 'bilgi' | 'defter' | 'kasa' | 'bakiye' | 'hakedis' | 'borclar' | 'ortaklar' | 'gecmis'
 const TABS: { id: Tab; label: string }[] = [
@@ -191,6 +194,7 @@ export default function FinanceClient({
   profitByMonth,
   kasaTotals,
   kasaMethods,
+  payAllocations,
   years,
   windowStart,
   branches,
@@ -213,6 +217,7 @@ export default function FinanceClient({
   profitByMonth: Record<string, number>
   kasaTotals: Record<string, { income: number; expense: number }>
   kasaMethods: Record<string, Record<string, { income: number; expense: number }>>
+  payAllocations: PaymentAllocation[]
   years: number[]
   windowStart: string
   branches: FinBranch[]
@@ -414,6 +419,7 @@ export default function FinanceClient({
             txs={windowTxs}
             totals={kasaTotals}
             methodTotals={kasaMethods}
+            allocations={payAllocations}
             doctorShares={doctorShares}
             doctors={doctors}
             onChanged={() => router.refresh()}
