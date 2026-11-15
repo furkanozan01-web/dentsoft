@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { usernameKey } from '@/lib/username'
 import { redirect } from 'next/navigation'
 
 export type LoginState = { error: string } | null
@@ -18,7 +19,7 @@ export async function credentialsLogin(
   formData: FormData
 ): Promise<LoginState> {
   const email = String(formData.get('email') ?? '').trim().toLowerCase()
-  const username = String(formData.get('username') ?? '').trim().toLowerCase()
+  const username = usernameKey(formData.get('username'))
   const password = String(formData.get('password') ?? '')
 
   if (!email || !username || !password) {

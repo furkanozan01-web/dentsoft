@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { usernameKey } from '@/lib/username'
 import { getCtx, requireAdmin, requireUserManager, requireCanManageUser, MANAGER_ASSIGNABLE_ROLES, type R } from './actionsShared'
 
 // ---- Kullanıcı (allowlist) ----
@@ -63,11 +64,9 @@ export async function syncDoctorsToUsers(): Promise<R & { synced?: number }> {
 // ---- Kullanıcı adı + şifre ile giriş ----
 // Giriş e-postası klinik sahibinindir (clinic_settings.owner_email); diğer kullanıcılar aynı e-posta + kendi kullanıcı adıyla girer.
 // Supabase Auth tarafında her kullanıcının benzersiz (sentetik) bir e-postası vardır; kullanıcı bunu hiç görmez.
-const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{2,29}$/
-
 function normalizeUsername(raw: unknown): { value?: string; error?: string } {
-  const value = String(raw ?? '').trim().toLowerCase()
-  if (!USERNAME_RE.test(value)) return { error: 'Kullanıcı adı 3-30 karakter olmalı; yalnızca küçük harf (a-z), rakam, nokta, tire veya alt çizgi içerebilir' }
+  const value = usernameKey(raw)
+  if (!value) return { error: 'Kullanıcı adı boş olamaz' }
   return { value }
 }
 
@@ -128,7 +127,8 @@ export async function createStaffUser(_prev: R, formData: FormData): Promise<R> 
   }
 
   // Profili handle_new_user tetikleyicisi user_metadata'dan oluşturur
-  const authEmail = `${username}.c${ctx.clinicId}@staff.dentsoft.local`
+  // Supabase'in benzersiz giriş adresi: kullanıcı adından bağımsız (her karakter serbest olsun diye); kullanıcı bunu hiç görmez
+  const authEmail = `u${crypto.randomUUID().replace(/-/g, '')}.c${ctx.clinicId}@staff.dentsoft.local`
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
     email: authEmail,
     password,
