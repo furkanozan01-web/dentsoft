@@ -121,7 +121,7 @@ export default function DisHekimiTab({ doctors, branches, isAdmin, onChanged }: 
       </div>
 
       {offboard && <OffboardModal kind="doctor" name={'Dt. ' + offboard.doctor.name} doctorId={offboard.doctor.id} action={offboard.action} onClose={() => setOffboard(null)} onDone={() => { if (selectedId === offboard.doctor.id) closeEditor(); setOffboard(null); onChanged() }} />}
-      {mode !== 'none' && <div className="fixed inset-0 z-50 flex items-center justify-center p-4"><button type="button" aria-label="Düzenleyiciyi kapat" onClick={closeEditor} className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm" /><div className="relative max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl shadow-2xl"><DoctorEditor key={mode === 'edit' ? selected?.id ?? 'edit' : 'new'} doctor={mode === 'edit' ? selected : null} branches={branches} isAdmin={isAdmin} onCancel={closeEditor} onSaved={() => { closeEditor(); onChanged() }} onSharesChanged={onChanged} /></div></div>}
+      {mode !== 'none' && <div className="fixed inset-0 z-50 flex items-center justify-center p-4"><button type="button" aria-label="Düzenleyiciyi kapat" onClick={closeEditor} className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm" /><div className="relative max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl shadow-2xl"><DoctorEditor key={mode === 'edit' ? selected?.id ?? 'edit' : 'new'} doctor={mode === 'edit' ? selected : null} branches={branches} isAdmin={isAdmin} onCancel={closeEditor} onSaved={() => { closeEditor(); onChanged() }} /></div></div>}
     </div>
   )
 }

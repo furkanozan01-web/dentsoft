@@ -37,16 +37,6 @@ type DoctorPayload = {
   guarantee_note?: string | null
 }
 
-type DoctorSharePayload = {
-  branch_id: number
-  rate_bps: number
-  start_date: string | null
-  end_date: string | null
-  period: string
-  profit_distribution_type: string
-  note: string | null
-}
-
 type SanitizedDoctor = Omit<DoctorPayload, 'create_user_account' | 'user_access_level' | 'tc_identity_no'> & { tc_enc: string | null }
 
 async function syncDoctorUser(input: { clinicId: number; doctorId: number; row: SanitizedDoctor; accessLevel?: string }): Promise<string | null> {
@@ -124,90 +114,6 @@ function sanitizeDoctor(input: DoctorPayload): { error?: string; row?: Sanitized
       guarantee_note: input.guarantee_note?.trim() || null,
     },
   }
-}
-
-// Girdiyi normalize eder + doğrular (hisse satırı add/update ortak).
-function sanitizeDoctorShare(input: DoctorSharePayload): { error?: string; row?: DoctorSharePayload } {
-  if (!input.branch_id) return { error: 'Şube seçimi zorunludur' }
-  const rate_bps = Math.min(10000, Math.max(0, Math.round(input.rate_bps ?? 0)))
-  if (rate_bps <= 0) return { error: 'Hisse oranı 0\'dan büyük olmalıdır' }
-  if (input.start_date && input.end_date && input.end_date < input.start_date) {
-    return { error: 'Bitiş tarihi başlangıç tarihinden önce olamaz' }
-  }
-  return {
-    row: {
-      branch_id: input.branch_id,
-      rate_bps,
-      start_date: input.start_date || null,
-      end_date: input.end_date || null,
-      period: ['monthly', 'quarterly', 'yearly'].includes(input.period ?? '') ? input.period : 'monthly',
-      profit_distribution_type: ['expense', 'profit_distribution', 'partner_payment'].includes(input.profit_distribution_type ?? '')
-        ? input.profit_distribution_type
-        : 'profit_distribution',
-      note: input.note?.trim() || null,
-    },
-  }
-}
-
-export async function addDoctorShare(doctorId: number, input: DoctorSharePayload): Promise<R> {
-  const ctx = await getCtx()
-  if (!ctx) return { error: 'Yetkisiz erişim' }
-  const adminErr = requireAdmin(ctx)
-  if (adminErr) return adminErr
-  const { supabase, clinicId } = ctx
-  if (!doctorId) return { error: 'Hekim ID gerekli' }
-
-  const { error: vErr, row } = sanitizeDoctorShare(input)
-  if (vErr || !row) return { error: vErr }
-
-  const { data: branch } = await supabase.from('branches').select('id').eq('id', row.branch_id).eq('clinic_id', clinicId).maybeSingle()
-  if (!branch) return { error: 'Seçilen şube bu kliniğe ait değil' }
-
-  const { error } = await supabase.from('doctor_shares').insert({ clinic_id: clinicId, doctor_id: doctorId, ...row })
-  if (error) return { error: error.code === '23505' ? 'Bu hekimin bu şubede zaten aktif bir hissesi var' : error.message }
-  revalidatePath('/settings')
-  revalidatePath('/finance')
-  return { success: true }
-}
-
-export async function updateDoctorShare(id: number, input: DoctorSharePayload): Promise<R> {
-  const ctx = await getCtx()
-  if (!ctx) return { error: 'Yetkisiz erişim' }
-  const adminErr = requireAdmin(ctx)
-  if (adminErr) return adminErr
-  const { supabase, clinicId } = ctx
-  if (!id) return { error: 'Hisse ID gerekli' }
-
-  const { error: vErr, row } = sanitizeDoctorShare(input)
-  if (vErr || !row) return { error: vErr }
-
-  const { data: branch } = await supabase.from('branches').select('id').eq('id', row.branch_id).eq('clinic_id', clinicId).maybeSingle()
-  if (!branch) return { error: 'Seçilen şube bu kliniğe ait değil' }
-
-  const { error } = await supabase
-    .from('doctor_shares')
-    .update({ ...row, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .eq('clinic_id', clinicId)
-  if (error) return { error: error.code === '23505' ? 'Bu hekimin bu şubede zaten aktif bir hissesi var' : error.message }
-  revalidatePath('/settings')
-  revalidatePath('/finance')
-  return { success: true }
-}
-
-export async function deleteDoctorShare(id: number): Promise<R> {
-  const ctx = await getCtx()
-  if (!ctx) return { error: 'Yetkisiz erişim' }
-  const adminErr = requireAdmin(ctx)
-  if (adminErr) return adminErr
-  const { supabase, clinicId } = ctx
-  if (!id) return { error: 'Hisse ID gerekli' }
-
-  const { error } = await supabase.from('doctor_shares').delete().eq('id', id).eq('clinic_id', clinicId)
-  if (error) return { error: error.message }
-  revalidatePath('/settings')
-  revalidatePath('/finance')
-  return { success: true }
 }
 
 export async function addDoctor(input: DoctorPayload): Promise<R> {

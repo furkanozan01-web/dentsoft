@@ -98,7 +98,7 @@ export default function SettingsClient({
 
       {/* Content */}
       <div className="flex-1 px-8 py-6">
-        {activeTab === 'klinik' && <KlinikTab clinic={clinic} branches={branches} activeBranchId={activeBranchId} canManage={isAdmin} onSaved={refresh} />}
+        {activeTab === 'klinik' && <KlinikTab clinic={clinic} branches={branches} doctors={initialDoctors} activeBranchId={activeBranchId} canManage={isAdmin} onSaved={refresh} />}
         {activeTab === 'dis-hekimi' && (
           <DisHekimiTab doctors={initialDoctors} branches={branches} isAdmin={isAdmin} onChanged={refresh} />
         )}

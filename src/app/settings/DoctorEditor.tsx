@@ -13,7 +13,6 @@ import type {
   Doctor,
   R,
 } from './types'
-import { DoctorSharesEditor } from './DoctorSharesEditor'
 
 export function DoctorEditor({
   doctor,
@@ -21,14 +20,12 @@ export function DoctorEditor({
   isAdmin,
   onCancel,
   onSaved,
-  onSharesChanged,
 }: {
   doctor: Doctor | null
   branches: Branch[]
   isAdmin: boolean
   onCancel: () => void
   onSaved: () => void
-  onSharesChanged: () => void
 }) {
   const isNew = !doctor
   const existingNameParts = (doctor?.name ?? '').trim().split(/\s+/).filter(Boolean)
@@ -242,11 +239,18 @@ export function DoctorEditor({
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm font-black text-rose-800">Hisse / Kâr Payı (Şube Bazlı)</span>
           </div>
-          <p className="mt-1 text-xs font-semibold text-rose-700/70">Bir hekim birden fazla şubede farklı oranlarda hisseye sahip olabilir. Kasa &gt; Kâr Payı Öde işlemi bu oranları kullanır.</p>
-          {isNew ? (
-            <p className="mt-3 text-xs font-bold text-rose-700">Hekim kaydedildikten sonra şube hissesi ekleyebilirsiniz.</p>
+          <p className="mt-1 text-xs font-semibold text-rose-700/70">Yalnızca bilgi: hisse oranları Ayarlar → Klinik sekmesinde, her şube için hissedarlar belirlenerek girilir (bir şubenin toplamı tam %100 olmalı).</p>
+          {isNew || !doctor || doctor.doctor_shares.filter((s) => s.is_active).length === 0 ? (
+            <p className="mt-3 text-xs font-bold text-rose-700">Bu hekimin hissesi yok.</p>
           ) : (
-            <DoctorSharesEditor doctorId={doctor!.id} shares={doctor!.doctor_shares} branches={branches} onChanged={onSharesChanged} />
+            <ul className="mt-3 space-y-1">
+              {doctor.doctor_shares.filter((s) => s.is_active).map((s) => (
+                <li key={s.id} className="flex items-center justify-between rounded-xl bg-white/70 px-3 py-2 text-sm font-bold text-rose-900">
+                  <span>{branches.find((b) => b.id === s.branch_id)?.name ?? 'Şube'}</span>
+                  <span>%{(s.rate_bps / 100).toLocaleString('tr-TR', { maximumFractionDigits: 2 })}</span>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
         <div className="mt-4 grid grid-cols-2 gap-4">

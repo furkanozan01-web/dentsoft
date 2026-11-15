@@ -346,6 +346,7 @@ export default function KullaniciTab({
           user={detailUser}
           branchName={branchName(detailUser.branch_id)}
           doctorName={doctorName(detailUser.doctor_id)}
+          sharesInfo={(doctors.find((d) => d.id === detailUser.doctor_id)?.doctor_shares ?? []).filter((s) => s.is_active).map((s) => ({ branch: branchName(s.branch_id) ?? 'Şube', pct: (s.rate_bps / 100).toLocaleString('tr-TR', { maximumFractionDigits: 2 }) }))}
           canEdit={canSetCredentials(detailUser)}
           canEditUsername={canSetCredentials(detailUser) || (isAdmin && detailUser.id === currentUserId)}
           isSelf={detailUser.id === currentUserId}

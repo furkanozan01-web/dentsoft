@@ -18,6 +18,7 @@ export function UserDetailModal({
   user,
   branchName,
   doctorName,
+  sharesInfo,
   canEdit,
   canEditUsername,
   isSelf,
@@ -28,6 +29,8 @@ export function UserDetailModal({
   user: Profile
   branchName: string | null
   doctorName: string | null
+  /** Bilgi amaçlı: hekimin şube hisseleri (Ayarlar → Klinik'te belirlenir) */
+  sharesInfo?: { branch: string; pct: string }[]
   canEdit: boolean
   canEditUsername: boolean
   isSelf: boolean
@@ -107,6 +110,18 @@ export function UserDetailModal({
               <input name="password2" type="password" required minLength={6} maxLength={72} autoComplete="new-password" placeholder="Yeni şifre (tekrar)" className={inputCls} />
               <button type="submit" disabled={pending} className={btnCls}>Şifreyi Kaydet</button>
             </form>
+          </section>
+        )}
+
+        {sharesInfo && sharesInfo.length > 0 && (
+          <section>
+            <h3 className="mb-2 text-sm font-black text-[#142536]">Hisse (bilgi)</h3>
+            <ul className="space-y-1">
+              {sharesInfo.map((s) => (
+                <li key={s.branch} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm font-bold text-slate-600"><span>{s.branch}</span><span>%{s.pct}</span></li>
+              ))}
+            </ul>
+            <p className="mt-1 text-[11px] text-gray-400">Hisse oranları Ayarlar → Klinik sekmesinde belirlenir.</p>
           </section>
         )}
 

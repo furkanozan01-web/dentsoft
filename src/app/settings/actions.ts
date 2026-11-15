@@ -23,11 +23,9 @@ export {
   updateDoctor,
   deleteDoctor,
   toggleMesulMudur,
-  addDoctorShare,
-  updateDoctorShare,
-  deleteDoctorShare,
 } from './doctorActions'
 
+export { saveBranchShares } from './shareActions'
 export { getOffboardSummary, offboardDoctor, offboardUser } from './offboardActions'
 export type { OffboardSummary, OffboardResult } from './offboardActions'
 

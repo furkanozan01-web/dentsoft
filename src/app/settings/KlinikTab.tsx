@@ -4,9 +4,10 @@ import { useState, useEffect, useActionState, type ReactNode } from 'react'
 import { updateClinic, uploadClinicLogo } from './actions'
 import { ClinicFormSection, ModernField, SettingsIconBox, IconSave, IconClipboard, IconAlert } from './SettingsSharedUI'
 import BranchManager from './BranchManager'
-import type { Branch, ClinicSettings, R } from './types'
+import { BranchSharesEditor } from './BranchSharesEditor'
+import type { Branch, ClinicSettings, Doctor, R } from './types'
 
-export default function KlinikTab({ clinic, branches, activeBranchId, canManage, onSaved }: { clinic: ClinicSettings; branches: Branch[]; activeBranchId: number | null; canManage: boolean; onSaved: () => void }) {
+export default function KlinikTab({ clinic, branches, doctors, activeBranchId, canManage, onSaved }: { clinic: ClinicSettings; branches: Branch[]; doctors: Doctor[]; activeBranchId: number | null; canManage: boolean; onSaved: () => void }) {
   const [state, action, pending] = useActionState(updateClinic, null as R)
   const [logoState, logoAction, logoPending] = useActionState(uploadClinicLogo, null as R)
   const [logoPreview, setLogoPreview] = useState<string | null>(clinic.logo_url ?? null)
@@ -29,6 +30,7 @@ export default function KlinikTab({ clinic, branches, activeBranchId, canManage,
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
       <div className="space-y-6">
         <BranchManager branches={branches} activeBranchId={activeBranchId} canManage={canManage} onChanged={onSaved} />
+        <BranchSharesEditor branches={branches} doctors={doctors} canManage={canManage} onSaved={onSaved} />
         <section className="rounded-[24px] border border-slate-200/90 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
           <div className="mb-5 flex items-start gap-3">
             <SettingsIconBox><IconImage /></SettingsIconBox>
