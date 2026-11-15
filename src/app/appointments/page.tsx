@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import Sidebar from '../Sidebar'
 import AppointmentsClient from './AppointmentsClient'
 import type { AppointmentTypeOption, ApptDoctor, ApptPatient, ApptTariff, NightShiftConfig } from './AppointmentsClient'
-import { getPermissions, canSeeAyarlarNav } from '@/lib/permissions'
+import { getFinansNavPermission, canSeeAyarlarNav } from '@/lib/permissions'
 
 export const metadata = { title: 'Randevular — DentSoft' }
 
@@ -21,7 +21,7 @@ export default async function AppointmentsPage() {
     .single()
   if (!profile?.clinic_id) redirect('/login')
   // Sidebar izinleri ana sorgularla paralel başlar
-  const navPermsPromise = Promise.all([getPermissions('finans_bilgi'), canSeeAyarlarNav()])
+  const navPermsPromise = Promise.all([getFinansNavPermission(), canSeeAyarlarNav()])
   const clinicId = profile.clinic_id
 
   const [{ data: doctors }, { data: patients }, { data: clinic }, { data: tariffs }, { data: appointmentTypes }] = await Promise.all([

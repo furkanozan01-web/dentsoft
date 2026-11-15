@@ -6,7 +6,7 @@ import DashboardBell from './DashboardBell'
 import MissingInvoiceAlert, { type MissingInvoiceRow } from './MissingInvoiceAlert'
 import DashboardNewPatientButton from './DashboardNewPatientButton'
 import { computeSummary } from '@/lib/finance/hakedis'
-import { getPermissions, canSeeAyarlarNav } from '@/lib/permissions'
+import { getFinansNavPermission, canSeeAyarlarNav } from '@/lib/permissions'
 
 interface AppointmentRow {
   id: number
@@ -108,7 +108,7 @@ export default async function DashboardPage() {
   const clinicId = profile?.clinic_id
   if (!clinicId) redirect('/login')
   // Sidebar izinleri ana sorgularla paralel başlar
-  const navPermsPromise = Promise.all([getPermissions('finans_bilgi'), canSeeAyarlarNav()])
+  const navPermsPromise = Promise.all([getFinansNavPermission(), canSeeAyarlarNav()])
 
   const now = new Date()
   const today = new Date(now)

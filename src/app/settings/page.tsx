@@ -5,7 +5,7 @@ import Sidebar from '../Sidebar'
 import SettingsClient from './SettingsClient'
 import type { Branch, ClinicSettings, Doctor, Profile, Tariff, TariffProfile } from './SettingsClient'
 import type { RolePermissionRow } from './actions'
-import { getPermissions, canSeeAyarlarNav, canSeeAllHakedis } from '@/lib/permissions'
+import { getFinansNavPermission, canSeeAyarlarNav, canSeeAllHakedis } from '@/lib/permissions'
 import type { AppointmentType, TariffPriceHistory } from './types'
 import { tryDecrypt } from '@/lib/crypto'
 
@@ -25,7 +25,7 @@ export default async function SettingsPage() {
   if (!profile?.clinic_id) redirect('/login')
   const isUserManager = profile.role === 'bashekim' || profile.role === 'responsible_manager'
   // Sidebar izinleri ana sorgularla paralel başlar
-  const navPermsPromise = Promise.all([getPermissions('finans_bilgi'), canSeeAyarlarNav()])
+  const navPermsPromise = Promise.all([getFinansNavPermission(), canSeeAyarlarNav()])
   const clinicId = profile.clinic_id
 
   const [

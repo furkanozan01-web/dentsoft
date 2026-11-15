@@ -350,9 +350,10 @@ export interface RolePermissionRow {
 const VALID_PERMISSION_ROLES = ['bashekim', 'responsible_manager', 'hekim', 'asistan']
 const VALID_RESOURCES = [
   'randevu_sube', 'randevu_tum', 'hasta_liste', 'hasta_karti',
-  'oral_kendi', 'oral_sube', 'oral_tum', 'not_goruntu', 'hesap',
-  'fatura', 'recete', 'finans_bilgi', 'finans_borclar', 'finans_defter',
-  'finans_bakiye', 'hakedis_kendi', 'hakedis_tum', 'is_ortaklari',
+  'oral_kendi', 'oral_sube', 'oral_tum', 'not_goruntu', 'hesap_sube', 'hesap_tum',
+  'fatura', 'recete', 'finans_bilgi_sube', 'finans_bilgi_tum',
+  'finans_borclar_sube', 'finans_borclar_tum', 'finans_defter_sube', 'finans_defter_tum',
+  'finans_bakiye_sube', 'finans_bakiye_tum', 'hakedis_kendi', 'hakedis_tum', 'is_ortaklari',
   'ayarlar_klinik', 'ayarlar_hekim', 'ayarlar_kullanici',
   'ayarlar_tarife', 'ayarlar_randevu',
 ]

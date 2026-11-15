@@ -5,7 +5,7 @@ import ResearchClient from '@/features/research/components/ResearchClient'
 import { DEFAULT_RESEARCH_FILTERS } from '@/features/research/filters/defaults'
 import { searchPatients } from '@/features/research/queries/search-patients'
 import type { ResearchDoctor, ResearchTag, SavedResearch } from '@/features/research/types'
-import { getPermissions, canSeeAyarlarNav } from '@/lib/permissions'
+import { getFinansNavPermission, canSeeAyarlarNav } from '@/lib/permissions'
 
 export const metadata = { title: 'Araştırma - DentSoft' }
 
@@ -23,7 +23,7 @@ export default async function ResearchPage() {
     .single()
   if (!profile?.clinic_id) redirect('/login')
   // Sidebar izinleri ana sorgularla paralel başlar
-  const navPermsPromise = Promise.all([getPermissions('finans_bilgi'), canSeeAyarlarNav()])
+  const navPermsPromise = Promise.all([getFinansNavPermission(), canSeeAyarlarNav()])
 
   const clinicId = Number(profile.clinic_id)
   const [{ data: saved }, { data: tags }, { data: doctors }, initialResults] = await Promise.all([

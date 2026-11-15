@@ -15,7 +15,7 @@ import type {
   ClinicDebt,
   PartnerService,
 } from './FinanceClient'
-import { getPermissions, canSeeAyarlarNav, canSeeAllHakedis as getCanSeeAllHakedis } from '@/lib/permissions'
+import { getFinansNavPermission, canSeeAyarlarNav, canSeeAllHakedis as getCanSeeAllHakedis } from '@/lib/permissions'
 
 export const metadata = { title: 'Finans — DentSoft' }
 
@@ -58,7 +58,7 @@ export default async function FinancePage() {
     { data: totalsRaw },
   ] = await Promise.all([
     supabase.from('clinic_settings').select('clinic_name').eq('id', clinicId).single(),
-    getPermissions('finans_bilgi'),
+    getFinansNavPermission(),
     canSeeAyarlarNav(),
     getCanSeeAllHakedis(),
     supabase

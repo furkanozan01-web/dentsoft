@@ -127,6 +127,17 @@ export async function canSeeAyarlarNav(): Promise<boolean> {
   })
 }
 
+// Sidebar "Finans" linki: Finans Bilgi (Şube) veya Finans Bilgi (Tüm) izninden en az biri açıksa görünür.
+export async function getFinansNavPermission(): Promise<Permissions> {
+  const [sube, tum] = await Promise.all([getPermissions('finans_bilgi_sube'), getPermissions('finans_bilgi_tum')])
+  return {
+    canView: sube.canView || tum.canView,
+    canCreate: sube.canCreate || tum.canCreate,
+    canUpdate: sube.canUpdate || tum.canUpdate,
+    canDelete: sube.canDelete || tum.canDelete,
+  }
+}
+
 // "Hakediş — Tüm Hekimler" izni: rol şablonu + kişisel override sonrası.
 // bashekim ve responsible_manager rol şablonunda true'dur; bashekim/mesul
 // müdür bir hekime bu izni tekil olarak da verebilir (override).

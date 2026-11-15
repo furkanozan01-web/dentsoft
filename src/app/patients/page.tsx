@@ -10,7 +10,7 @@ import type {
   ClinicInfo,
   PatientTreatmentSummary,
 } from './PatientsClient'
-import { getPermissions, canSeeAyarlarNav } from '@/lib/permissions'
+import { getFinansNavPermission, canSeeAyarlarNav } from '@/lib/permissions'
 
 export const metadata = { title: 'Hastalar — DentSoft' }
 
@@ -29,7 +29,7 @@ export default async function PatientsPage() {
 
   if (!profile?.clinic_id) redirect('/login')
   // Sidebar izinleri ana sorgularla paralel başlar
-  const navPermsPromise = Promise.all([getPermissions('finans_bilgi'), canSeeAyarlarNav()])
+  const navPermsPromise = Promise.all([getFinansNavPermission(), canSeeAyarlarNav()])
   const clinicId = profile.clinic_id
 
   const [

@@ -3,7 +3,7 @@ import Sidebar from '../Sidebar'
 import { createClient } from '@/lib/supabase/server'
 import SocialMediaClient from '@/features/social-media/components/SocialMediaClient'
 import { loadSocialPageData } from '@/features/social-media/queries/load-social-page'
-import { getPermissions, canSeeAyarlarNav } from '@/lib/permissions'
+import { getFinansNavPermission, canSeeAyarlarNav } from '@/lib/permissions'
 
 export const metadata = { title: 'Sosyal Medya - DentSoft' }
 
@@ -21,7 +21,7 @@ export default async function SocialPage() {
     .single()
   if (!profile?.clinic_id) redirect('/login')
   // Sidebar izinleri ana sorgularla paralel başlar
-  const navPermsPromise = Promise.all([getPermissions('finans_bilgi'), canSeeAyarlarNav()])
+  const navPermsPromise = Promise.all([getFinansNavPermission(), canSeeAyarlarNav()])
 
   const data = await loadSocialPageData(supabase, Number(profile.clinic_id))
   const [{ canView: canSeeFinans }, canSeeAyarlar] = await navPermsPromise
