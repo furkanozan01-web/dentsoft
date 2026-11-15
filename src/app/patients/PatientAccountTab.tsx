@@ -55,7 +55,11 @@ function HesapTab({
   const visibleTreatments = showClosed ? treatments : treatments.filter((t) => !t.is_closed)
 
   const totalOwed = treatments.reduce((s, t) => s + (t.fee ?? 0), 0)
-  const totalCost = treatments.reduce((s, t) => s + (t.cost ?? 0), 0)
+  // KDV: ücretler KDV dahildir; KDV klinik geliri olmadığı için hekime masraf olarak gösterilir (hakedişle aynı hesap)
+  const vatBps = clinic?.vat_rate ?? 1000
+  const vatOf = (fee: number) => (vatBps > 0 ? Math.round((fee * vatBps) / (10000 + vatBps)) : 0)
+  const totalVat = treatments.reduce((s, t) => s + vatOf(t.fee ?? 0), 0)
+  const totalCost = treatments.reduce((s, t) => s + (t.cost ?? 0), 0) + totalVat
   const payments = transactions.filter((t) => t.type === 'payment')
   const totalPaid = payments.reduce((s, t) => s + (t.amount ?? 0), 0)
   const balance = totalOwed - totalPaid
@@ -142,12 +146,12 @@ function HesapTab({
             ) : (
               <>
                 {visibleTreatments.map((tr) => (
-                  <FinanceLine key={tr.id} label={tr.treatment_name} value={`₺${formatAmount(tr.fee)}`} sub={showCost && (tr.cost ?? 0) > 0 ? `Masraf ₺${formatAmount(tr.cost ?? 0)}` : undefined} />
+                  <FinanceLine key={tr.id} label={tr.treatment_name} value={`₺${formatAmount(tr.fee)}`} sub={showCost ? `Masraf ₺${formatAmount(tr.cost ?? 0)} + KDV ₺${formatAmount(vatOf(tr.fee ?? 0))}` : undefined} />
                 ))}
                 <FinanceLine label="Toplam Ücret" value={`₺${formatAmount(totalOwed)}`} strong />
                 {showCost && totalCost > 0 && (
                   <>
-                    <FinanceLine label="Toplam Masraf (lab, malzeme)" value={`₺${formatAmount(totalCost)}`} />
+                    <FinanceLine label="Toplam Masraf (lab, malzeme + KDV)" value={`₺${formatAmount(totalCost)}`} sub={`Bunun KDV kısmı ₺${formatAmount(totalVat)}`} />
                     <FinanceLine label="Kâr (ücret − masraf)" value={`₺${formatAmount(totalOwed - totalCost)}`} strong />
                   </>
                 )}

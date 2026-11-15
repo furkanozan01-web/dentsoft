@@ -177,6 +177,7 @@ export default function FinanceClient({
   currentDoctorId,
   isMesulMudur,
   clinicName,
+  vatBps,
   partnerServices,
   profitByMonth,
   kasaTotals,
@@ -197,6 +198,7 @@ export default function FinanceClient({
   currentDoctorId: number | null
   isMesulMudur: boolean
   clinicName: string
+  vatBps: number
   partnerServices: PartnerService[]
   profitByMonth: Record<string, number>
   kasaTotals: Record<string, { income: number; expense: number }>
@@ -259,7 +261,7 @@ export default function FinanceClient({
     const ciro = mine.reduce((s, t) => s + (t.fee ?? 0), 0)
     const maliyet = mine.reduce((s, t) => s + (t.cost ?? 0), 0)
     const netKar = ciro - maliyet
-    const summary = computeSummary(d, doctorShares, treatments, patients, txs, doctorPayments, monthKey, profitByMonth)
+    const summary = computeSummary(d, doctorShares, treatments, patients, txs, doctorPayments, monthKey, profitByMonth, vatBps)
     return { doctor: d, ciro, maliyet, netKar, hakedis: summary.entitlement, kalan: summary.remaining, count: mine.length }
   })
   const totalHakedis = hakedisByDoctor.reduce((s, h) => s + h.hakedis, 0)
@@ -382,6 +384,7 @@ export default function FinanceClient({
             payments={doctorPayments}
             installments={installments}
             profitByMonth={profitByMonth}
+            vatBps={vatBps}
             monthKey={monthKey}
             canSeeAll={canSeeAllHakedis}
             canManagePayments={canSeeAllHakedis}

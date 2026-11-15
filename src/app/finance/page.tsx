@@ -57,7 +57,7 @@ export default async function FinancePage() {
     { data: branches },
     { data: totalsRaw },
   ] = await Promise.all([
-    supabase.from('clinic_settings').select('clinic_name').eq('id', clinicId).single(),
+    supabase.from('clinic_settings').select('clinic_name, vat_rate').eq('id', clinicId).single(),
     getFinansNavPermission(),
     canSeeAyarlarNav(),
     getCanSeeAllHakedis(),
@@ -222,6 +222,7 @@ export default async function FinancePage() {
           currentDoctorId={profile.doctor_id ?? null}
           isMesulMudur={isMesulMudur}
           clinicName={clinic?.clinic_name ?? 'Klinik'}
+          vatBps={clinic?.vat_rate ?? 1000}
           partnerServices={(partnerServices ?? []) as PartnerService[]}
           profitByMonth={profitByMonth}
           kasaTotals={kasaTotals}

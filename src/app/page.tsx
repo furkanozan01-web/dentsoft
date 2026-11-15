@@ -264,6 +264,10 @@ export default async function DashboardPage() {
     profitByMonth[key] = (profitByMonth[key] ?? 0) + signed
   }
 
+  // Hekime masraf olarak gösterilen KDV için klinik KDV oranı (hakediş sayfalarıyla aynı hesap)
+  const { data: vatRow } = await supabase.from('clinic_settings').select('vat_rate').eq('id', clinicId).maybeSingle()
+  const vatBps = vatRow?.vat_rate ?? 1000
+
   const ownSummary = currentDoctor
     ? computeSummary(
         currentDoctor,
@@ -279,7 +283,8 @@ export default async function DashboardPage() {
           payment_type: payment.payment_type,
         })),
         monthKey,
-        profitByMonth
+        profitByMonth,
+        vatBps
       )
     : null
 

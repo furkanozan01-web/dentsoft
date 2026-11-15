@@ -89,6 +89,8 @@ export interface DetailRow {
   collected: number
   gross: number
   cost: number
+  /** Masrafın içindeki KDV (tahsil edilen tutarın KDV payı) */
+  vat: number
   net: number
   rate: number
   bonus: number
@@ -137,7 +139,9 @@ export function computeSummary(
   txs: HakedisTx[],
   payments: HakedisDoctorPayment[],
   monthKey: string,
-  profitByMonth: Record<string, number>
+  profitByMonth: Record<string, number>,
+  /** Klinik KDV oranı (baz puan, örn. 1000 = %10). Tedavi ücretleri KDV dahildir; KDV hekime masraf olarak gösterilir. */
+  vatBps = 0
 ): DoctorSummary {
   const patientMap = new Map(patients.map((p) => [p.id, p]))
   const periodTreatments = treatments.filter(
@@ -193,8 +197,11 @@ export function computeSummary(
     const treatmentFee = treatment.fee ?? 0
     const collected = collectedBy.get(treatment.id) ?? 0
     const gross = collected
-    // Masraf (lab, malzeme): tahsil edilen oranda düşülür; komisyon kalan kâr üzerinden hesaplanır
-    const cost = treatmentFee > 0 ? Math.round((treatment.cost ?? 0) * (collected / treatmentFee)) : 0
+    // Masraf = lab/malzeme (tahsil edilen oranda) + KDV (ücret KDV dahildir; KDV klinik geliri değildir).
+    // Komisyon, masraflar düşüldükten sonraki kâr üzerinden hesaplanır.
+    const materialCost = treatmentFee > 0 ? Math.round((treatment.cost ?? 0) * (collected / treatmentFee)) : 0
+    const vat = vatBps > 0 ? Math.round((collected * vatBps) / (10000 + vatBps)) : 0
+    const cost = materialCost + vat
     const net = Math.max(gross - cost, 0)
     const earning = rate > 0 ? Math.round((net * rate) / 10000) : 0
     const collection = treatment.patient_id != null ? lastCollection.get(treatment.patient_id) : undefined
@@ -212,6 +219,7 @@ export function computeSummary(
       collected,
       gross,
       cost,
+      vat,
       net,
       rate,
       bonus: 0,
