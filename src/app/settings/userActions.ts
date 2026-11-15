@@ -6,7 +6,7 @@ import { usernameKey } from '@/lib/username'
 import { getCtx, requireAdmin, requireUserManager, requireCanManageUser, MANAGER_ASSIGNABLE_ROLES, type R } from './actionsShared'
 
 // ---- Kullanıcı (allowlist) ----
-const VALID_ROLES = ['bashekim', 'responsible_manager', 'hekim', 'asistan']
+const VALID_ROLES = ['bashekim', 'responsible_manager', 'hekim', 'asistan', 'laboratuvar']
 
 export async function syncDoctorsToUsers(): Promise<R & { synced?: number }> {
   const ctx = await getCtx()
@@ -94,6 +94,15 @@ export async function createStaffUser(_prev: R, formData: FormData): Promise<R> 
   let branchId = Number(formData.get('branch_id')) || null
   let accessLevel = formData.get('access_level') === 'all' ? 'all' : 'branch'
   if (!VALID_ROLES.includes(role) || role === 'bashekim') return { error: 'Geçersiz rol' }
+  // Laboratuvar kullanıcısı: yalnızca başhekim ekler; bir laboratuvar iş ortağına bağlanır, şubesi/hekimi yoktur
+  let labPartnerId: number | null = null
+  if (role === 'laboratuvar') {
+    if (ctx.role !== 'bashekim') return { error: 'Laboratuvar kullanıcısını yalnızca başhekim ekleyebilir' }
+    labPartnerId = Number(formData.get('partner_id')) || null
+    if (!labPartnerId) return { error: 'Laboratuvar kullanıcısı için bir laboratuvar (iş ortağı) seçin' }
+    branchId = null
+    accessLevel = 'branch'
+  }
   if (ctx.role === 'responsible_manager') {
     // Mesul müdür yalnızca hekim/asistan ekler; şubesi kendi şubesidir ("tüm şubeler" yetkisi yoksa) ve yetki seviyesini yükseltemez
     if (!MANAGER_ASSIGNABLE_ROLES.includes(role)) return { error: 'Mesul müdür yalnızca hekim ve asistan ekleyebilir' }
@@ -107,6 +116,10 @@ export async function createStaffUser(_prev: R, formData: FormData): Promise<R> 
   if (branchId) {
     const { data: branch } = await ctx.supabase.from('branches').select('id').eq('id', branchId).eq('clinic_id', ctx.clinicId).maybeSingle()
     if (!branch) return { error: 'Seçilen şube bu kliniğe ait değil' }
+  }
+  if (labPartnerId) {
+    const { data: partner } = await admin.from('business_partners').select('id').eq('id', labPartnerId).eq('clinic_id', ctx.clinicId).eq('partner_type', 'laboratuvar').maybeSingle()
+    if (!partner) return { error: 'Seçilen firma bu klinikte kayıtlı bir laboratuvar değil' }
   }
 
   // Hekim rolü → bir doctors kaydıyla ilişkilendir (mevcut veya yeni)
@@ -134,6 +147,8 @@ export async function createStaffUser(_prev: R, formData: FormData): Promise<R> 
     email: authEmail,
     password,
     email_confirm: true,
+    // app_metadata istemciden değiştirilemez; proxy bu bilgiyle laboratuvar kullanıcısını yalnızca portala yönlendirir
+    ...(role === 'laboratuvar' ? { app_metadata: { role: 'laboratuvar' } } : {}),
     user_metadata: {
       clinic_id: String(ctx.clinicId),
       role,
@@ -145,7 +160,7 @@ export async function createStaffUser(_prev: R, formData: FormData): Promise<R> 
   })
   if (createErr || !created.user) return { error: createErr?.message?.includes('already') ? 'Bu kullanıcı adı zaten kullanılıyor' : (createErr?.message ?? 'Kullanıcı oluşturulamadı') }
 
-  const { error: profileErr } = await admin.from('profiles').update({ username, updated_at: new Date().toISOString() }).eq('id', created.user.id)
+  const { error: profileErr } = await admin.from('profiles').update({ username, ...(labPartnerId ? { partner_id: labPartnerId } : {}), updated_at: new Date().toISOString() }).eq('id', created.user.id)
   if (profileErr) {
     await admin.auth.admin.deleteUser(created.user.id)
     return { error: profileErr.message }
@@ -275,6 +290,11 @@ export async function updateUserRole(userId: string, role: string): Promise<R> {
   if (!userId) return { error: 'Kullanıcı ID gerekli' }
   if (ctx.userId === userId) return { error: 'Kendi rolünüzü değiştiremezsiniz' }
   if (!VALID_ROLES.includes(role)) return { error: 'Geçersiz rol' }
+  if (role === 'laboratuvar') return { error: 'Laboratuvar kullanıcısı yalnızca "Kullanıcı Ekle" ile oluşturulur' }
+  {
+    const { data: cur } = await createAdminClient().from('profiles').select('role').eq('id', userId).eq('clinic_id', ctx.clinicId).maybeSingle()
+    if (cur?.role === 'laboratuvar') return { error: 'Laboratuvar kullanıcısının rolü değiştirilemez; hesabı pasife alın veya silin' }
+  }
 
   // Sadece kendi kliniğindeki kullanıcıyı güncelle
   let doctorId: number | null | undefined

@@ -33,6 +33,7 @@ export default function KullaniciTab({
   canManageUsers,
   currentUserId,
   rolePermissions,
+  labPartners = [],
   onAdd,
   onChanged,
 }: {
@@ -40,6 +41,7 @@ export default function KullaniciTab({
   doctors: Doctor[]
   branches: Branch[]
   rolePermissions: RolePermissionRow[]
+  labPartners?: { id: number; name: string }[]
   isAdmin: boolean
   canManageUsers: boolean
   currentUserId: string
@@ -198,13 +200,13 @@ export default function KullaniciTab({
                             <span className="truncate font-black text-[#142536]">{p.full_name ?? 'İsimsiz kullanıcı'}</span>
                             {isSelf && <span className="rounded-full bg-[#E6FFFA] px-2 py-0.5 text-[11px] font-black text-[#0F766E]">Siz</span>}
                           </div>
-                          <p className="mt-0.5 text-xs font-semibold text-slate-400">{dName ? `Dt. ${dName}` : 'Personel'}{bName ? ` · ${bName}` : ''}{p.is_pending ? ' · Davet bekliyor' : ''}</p>
+                          <p className="mt-0.5 text-xs font-semibold text-slate-400">{p.role === 'laboratuvar' ? `Laboratuvar${labPartners.find((l) => l.id === p.partner_id) ? ` · ${labPartners.find((l) => l.id === p.partner_id)!.name}` : ''}` : dName ? `Dt. ${dName}` : 'Personel'}{bName ? ` · ${bName}` : ''}{p.is_pending ? ' · Davet bekliyor' : ''}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-5 py-4 text-xs font-semibold text-slate-500">{p.username ?? (p.is_pending ? 'Davet bekliyor' : '—')}</td>
                     <td className="px-5 py-4">
-                      {canManage ? (
+                      {canManage && p.role !== 'laboratuvar' ? (
                         <select
                           value={p.role}
                           onChange={(e) => changeRole(p, e.target.value)}
@@ -240,7 +242,7 @@ export default function KullaniciTab({
                     </td>
                     <td className="px-5 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {!p.is_pending && (
+                        {!p.is_pending && p.role !== 'laboratuvar' && (
                           <button
                             onClick={() => setPermissionUser(p)}
                             title={isAdmin ? 'İzinleri Düzenle' : 'İzinleri Görüntüle'}
@@ -370,7 +372,9 @@ function IconKey() {
 }
 function RoleBadge({ role }: { role: string }) {
   const label = ROLE_LABEL[role] ?? role
-  const cls = role === 'bashekim'
+  const cls = role === 'laboratuvar'
+    ? 'bg-[#FEF3C7] text-[#B45309]'
+    : role === 'bashekim'
     ? 'bg-[#F3E8FF] text-[#7C3AED]'
     : role === 'responsible_manager'
       ? 'bg-[#FFF7ED] text-[#C2410C]'

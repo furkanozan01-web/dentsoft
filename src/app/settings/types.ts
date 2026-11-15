@@ -120,6 +120,7 @@ export interface Profile {
   branch_id: number | null
   active_branch_id: number | null
   access_level: string
+  partner_id?: number | null
   is_pending?: boolean
 }
 

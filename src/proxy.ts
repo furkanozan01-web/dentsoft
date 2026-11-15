@@ -37,6 +37,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
+  // Laboratuvar kullanıcısı yalnızca kendi portalını (/laboratuvar) kullanabilir; app_metadata yalnızca sunucuda (service role) yazılır
+  if (user && user.app_metadata?.role === 'laboratuvar' && !path.startsWith('/laboratuvar') && !path.startsWith('/login') && !path.startsWith('/auth/')) {
+    return NextResponse.redirect(new URL('/laboratuvar', request.url))
+  }
+
   // Giriş yapılmış → /login'e gitmesin
   if (user && path.startsWith('/login')) {
     return NextResponse.redirect(new URL('/', request.url))

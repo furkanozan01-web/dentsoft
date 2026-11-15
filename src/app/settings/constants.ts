@@ -42,6 +42,7 @@ export const ROLE_LABEL: Record<string, string> = {
   responsible_manager: 'Mesul Müdür',
   hekim: 'Hekim',
   asistan: 'Asistan',
+  laboratuvar: 'Laboratuvar',
 }
 
 export const ASSIGNABLE_ROLES = [

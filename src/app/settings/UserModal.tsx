@@ -10,6 +10,7 @@ export function UserModal({
   branches,
   managerOnly = false,
   lockedBranchId = null,
+  labPartners = [],
   onClose,
   onSuccess,
 }: {
@@ -19,6 +20,8 @@ export function UserModal({
   managerOnly?: boolean
   /** Mesul müdürün kendi şubesi (kilitli) */
   lockedBranchId?: number | null
+  /** Laboratuvar rolü için seçilebilecek laboratuvar iş ortakları */
+  labPartners?: { id: number; name: string }[]
   onClose: () => void
   onSuccess: () => void
 }) {
@@ -49,8 +52,23 @@ export function UserModal({
             <option value="asistan">Asistan</option>
             <option value="hekim">Hekim</option>
             {!managerOnly && <option value="responsible_manager">Mesul Müdür</option>}
+            {!managerOnly && <option value="laboratuvar">Laboratuvar (dış kullanıcı)</option>}
           </select>
         </div>
+        {role === 'laboratuvar' && (
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1.5">Hangi laboratuvar? *</label>
+            {labPartners.length === 0 ? (
+              <p className="rounded-xl bg-amber-50 px-3 py-2.5 text-xs font-medium text-amber-700">Önce Finans → İş Ortaklarımız bölümünden türü “Laboratuvar” olan bir firma ekleyin.</p>
+            ) : (
+              <select name="partner_id" required defaultValue="" className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#2DD4BF]/30">
+                <option value="" disabled>Laboratuvar seçin…</option>
+                {labPartners.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            )}
+            <p className="text-[11px] text-gray-400 mt-1">Bu kullanıcı yalnızca kendi laboratuvar portalını görür: yaptığı işleri ve ücretlerini bildirir; hasta, finans ve diğer bilgilere erişemez.</p>
+          </div>
+        )}
         {role === 'hekim' && (
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1.5">
@@ -71,13 +89,13 @@ export function UserModal({
             </p>
           </div>
         )}
-        <div>
+        {role !== 'laboratuvar' && <div>
           <label className="block text-xs font-medium text-gray-500 mb-1.5">Bağlı Şube</label>
           <select name="branch_id" defaultValue={lockedBranchId ?? branches.find((branch) => branch.is_default)?.id ?? ''} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#2DD4BF]/30">
             {branches.filter((branch) => branch.is_active && (lockedBranchId === null || branch.id === lockedBranchId)).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
           </select>
-        </div>
-        {!(managerOnly && lockedBranchId !== null) && <div>
+        </div>}
+        {role !== 'laboratuvar' && !(managerOnly && lockedBranchId !== null) && <div>
           <label className="block text-xs font-medium text-gray-500 mb-1.5">Yetki Seviyesi</label>
           <select name="access_level" defaultValue="branch" className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#2DD4BF]/30">
             <option value="branch">Yalnızca bağlı şube</option>

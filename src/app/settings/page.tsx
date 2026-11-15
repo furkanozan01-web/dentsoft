@@ -56,7 +56,7 @@ export default async function SettingsPage() {
     // listelemek için sunucuda service role ile (clinic_id filtreli) okur. Mesul müdür yalnızca kendi şubesini görür.
     (isUserManager ? createAdminClient() : supabase)
       .from('profiles')
-      .select('id, full_name, username, role, created_at, doctor_id, branch_id, active_branch_id, access_level')
+      .select('id, full_name, username, role, created_at, doctor_id, branch_id, active_branch_id, access_level, partner_id')
       .eq('clinic_id', clinicId)
       .order('created_at'),
     supabase
@@ -213,6 +213,14 @@ export default async function SettingsPage() {
   )
 
   const [{ canView: canSeeFinans }, canSeeAyarlar] = await navPermsPromise
+  // Laboratuvar kullanıcısı eklerken seçilecek laboratuvar iş ortakları
+  const { data: labPartners } = await supabase
+    .from('business_partners')
+    .select('id, name')
+    .eq('clinic_id', clinicId)
+    .eq('partner_type', 'laboratuvar')
+    .eq('is_active', true)
+    .order('name')
 
   return (
     <div className="flex min-h-screen bg-[#F0F4F9]">
@@ -232,6 +240,7 @@ export default async function SettingsPage() {
           currentUserId={user.id}
           activeBranchId={profile.active_branch_id ?? null}
           rolePermissions={(rolePermissions ?? []) as RolePermissionRow[]}
+          labPartners={(labPartners ?? []) as { id: number; name: string }[]}
         />
       </main>
     </div>

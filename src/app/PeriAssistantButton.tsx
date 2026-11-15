@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useTransition, Fragment } from 'react'
+import { usePathname } from 'next/navigation'
 import type { PeriMessage, PeriResponse, PendingWrite } from '@/lib/peri/types'
 
 interface ChatMessage {
@@ -11,7 +12,14 @@ interface ChatMessage {
   agent?: { id: string; displayName: string }
 }
 
+// Laboratuvar portalında (dış kullanıcı) PERİ asistanı gösterilmez
 export default function PeriAssistantButton() {
+  const pathname = usePathname()
+  if (pathname?.startsWith('/laboratuvar')) return null
+  return <PeriAssistantInner />
+}
+
+function PeriAssistantInner() {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])

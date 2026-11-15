@@ -30,6 +30,7 @@ export default function SettingsClient({
   currentUserId,
   activeBranchId,
   rolePermissions,
+  labPartners = [],
 }: {
   clinic: ClinicSettings
   doctors: Doctor[]
@@ -44,6 +45,7 @@ export default function SettingsClient({
   currentUserId: string
   activeBranchId: number | null
   rolePermissions: RolePermissionRow[]
+  labPartners?: { id: number; name: string }[]
 }) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('klinik')
   const [showUserModal, setShowUserModal] = useState(false)
@@ -111,6 +113,7 @@ export default function SettingsClient({
             canManageUsers={canManageUsers}
             currentUserId={currentUserId}
             rolePermissions={rolePermissions}
+            labPartners={labPartners}
             onAdd={() => setShowUserModal(true)}
             onChanged={refresh}
           />
@@ -135,6 +138,7 @@ export default function SettingsClient({
           doctors={initialDoctors}
           branches={branches}
           managerOnly={!isAdmin}
+          labPartners={labPartners}
           lockedBranchId={!isAdmin ? (() => { const me = initialProfiles.find((p) => p.id === currentUserId); return me && me.access_level !== 'all' ? me.branch_id : null })() : null}
           onClose={() => setShowUserModal(false)}
           onSuccess={() => { setShowUserModal(false); refresh() }}
