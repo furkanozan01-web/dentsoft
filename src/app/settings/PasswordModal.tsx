@@ -39,7 +39,7 @@ export function PasswordModal({
       subtitle={self ? 'Giriş: klinik e-postası + kullanıcı adınız + bu şifre.' : `${userLabel ?? 'Kullanıcı'} için yeni şifre belirleyin.`}
       onClose={onClose}
     >
-      <form action={submit} className="p-6 space-y-4" autoComplete="off">
+      <form onSubmit={(e) => { e.preventDefault(); submit(new FormData(e.currentTarget)) }} className="p-6 space-y-4" autoComplete="off">
         {error && <ErrBox msg={error} />}
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1.5">Yeni şifre (en az 10 karakter)</label>

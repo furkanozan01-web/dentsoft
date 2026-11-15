@@ -18,11 +18,12 @@ export default async function SettingsPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, role, clinic_id, doctor_id, active_branch_id')
+    .select('full_name, role, clinic_id, doctor_id, active_branch_id, branch_id, access_level')
     .eq('id', user.id)
     .single()
 
   if (!profile?.clinic_id) redirect('/login')
+  const isUserManager = profile.role === 'bashekim' || profile.role === 'responsible_manager'
   // Sidebar izinleri ana sorgularla paralel başlar
   const navPermsPromise = Promise.all([getPermissions('finans_bilgi'), canSeeAyarlarNav()])
   const clinicId = profile.clinic_id
@@ -50,7 +51,9 @@ export default async function SettingsPage() {
       )
       .eq('clinic_id', clinicId)
       .order('name'),
-    supabase
+    // profiles RLS'i yalnızca kişinin kendi satırını döndürür; yöneticiler (başhekim/mesul müdür) kliniğin tüm kullanıcılarını
+    // listelemek için sunucuda service role ile (clinic_id filtreli) okur. Mesul müdür yalnızca kendi şubesini görür.
+    (isUserManager ? createAdminClient() : supabase)
       .from('profiles')
       .select('id, full_name, username, role, created_at, doctor_id, branch_id, active_branch_id, access_level')
       .eq('clinic_id', clinicId)
@@ -113,7 +116,7 @@ export default async function SettingsPage() {
   // auth.users PostgREST'e açık olmadığından admin API kullanılır.
   const authMap = new Map<string, { email: string | null; lastLogin: string | null; active: boolean }>()
   const pendingProfiles: Profile[] = []
-  if (profile.role === 'bashekim') try {
+  if (profile.role === 'bashekim' || profile.role === 'responsible_manager') try {
     const admin = createAdminClient()
     const { data: authData } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
     for (const u of authData?.users ?? []) {
@@ -177,6 +180,11 @@ export default async function SettingsPage() {
       is_pending: true,
     })
   }
+  // Mesul müdür ("tüm şubeler" yetkisi yoksa) yalnızca kendi şubesinin kullanıcılarını görür
+  const limitedManager = profile.role === 'responsible_manager' && profile.access_level !== 'all'
+  const visibleProfiles = limitedManager
+    ? enrichedProfiles.filter((item) => item.id === user.id || item.branch_id === profile.branch_id)
+    : enrichedProfiles
   const doctorViews = (doctors ?? []).map(({ tc_enc, ...doctor }) => ({
     ...doctor,
     tc_identity_no: tc_enc ? tryDecrypt(tc_enc) : null,
@@ -210,13 +218,14 @@ export default async function SettingsPage() {
         <SettingsClient
           clinic={(clinic ?? {}) as ClinicSettings}
           doctors={safeDoctors as Doctor[]}
-          profiles={enrichedProfiles}
+          profiles={visibleProfiles}
           branches={(branches ?? []) as Branch[]}
           tariffs={(tariffRows ?? []) as Tariff[]}
           tariffProfiles={(tariffProfiles ?? []) as TariffProfile[]}
           tariffHistory={(tariffHistory ?? []).map((row) => ({ ...row, changed_by_name: enrichedProfiles.find((item) => item.id === row.changed_by)?.full_name ?? null })) as TariffPriceHistory[]}
           appointmentTypes={(appointmentTypes ?? []) as AppointmentType[]}
           isAdmin={profile.role === 'bashekim'}
+          canManageUsers={profile.role === 'bashekim' || profile.role === 'responsible_manager'}
           currentUserId={user.id}
           activeBranchId={profile.active_branch_id ?? null}
           rolePermissions={(rolePermissions ?? []) as RolePermissionRow[]}

@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { useConfirm } from '@/components/ConfirmModal'
 import { updateUserRole, setUserActive, type RolePermissionRow } from './actions'
 import { PasswordModal } from './PasswordModal'
+import { UserDetailModal } from './UserDetailModal'
 import { ASSIGNABLE_ROLES, ROLE_LABEL } from './constants'
 import {
   SettingsIconBox,
@@ -29,6 +30,7 @@ export default function KullaniciTab({
   doctors,
   branches,
   isAdmin,
+  canManageUsers,
   currentUserId,
   rolePermissions,
   onAdd,
@@ -39,6 +41,7 @@ export default function KullaniciTab({
   branches: Branch[]
   rolePermissions: RolePermissionRow[]
   isAdmin: boolean
+  canManageUsers: boolean
   currentUserId: string
   onAdd: () => void
   onChanged: () => void
@@ -48,6 +51,14 @@ export default function KullaniciTab({
   const [permissionUser, setPermissionUser] = useState<Profile | null>(null)
   // Şifre penceresi: 'self' = kendi şifrem, Profile = o çalışanın şifresini sıfırla
   const [passwordTarget, setPasswordTarget] = useState<'self' | Profile | null>(null)
+  const [detailUser, setDetailUser] = useState<Profile | null>(null)
+  const me = profiles.find((p) => p.id === currentUserId)
+  // Kullanıcı adı/şifre belirleme yetkisi: başhekim herkes için; mesul müdür kendi şubesindeki (veya "tüm şubeler" yetkisiyse kliniğindeki) hekim ve asistanlar için
+  const canSetCredentials = (p: Profile) =>
+    canManageUsers && !p.is_pending && p.id !== currentUserId &&
+    (isAdmin
+      ? p.role !== 'bashekim'
+      : ['hekim', 'asistan'].includes(p.role) && (me?.access_level === 'all' || (me?.branch_id != null && p.branch_id === me.branch_id)))
 
   const doctorName = (id: number | null) =>
     id ? doctors.find((d) => d.id === id)?.name ?? null : null
@@ -123,7 +134,7 @@ export default function KullaniciTab({
               <IconKey />
               Şifremi Belirle
             </button>
-            {isAdmin && (
+            {canManageUsers && (
               <button
                 onClick={onAdd}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-[14px] bg-[linear-gradient(135deg,#5FD3C1,#1EAEA0)] px-4 text-sm font-black text-white shadow-[0_10px_20px_rgba(30,174,160,0.18)] transition hover:-translate-y-0.5 hover:brightness-105"
@@ -178,7 +189,14 @@ export default function KullaniciTab({
                   .join('')
                   .toLocaleUpperCase('tr-TR')
                 return (
-                  <tr key={p.id} className={`h-20 border-b border-[#EEF2F6] transition last:border-0 hover:bg-[#5FD3C1]/[0.04] ${!p.is_active ? 'opacity-60' : ''}`}>
+                  <tr
+                    key={p.id}
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest('button,select,a,input')) return
+                      setDetailUser(p)
+                    }}
+                    className={`h-20 cursor-pointer border-b border-[#EEF2F6] transition last:border-0 hover:bg-[#5FD3C1]/[0.04] ${!p.is_active ? 'opacity-60' : ''}`}
+                  >
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#5FD3C1,#2563EB)] text-sm font-black text-white shadow-sm">
@@ -240,7 +258,7 @@ export default function KullaniciTab({
                             <IconKey />
                           </button>
                         )}
-                        {canManage && (
+                        {canSetCredentials(p) && (
                           <button
                             onClick={() => setPasswordTarget(p)}
                             className="inline-flex h-9 items-center justify-center rounded-xl px-3 text-xs font-black text-slate-400 transition hover:bg-[#5FD3C1]/10 hover:text-[#1EAEA0]"
@@ -305,13 +323,26 @@ export default function KullaniciTab({
             </div>
             <div className="space-y-3">
               <RoleInfoRow title="Başhekim" description="Tüm modüllere erişir." tone="violet" />
-              <RoleInfoRow title="Mesul Müdür" description="Ayarlar → Kullanıcı hariç her şeye erişir." tone="slate" />
+              <RoleInfoRow title="Mesul Müdür" description="Kendi şubesindeki hekim ve asistanların kullanıcı adı ve şifresini belirler; rol/yetki matrisini değiştiremez." tone="slate" />
               <RoleInfoRow title="Hekim" description="Kendi hastası, randevu ve klinik işlem erişimi." tone="teal" />
               <RoleInfoRow title="Asistan" description="Randevu ve hasta kayıt erişimi." tone="blue" />
             </div>
           </section>
         </aside>
       </div>
+      {detailUser && (
+        <UserDetailModal
+          user={detailUser}
+          branchName={branchName(detailUser.branch_id)}
+          doctorName={doctorName(detailUser.doctor_id)}
+          canEdit={canSetCredentials(detailUser)}
+          canEditUsername={canSetCredentials(detailUser) || (isAdmin && detailUser.id === currentUserId)}
+          isSelf={detailUser.id === currentUserId}
+          onClose={() => setDetailUser(null)}
+          onChanged={onChanged}
+          onOpenPermissions={detailUser.is_pending ? undefined : () => { setPermissionUser(detailUser); setDetailUser(null) }}
+        />
+      )}
       {passwordTarget && (
         <PasswordModal
           userId={passwordTarget === 'self' ? undefined : passwordTarget.id}

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getCtx, requireAdmin, type R } from './actionsShared'
+import { getCtx, requireAdmin, requireUserManager, requireCanManageUser, MANAGER_ASSIGNABLE_ROLES, type R } from './actionsShared'
 
 // ---- Kullanıcı (allowlist) ----
 const VALID_ROLES = ['bashekim', 'responsible_manager', 'hekim', 'asistan']
@@ -80,8 +80,8 @@ function passwordError(pw: string): string | null {
 export async function createStaffUser(_prev: R, formData: FormData): Promise<R> {
   const ctx = await getCtx()
   if (!ctx) return { error: 'Yetkisiz erişim' }
-  const adminErr = requireAdmin(ctx)
-  if (adminErr) return adminErr
+  const managerErr = requireUserManager(ctx)
+  if (managerErr) return managerErr
 
   const { value: username, error: usernameErr } = normalizeUsername(formData.get('username'))
   if (usernameErr || !username) return { error: usernameErr }
@@ -91,9 +91,14 @@ export async function createStaffUser(_prev: R, formData: FormData): Promise<R> 
 
   const fullName = (formData.get('full_name') as string)?.trim() || null
   const role = (formData.get('role') as string) || 'asistan'
-  const branchId = Number(formData.get('branch_id')) || null
-  const accessLevel = formData.get('access_level') === 'all' ? 'all' : 'branch'
+  let branchId = Number(formData.get('branch_id')) || null
+  let accessLevel = formData.get('access_level') === 'all' ? 'all' : 'branch'
   if (!VALID_ROLES.includes(role) || role === 'bashekim') return { error: 'Geçersiz rol' }
+  if (ctx.role === 'responsible_manager') {
+    // Mesul müdür yalnızca hekim/asistan ekler; şubesi kendi şubesidir ("tüm şubeler" yetkisi yoksa) ve yetki seviyesini yükseltemez
+    if (!MANAGER_ASSIGNABLE_ROLES.includes(role)) return { error: 'Mesul müdür yalnızca hekim ve asistan ekleyebilir' }
+    if (ctx.accessLevel !== 'all') { branchId = ctx.branchId; accessLevel = 'branch' }
+  }
 
   const admin = createAdminClient()
   const { data: taken } = await admin.from('profiles').select('id').eq('clinic_id', ctx.clinicId).eq('username', username).maybeSingle()
@@ -152,16 +157,14 @@ export async function createStaffUser(_prev: R, formData: FormData): Promise<R> 
 export async function resetUserPassword(userId: string, newPassword: string): Promise<R> {
   const ctx = await getCtx()
   if (!ctx) return { error: 'Yetkisiz erişim' }
-  const adminErr = requireAdmin(ctx)
-  if (adminErr) return adminErr
   if (!userId) return { error: 'Kullanıcı ID gerekli' }
   if (userId === ctx.userId) return { error: 'Kendi şifrenizi "Şifremi Belirle" ile değiştirin' }
+  const manageErr = await requireCanManageUser(ctx, userId)
+  if (manageErr) return manageErr
   const pwErr = passwordError(newPassword)
   if (pwErr) return { error: pwErr }
 
   const admin = createAdminClient()
-  const { data: target } = await admin.from('profiles').select('id').eq('id', userId).eq('clinic_id', ctx.clinicId).maybeSingle()
-  if (!target) return { error: 'Kullanıcı bu klinikte bulunamadı' }
   const { error } = await admin.auth.admin.updateUserById(userId, { password: newPassword })
   if (error) return { error: error.message }
   return { success: true }
@@ -181,14 +184,13 @@ export async function setMyPassword(newPassword: string): Promise<R> {
 export async function updateUsername(userId: string, rawUsername: string): Promise<R> {
   const ctx = await getCtx()
   if (!ctx) return { error: 'Yetkisiz erişim' }
-  const adminErr = requireAdmin(ctx)
-  if (adminErr) return adminErr
+  // Başhekim herkesin, mesul müdür kendi şubesindeki hekim/asistanların kullanıcı adını değiştirir
+  const manageErr = await requireCanManageUser(ctx, userId)
+  if (manageErr) return manageErr
   const { value: username, error: usernameErr } = normalizeUsername(rawUsername)
   if (usernameErr || !username) return { error: usernameErr }
 
   const admin = createAdminClient()
-  const { data: target } = await admin.from('profiles').select('id').eq('id', userId).eq('clinic_id', ctx.clinicId).maybeSingle()
-  if (!target) return { error: 'Kullanıcı bu klinikte bulunamadı' }
   const { data: taken } = await admin.from('profiles').select('id').eq('clinic_id', ctx.clinicId).eq('username', username).neq('id', userId).maybeSingle()
   if (taken) return { error: 'Bu kullanıcı adı bu klinikte zaten kullanılıyor' }
   const { error } = await admin.from('profiles').update({ username, updated_at: new Date().toISOString() }).eq('id', userId)

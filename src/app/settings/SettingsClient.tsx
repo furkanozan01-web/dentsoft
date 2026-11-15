@@ -26,6 +26,7 @@ export default function SettingsClient({
   tariffHistory,
   appointmentTypes,
   isAdmin,
+  canManageUsers,
   currentUserId,
   activeBranchId,
   rolePermissions,
@@ -39,6 +40,7 @@ export default function SettingsClient({
   tariffHistory: TariffPriceHistory[]
   appointmentTypes: AppointmentType[]
   isAdmin: boolean
+  canManageUsers: boolean
   currentUserId: string
   activeBranchId: number | null
   rolePermissions: RolePermissionRow[]
@@ -106,6 +108,7 @@ export default function SettingsClient({
             doctors={initialDoctors}
             branches={branches}
             isAdmin={isAdmin}
+            canManageUsers={canManageUsers}
             currentUserId={currentUserId}
             rolePermissions={rolePermissions}
             onAdd={() => setShowUserModal(true)}
@@ -131,6 +134,8 @@ export default function SettingsClient({
         <UserModal
           doctors={initialDoctors}
           branches={branches}
+          managerOnly={!isAdmin}
+          lockedBranchId={!isAdmin ? (() => { const me = initialProfiles.find((p) => p.id === currentUserId); return me && me.access_level !== 'all' ? me.branch_id : null })() : null}
           onClose={() => setShowUserModal(false)}
           onSuccess={() => { setShowUserModal(false); refresh() }}
         />
