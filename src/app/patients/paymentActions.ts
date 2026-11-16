@@ -230,6 +230,16 @@ export async function deletePayment(
   const { supabase, clinicId } = ctx
   if (!transactionId) return { error: 'İşlem ID gerekli' }
 
+  // Firma ödemesinde hasta ödemesi ile firma gideri bağlıdır; biri silinirse diğeri de silinir (Defter/Kasa tutarlı kalsın)
+  const { data: payRow } = await supabase
+    .from('transactions')
+    .select('method, linked_transaction_id')
+    .eq('id', transactionId)
+    .eq('clinic_id', clinicId)
+    .eq('type', 'payment')
+    .maybeSingle()
+  if (!payRow) return { error: 'Ödeme kaydı bulunamadı' }
+
   const { error } = await supabase
     .from('transactions')
     .delete()
@@ -238,6 +248,16 @@ export async function deletePayment(
     .eq('type', 'payment')
 
   if (error) return { error: error.message }
+  if (payRow.method === 'firma_odemesi' && payRow.linked_transaction_id) {
+    await supabase
+      .from('transactions')
+      .delete()
+      .eq('id', payRow.linked_transaction_id)
+      .eq('clinic_id', clinicId)
+      .eq('type', 'expense')
+  }
+  revalidatePath('/patients')
+  revalidatePath('/finance')
   return { success: true }
 }
 
@@ -338,7 +358,11 @@ export async function addPaymentWithCurrency(
       .select('id')
       .single()
 
-    if (expenseErr) return { error: expenseErr.message }
+    if (expenseErr) {
+      // Gider yazılamazsa hasta ödemesi de geri alınır: yarım kayıt kalmasın
+      await supabase.from('transactions').delete().eq('id', incomeTx.id).eq('clinic_id', clinicId)
+      return { error: expenseErr.message }
+    }
 
     // Gelir kaydını gider kaydına bağla
     await supabase
