@@ -1,0 +1,20 @@
+{
+  "$schema": "https://raw.githubusercontent.com/TestSprite/testsprite-cli/v0.16.0/schemas/plan.schema.json",
+  "projectId": "b13fbbe2-51bc-4d95-8377-2f6bb89eaf17",
+  "type": "frontend",
+  "name": "Fatura: kagit fatura (kismi tutar), tutar siniri, geri alma",
+  "description": "TEST hastasinin faturasiz odemesi icin elle yazilmis fatura kaydi.",
+  "planSteps": [
+    { "type": "action", "description": "Log in with the TEST account credentials configured for this project" },
+    { "type": "action", "description": "Open patient 'TEST Senaryo HASTA', go to the 'Fatura' tab and click the 'Kagit Fatura Kesildi' sub tab" },
+    { "type": "assertion", "description": "Verify the list of un-invoiced payments is shown with checkboxes and a selected payment total" },
+    { "type": "action", "description": "Enter invoice number 'TEST-0001', keep today's date, and set the invoice amount to half of the selected payment total" },
+    { "type": "assertion", "description": "Verify a note appears saying this is a partial invoice and the VAT is calculated only on the invoiced amount" },
+    { "type": "action", "description": "Click 'Faturayi Dus'" },
+    { "type": "assertion", "description": "Verify invoice 'TEST-0001' appears in the 'Kesilen Faturalar' table with the half amount" },
+    { "type": "action", "description": "Try to record another invoice with an amount larger than the payment total" },
+    { "type": "assertion", "description": "Verify the save button is disabled or an error says the invoice amount cannot exceed the selected payments" },
+    { "type": "action", "description": "Remove the 'TEST-0001' invoice record from the table and confirm" },
+    { "type": "assertion", "description": "Verify the invoice disappears and the payment is listed again as un-invoiced" }
+  ]
+}

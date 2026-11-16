@@ -1,0 +1,17 @@
+{
+  "$schema": "https://raw.githubusercontent.com/TestSprite/testsprite-cli/v0.16.0/schemas/plan.schema.json",
+  "projectId": "b13fbbe2-51bc-4d95-8377-2f6bb89eaf17",
+  "type": "frontend",
+  "name": "Hasta: TEST hastasi ekleme, TC 11 hane, listede gorunme",
+  "description": "TEST hesabi ile giris yapilir. Yalnizca adi TEST ile baslayan kayitlar olusturulur.",
+  "planSteps": [
+    { "type": "action", "description": "Log in on /login with the TEST account credentials configured for this project (clinic e-mail, username and password)" },
+    { "type": "action", "description": "Open the Patients page (/patients) and start creating a new patient" },
+    { "type": "action", "description": "Fill the patient form: first name 'TEST Senaryo', last name 'HASTA', a valid phone number, and the T.C. identity number 12345678901 (any random 11 digits)" },
+    { "type": "action", "description": "Save the new patient" },
+    { "type": "assertion", "description": "Verify no error about an invalid T.C. identity number is shown and the patient was created" },
+    { "type": "assertion", "description": "Verify the patient 'TEST Senaryo HASTA' appears in the patient list and has a protocol number" },
+    { "type": "action", "description": "Create another patient named 'TEST Kisa Tc HASTA' with a T.C. identity number that has only 10 digits" },
+    { "type": "assertion", "description": "Verify the form rejects the 10-digit T.C. number with a message saying it must be 11 digits" }
+  ]
+}

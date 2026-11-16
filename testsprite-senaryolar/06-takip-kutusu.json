@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/TestSprite/testsprite-cli/v0.16.0/schemas/plan.schema.json",
+  "projectId": "b13fbbe2-51bc-4d95-8377-2f6bb89eaf17",
+  "type": "frontend",
+  "name": "Takip: yeni takip kutusuna islem/seans ekleme, duzenleme, silme",
+  "description": "TEST hastasinda tedavi takibi.",
+  "planSteps": [
+    { "type": "action", "description": "Log in with the TEST account credentials configured for this project" },
+    { "type": "action", "description": "Open patient 'TEST Senaryo HASTA', go to the 'Takip' tab and click 'Yeni Takip'" },
+    { "type": "action", "description": "Choose the 'Kanal Tedavisi' template and create the follow-up" },
+    { "type": "assertion", "description": "Verify a follow-up box appears with three steps and a progress counter showing 0/3" },
+    { "type": "action", "description": "In that box click 'Islem / Seans Ekle', type 'TEST Ek Seans' with a date and click 'Ekle'" },
+    { "type": "assertion", "description": "Verify the new step appears at the end of the box and the counter shows 0/4" },
+    { "type": "action", "description": "Click the pencil icon on 'TEST Ek Seans', rename it to 'TEST Ek Seans 2' and save" },
+    { "type": "assertion", "description": "Verify the step name is updated" },
+    { "type": "action", "description": "Mark the first step as completed" },
+    { "type": "assertion", "description": "Verify the counter shows 1/4 and the step appears struck through" },
+    { "type": "action", "description": "Delete the 'TEST Ek Seans 2' step and confirm" },
+    { "type": "assertion", "description": "Verify the step is removed and the counter shows 1/3" }
+  ]
+}

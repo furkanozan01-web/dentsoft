@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/TestSprite/testsprite-cli/v0.16.0/schemas/plan.schema.json",
+  "projectId": "b13fbbe2-51bc-4d95-8377-2f6bb89eaf17",
+  "type": "frontend",
+  "name": "Finans: gider, kasa, sube secimi, borc odeme ve defter tutarliligi",
+  "description": "Giris yapan hesap Finans iznine sahip olmalidir. Yalnizca TEST aciklamali gider ve borc olusturulur.",
+  "planSteps": [
+    { "type": "action", "description": "Log in with the TEST account credentials configured for this project and open the Finance page (/finance)" },
+    { "type": "action", "description": "Open the 'Kasa' tab and note the cash balance of the first branch" },
+    { "type": "action", "description": "Open the 'Defter' tab, click '+ Gider', enter description 'TEST gider', amount 1500 and save" },
+    { "type": "assertion", "description": "Verify the amount field showed 1.500 while typing and 'TEST gider' appears in the expense table of the ledger" },
+    { "type": "action", "description": "Go to the 'Kasa' tab again" },
+    { "type": "assertion", "description": "Verify the branch cash balance decreased by exactly 1.500,00 compared to the earlier value" },
+    { "type": "action", "description": "Open the 'Borclar' tab, add a debt titled 'TEST borc' with amount 40000 and save" },
+    { "type": "action", "description": "Pay 10000 of the 'TEST borc' debt from the debts list" },
+    { "type": "assertion", "description": "Verify the debt shows 10.000 paid and 30.000 remaining" },
+    { "type": "action", "description": "Open the 'Defter' tab" },
+    { "type": "assertion", "description": "Verify an expense named 'TEST borc' of 10.000,00 appears in the ledger expense list" },
+    { "type": "action", "description": "Delete that ledger expense record" },
+    { "type": "assertion", "description": "Verify in the 'Borclar' tab the debt shows 0 paid and 40.000 remaining again" }
+  ]
+}

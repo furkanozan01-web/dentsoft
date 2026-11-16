@@ -1,0 +1,17 @@
+{
+  "$schema": "https://raw.githubusercontent.com/TestSprite/testsprite-cli/v0.16.0/schemas/plan.schema.json",
+  "projectId": "b13fbbe2-51bc-4d95-8377-2f6bb89eaf17",
+  "type": "frontend",
+  "name": "Yetki: asistan hesabi yetkisiz sayfalari goremez",
+  "description": "Bu senaryo SADECE asistan rolundeki TEST hesabiyla calistirilmalidir.",
+  "planSteps": [
+    { "type": "action", "description": "Log in with the TEST assistant account credentials configured for this project" },
+    { "type": "assertion", "description": "Verify the sidebar does not show menu items that the assistant has no permission for" },
+    { "type": "action", "description": "Navigate directly to /settings" },
+    { "type": "assertion", "description": "Verify no clinic settings, user list or tariff management content is visible to the assistant" },
+    { "type": "action", "description": "Navigate directly to /finance" },
+    { "type": "assertion", "description": "Verify no cash balance (Kasa) or doctor earnings (Hakedis) information is visible" },
+    { "type": "action", "description": "Navigate directly to /laboratuvar" },
+    { "type": "assertion", "description": "Verify the assistant is redirected away and no laboratory portal data is shown" }
+  ]
+}

@@ -184,7 +184,7 @@ export async function markInstallmentPaid(
   if (updateError) return { error: updateError.message }
   if (!updated) return { error: 'Bu taksit zaten ödenmiş' }
 
-  const { error: txErr } = await supabase.from('transactions').insert({
+  const { data: payTx, error: txErr } = await supabase.from('transactions').insert({
     clinic_id: clinicId,
     patient_id: inst.patient_id,
     amount: inst.amount,
@@ -193,14 +193,18 @@ export async function markInstallmentPaid(
     transaction_date: localDateValue(),
     description: 'Taksit ödemesi',
     ...(await branchFallback(supabase, inst.patient_id)),
-  })
-  if (txErr) {
+  }).select('id').single()
+  if (payTx) {
+    // Taksit ile ödeme bağlanır: ödeme silinirse taksit yeniden ödenmemiş olur (veritabanı tetikleyicisi)
+    await supabase.from('payment_plans').update({ transaction_id: payTx.id }).eq('id', installmentId).eq('clinic_id', clinicId)
+  }
+  if (txErr || !payTx) {
     await supabase
       .from('payment_plans')
       .update({ paid: false, paid_at: null, updated_at: new Date().toISOString() })
       .eq('id', installmentId)
       .eq('clinic_id', clinicId)
-    return { error: txErr.message }
+    return { error: txErr?.message ?? 'Ödeme kaydı oluşturulamadı' }
   }
   return { success: true }
 }

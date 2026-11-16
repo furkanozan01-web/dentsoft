@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/TestSprite/testsprite-cli/v0.16.0/schemas/plan.schema.json",
+  "projectId": "b13fbbe2-51bc-4d95-8377-2f6bb89eaf17",
+  "type": "frontend",
+  "name": "Oral: planlama, indirim, tedaviye aktarim, tedavi sirasi, mantik kurallari",
+  "description": "TEST hastasi uzerinde planlama kalemleri eklenir, indirim uygulanir, Tedavi sekmesine aktarilir. Mantiksal kurallar denetlenir.",
+  "planSteps": [
+    { "type": "action", "description": "Log in with the TEST account credentials configured for this project" },
+    { "type": "action", "description": "Open the patient 'TEST Senaryo HASTA' and go to the 'Oral' tab, then open the 'Planlama 1' sub tab" },
+    { "type": "action", "description": "In the right panel choose any tariff item that has a price (for example a filling) and click tooth 16 in the tooth chart" },
+    { "type": "assertion", "description": "Verify the item is listed in the Planlama 1 items card with tooth number 16 and a doctor name, and that tooth 16 is NOT surrounded by a blue box" },
+    { "type": "action", "description": "Choose another priced tariff item and click tooth 26, then click the 'Tumunu Sec' button in the items card" },
+    { "type": "assertion", "description": "Verify all items in the plan are checked and the plan total equals the sum of the item prices" },
+    { "type": "action", "description": "Click the 'Indirim' button, choose percent, enter 10 and apply" },
+    { "type": "assertion", "description": "Verify each item shows a 10 percent discount and the plan total is 10 percent lower than before" },
+    { "type": "action", "description": "With all items selected click the 'Tedavi' copy target, confirm the transfer date and click 'Aktar'" },
+    { "type": "action", "description": "Open the 'Tedavi' sub tab" },
+    { "type": "assertion", "description": "Verify both items now appear as treatments, with the discounted prices, and the most recently added treatment is at the top of the list" },
+    { "type": "action", "description": "Go back to 'Planlama 1', choose a tariff whose name contains 'Implant' (an implant placement) and click tooth 16 which already has a planned filling" },
+    { "type": "assertion", "description": "Verify the system refuses with a message that natural tooth tissue exists and extraction is needed first" }
+  ]
+}

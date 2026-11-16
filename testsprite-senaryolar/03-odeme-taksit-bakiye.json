@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/TestSprite/testsprite-cli/v0.16.0/schemas/plan.schema.json",
+  "projectId": "b13fbbe2-51bc-4d95-8377-2f6bb89eaf17",
+  "type": "frontend",
+  "name": "Odeme: para alma, bakiye, taksit odeme ve odeme silince taksidin acilmasi",
+  "description": "TEST hastasinda 100.000 formatli tutar girisi, bakiye tutarliligi ve taksit-odeme baglantisi.",
+  "planSteps": [
+    { "type": "action", "description": "Log in with the TEST account credentials configured for this project" },
+    { "type": "action", "description": "Open patient 'TEST Senaryo HASTA' and go to the 'Hesap' tab; note the remaining balance" },
+    { "type": "action", "description": "Click the add payment button, choose cash, and type the amount 12500 in the amount field" },
+    { "type": "assertion", "description": "Verify the amount field automatically shows the value as 12.500 with a dot as thousands separator" },
+    { "type": "action", "description": "Save the payment" },
+    { "type": "assertion", "description": "Verify the payment of 12.500,00 appears in the payment history and the remaining balance decreased by exactly 12.500,00" },
+    { "type": "action", "description": "Create an installment plan for the remaining balance with 3 installments" },
+    { "type": "assertion", "description": "Verify the three installment amounts add up exactly to the remaining balance" },
+    { "type": "action", "description": "Mark the first installment as paid" },
+    { "type": "assertion", "description": "Verify a new payment named 'Taksit odemesi' appears in the payment history and the balance decreased by that installment amount" },
+    { "type": "action", "description": "Delete that installment payment from the payment history" },
+    { "type": "assertion", "description": "Verify the first installment is shown as unpaid again and the balance is back to its previous value" }
+  ]
+}
