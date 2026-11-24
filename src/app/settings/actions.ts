@@ -13,6 +13,7 @@
 export {
   updateClinic,
   updateRandevuSettings,
+  updateDefaultCostRate,
   saveNightShiftSettings,
   saveAppointmentType,
   uploadClinicLogo,

@@ -50,6 +50,23 @@ export async function updateClinic(_prev: R, formData: FormData): Promise<R> {
   return { success: true }
 }
 
+// ---- Varsayılan masraf oranı (Tarife > Maliyet) ----
+// Masrafı girilmemiş tedavilerde hakedişte ücretin bu yüzdesi masraf sayılır.
+export async function updateDefaultCostRate(percent: number): Promise<R> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Yetkisiz erişim' }
+  const adminErr = requireAdmin(ctx)
+  if (adminErr) return adminErr
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100) return { error: 'Oran 0 ile 100 arasında olmalı' }
+  const { error } = await ctx.supabase
+    .from('clinic_settings')
+    .update({ default_cost_bps: Math.round(percent * 100), updated_at: new Date().toISOString() })
+    .eq('id', ctx.clinicId)
+  if (error) return { error: error.message }
+  revalidatePath('/settings'); revalidatePath('/finance'); revalidatePath('/')
+  return { success: true }
+}
+
 // ---- Randevu ayarları ----
 export async function updateRandevuSettings(_prev: R, formData: FormData): Promise<R> {
   const ctx = await getCtx()

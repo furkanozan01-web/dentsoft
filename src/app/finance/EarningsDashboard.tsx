@@ -19,7 +19,7 @@ const METHOD_LABEL: Record<string, string> = { cash: 'Nakit / Kasa', transfer: '
 function money(value: number) { return `₺${(value / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }
 function dateText(value: string | null) { return value ? new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString('tr-TR') : '—' }
 
-export default function EarningsDashboard({ doctors, doctorShares, branches, profitByMonth, treatments, patients, txs, payments, installments, vatBps, monthKey, canSeeAll, canManagePayments, onNeedFrom, currentDoctorId, onChanged, onPatientClick }: {
+export default function EarningsDashboard({ doctors, doctorShares, branches, profitByMonth, treatments, patients, txs, payments, installments, vatBps, defaultCostBps, monthKey, canSeeAll, canManagePayments, onNeedFrom, currentDoctorId, onChanged, onPatientClick }: {
   doctors: FinDoctor[]
   doctorShares: FinDoctorShare[]
   branches: FinBranch[]
@@ -30,6 +30,8 @@ export default function EarningsDashboard({ doctors, doctorShares, branches, pro
   installments: FinInstallment[]
   profitByMonth: Record<string, number>
   vatBps: number
+  /** Masrafı girilmemiş tedavilerde ücretin kaçı masraf sayılır (baz puan, 1000 = %10) */
+  defaultCostBps: number
   monthKey: string
   canSeeAll: boolean
   canManagePayments: boolean
@@ -74,12 +76,12 @@ export default function EarningsDashboard({ doctors, doctorShares, branches, pro
     [canSeeAll, doctors, currentDoctorId]
   )
   const summaries = useMemo(
-    () => visibleDoctors.map((d) => computeRange(d, doctorShares, treatments, patients, txs, payments, range.start, range.end, vatBps)),
-    [visibleDoctors, doctorShares, treatments, patients, txs, payments, range, vatBps]
+    () => visibleDoctors.map((d) => computeRange(d, doctorShares, treatments, patients, txs, payments, range.start, range.end, vatBps, today, defaultCostBps)),
+    [visibleDoctors, doctorShares, treatments, patients, txs, payments, range, vatBps, today, defaultCostBps]
   )
   const receivables = useMemo(
-    () => new Map(visibleDoctors.map((d) => [d.id, computeReceivable(d, doctorShares, treatments, patients, txs, payments, vatBps)])),
-    [visibleDoctors, doctorShares, treatments, patients, txs, payments, vatBps]
+    () => new Map(visibleDoctors.map((d) => [d.id, computeReceivable(d, doctorShares, treatments, patients, txs, payments, vatBps, defaultCostBps)])),
+    [visibleDoctors, doctorShares, treatments, patients, txs, payments, vatBps, defaultCostBps]
   )
   const rcv = (id: number) => receivables.get(id) ?? { entitlement: 0, paid: 0, remaining: 0 }
   const firstId = canSeeAll ? summaries[0]?.doctor.id ?? null : currentDoctorId
@@ -157,7 +159,7 @@ export default function EarningsDashboard({ doctors, doctorShares, branches, pro
     else { toast.success('Ödeme ve bağlantılı gider silindi'); onChanged() }
   })
 
-  if (!selected) return <div className="rounded-[24px] border border-dashed border-slate-300 bg-white p-10 text-center"><p className="font-black text-slate-700">Hakediş kaydıyla eşleşen hekim bulunamadı.</p><p className="mt-2 text-sm font-semibold text-slate-400">Ayarlar bölümünden kullanıcı hesabını bir hekimle eşleştirin.</p></div>
+  if (!selected) return <div className="rounded-[24px] border border-dashed border-slate-300 bg-white p-6 text-center"><p className="font-black text-slate-700">Hakediş kaydıyla eşleşen hekim bulunamadı.</p><p className="mt-2 text-sm font-semibold text-slate-400">Ayarlar bölümünden kullanıcı hesabını bir hekimle eşleştirin.</p></div>
 
   return <div className="space-y-6">
     <div className="flex flex-wrap items-end justify-between gap-3 rounded-[18px] border border-slate-200 bg-white p-4"><div><p className="text-sm font-black text-[#142536]">Tahsilat Detayları Dönemi</p><p className="mt-1 text-xs font-semibold text-slate-400">Aşağıdaki yeşil kutu ve ayrıntılar seçtiğiniz dönem içindir (gün, hafta, ay veya serbest aralık)</p></div><div className="flex flex-wrap gap-2"><select value={detailPeriod} onChange={e=>setDetailPeriod(e.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-600"><option value="today">Bugün</option><option value="week">Bu hafta</option><option value="last7">Son 7 gün</option><option value="selected">Seçili ay</option><option value="last">Geçen ay</option><option value="3">Son 3 ay</option><option value="6">Son 6 ay</option><option value="year">Bu yıl</option><option value="custom">Özel tarih aralığı</option></select>{detailPeriod==='custom'&&<><input type="date" value={customStart} onChange={e=>setCustomStart(e.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs font-bold"/><input type="date" value={customEnd} onChange={e=>setCustomEnd(e.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs font-bold"/></>}<span className="flex h-10 items-center rounded-xl bg-slate-50 px-3 text-xs font-bold text-slate-500">{dateText(range.start)} – {dateText(range.end)}</span></div></div>
@@ -185,15 +187,30 @@ export default function EarningsDashboard({ doctors, doctorShares, branches, pro
 
     <section className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
       <Header title="Tahsilat Detayları" subtitle={`Dt. ${selected.doctor.name} • Seçilen dönemde hakedişe yansıyan tahsilatlar`} />
-      <div className="grid gap-3 border-b border-slate-100 p-5 sm:grid-cols-3">
+      <div className="grid gap-3 border-b border-slate-100 px-5 py-3 sm:grid-cols-4">
         <Mini label="Tahsilat sayısı" value={String(collectionRows.length)} />
         <Mini label="Toplam tahsilat" value={money(collectionRows.reduce((sum, row) => sum + row.collected, 0))} />
+        <Mini label="Toplam masraf" value={money(collectionRows.reduce((sum, row) => sum + row.cost, 0))} />
         <Mini label="Hakedişe yansıyan" value={money(collectionRows.reduce((sum, row) => sum + row.earning + row.bonus, 0))} />
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1750px] text-xs">
-          <thead className="bg-slate-50"><tr>{['Hasta adı','Hasta soyadı','İşlem tarihi','Tahsilat tarihi','Yapılan işlem','Tahsil edilen','Hekim cirosu','Komisyon oranı','Komisyon tutarı','Prim','Hakedişe yansıyan','Ödeme yöntemi','Açıklama'].map((h) => <th key={h} className="whitespace-nowrap px-4 py-4 text-left font-black uppercase tracking-wide text-slate-400">{h}</th>)}</tr></thead>
-          <tbody>{collectionRows.length === 0 ? <tr><td colSpan={13} className="p-10 text-center font-semibold text-slate-400">Seçili dönemde tahsilat bulunmuyor.</td></tr> : collectionRows.map((row) => <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50"><td className="px-4 py-4"><button disabled={!row.patientId} onClick={() => row.patientId && onPatientClick(row.patientId)} className="font-black text-[#142536] hover:underline">{row.firstName}</button></td><td className="px-4 py-4 font-bold text-slate-600">{row.surname}</td><td className="px-4 py-4 text-slate-500">{dateText(row.treatmentDate)}</td><td className="px-4 py-4 text-slate-500">{dateText(row.collectionDate)}</td><td className="px-4 py-4 font-bold text-slate-700">{row.treatment}</td><td className="px-4 py-4 font-black text-emerald-600">{money(row.collected)}</td><td className="px-4 py-4 font-black text-slate-700">{money(row.gross)}</td><td className="px-4 py-4 font-bold text-violet-600">%{hasCommission ? (row.rate / 100).toLocaleString('tr-TR') : '0'}</td><td className="px-4 py-4 font-black text-[#0F766E]">{money(hasCommission ? row.earning : 0)}</td><td className="px-4 py-4 font-bold text-amber-600">{money(row.bonus)}</td><td className="px-4 py-4 font-black text-blue-600">{money(row.earning + row.bonus)}</td><td className="px-4 py-4 text-slate-500">{METHOD_LABEL[row.paymentMethod ?? ''] ?? row.paymentMethod ?? '—'}</td><td className="px-4 py-4 text-slate-500">{row.description}</td></tr>)}</tbody>
+        <table className="w-full min-w-[1150px] text-xs">
+          <thead className="bg-slate-50"><tr><th key="Hasta" className="whitespace-nowrap px-2.5 py-2 text-left text-[10px] font-black uppercase tracking-wide text-slate-400 ">Hasta</th><th key="Yapılan işlem" className="whitespace-nowrap px-2.5 py-2 text-left text-[10px] font-black uppercase tracking-wide text-slate-400 ">Yapılan işlem</th><th key="Tahsil edilen" className="whitespace-nowrap px-2.5 py-2 text-left text-[10px] font-black uppercase tracking-wide text-slate-400 ">Tahsil edilen</th><th key="Masraf" className="whitespace-nowrap px-2.5 py-2 text-left text-[10px] font-black uppercase tracking-wide text-slate-400 ">Masraf</th><th key="Net" className="whitespace-nowrap px-2.5 py-2 text-left text-[10px] font-black uppercase tracking-wide text-slate-400 ">Net</th><th key="Oran" className="whitespace-nowrap px-2.5 py-2 text-left text-[10px] font-black uppercase tracking-wide text-slate-400 ">Oran</th><th key="Hakedişe yansıyan" className="whitespace-nowrap px-2.5 py-2 text-left text-[10px] font-black uppercase tracking-wide text-slate-400 ">Hakedişe yansıyan</th><th key="İşlem tarihi" className="whitespace-nowrap px-2.5 py-2 text-left text-[10px] font-black uppercase tracking-wide text-slate-400 border-l border-slate-200">İşlem tarihi</th><th key="Tahsilat tarihi" className="whitespace-nowrap px-2.5 py-2 text-left text-[10px] font-black uppercase tracking-wide text-slate-400 ">Tahsilat tarihi</th><th key="Yöntem" className="whitespace-nowrap px-2.5 py-2 text-left text-[10px] font-black uppercase tracking-wide text-slate-400 ">Yöntem</th><th key="Komisyon" className="whitespace-nowrap px-2.5 py-2 text-left text-[10px] font-black uppercase tracking-wide text-slate-400 ">Komisyon</th><th key="Prim" className="whitespace-nowrap px-2.5 py-2 text-left text-[10px] font-black uppercase tracking-wide text-slate-400 ">Prim</th><th key="Açıklama" className="whitespace-nowrap px-2.5 py-2 text-left text-[10px] font-black uppercase tracking-wide text-slate-400 ">Açıklama</th></tr></thead>
+          <tbody>{collectionRows.length === 0 ? <tr><td colSpan={13} className="p-6 text-center font-semibold text-slate-400">Seçili dönemde tahsilat bulunmuyor.</td></tr> : collectionRows.map((row) => <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50">
+            <td className="whitespace-nowrap px-2.5 py-1.5"><button disabled={!row.patientId} onClick={() => row.patientId && onPatientClick(row.patientId)} className="font-black text-[#142536] hover:underline">{row.firstName} {row.surname}</button></td>
+            <td className="px-2.5 py-1.5 font-bold text-slate-700">{row.treatment}</td>
+            <td className="whitespace-nowrap px-2.5 py-1.5 font-black text-emerald-600">{money(row.collected)}</td>
+            <td className="whitespace-nowrap px-2.5 py-1.5 font-black text-red-500" title={row.costEstimated ? 'Masraf girilmemiş: varsayılan masraf oranı uygulandı' : row.vat > 0 ? `Malzeme ${money(row.materialCost)} + KDV ${money(row.vat)}` : 'Tedavide girilen masraf'}>{row.cost > 0 ? '−' : ''}{money(row.cost)}<span className="ml-1 text-[10px] font-bold text-slate-400">{row.collected > 0 ? `%${((row.cost / row.collected) * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 })}` : ''}{row.costEstimated ? ' ~' : ''}</span></td>
+            <td className="whitespace-nowrap px-2.5 py-1.5 font-black text-slate-700">{money(row.net)}</td>
+            <td className="whitespace-nowrap px-2.5 py-1.5 font-bold text-violet-600">%{hasCommission ? (row.rate / 100).toLocaleString('tr-TR') : '0'}</td>
+            <td className="whitespace-nowrap px-2.5 py-1.5 font-black text-blue-600">{money(row.earning + row.bonus)}</td>
+            <td className="whitespace-nowrap border-l border-slate-200 px-2.5 py-1.5 text-slate-500">{dateText(row.treatmentDate)}</td>
+            <td className="whitespace-nowrap px-2.5 py-1.5 text-slate-500">{dateText(row.collectionDate)}</td>
+            <td className="whitespace-nowrap px-2.5 py-1.5 text-slate-500">{METHOD_LABEL[row.paymentMethod ?? ''] ?? row.paymentMethod ?? '—'}</td>
+            <td className="whitespace-nowrap px-2.5 py-1.5 font-bold text-[#0F766E]">{money(hasCommission ? row.earning : 0)}</td>
+            <td className="whitespace-nowrap px-2.5 py-1.5 font-bold text-amber-600">{money(row.bonus)}</td>
+            <td className="px-2.5 py-1.5 text-slate-500">{row.description}</td>
+          </tr>)}</tbody>
         </table>
       </div>
     </section>
@@ -202,15 +219,15 @@ export default function EarningsDashboard({ doctors, doctorShares, branches, pro
       <Header title="Hasta Bazlı Hakediş Detayları" subtitle={`Dt. ${selected.doctor.name} • Hasta bazında işlem, tahsilat, bakiye ve hakediş özeti`} />
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1050px] text-xs">
-          <thead className="bg-slate-50"><tr>{['Hasta','İşlem sayısı','Toplam işlem','Tahsil edilen','Bekleyen bakiye','Hakedişe yansıyan','Durum'].map((h) => <th key={h} className="whitespace-nowrap px-5 py-4 text-left font-black uppercase tracking-wide text-slate-400">{h}</th>)}</tr></thead>
-          <tbody>{patientRows.length === 0 ? <tr><td colSpan={7} className="p-10 text-center font-semibold text-slate-400">Seçili dönemde hasta işlemi bulunmuyor.</td></tr> : patientRows.map((row) => { const waiting = Math.max(row.total - row.collected, 0); return <tr key={row.key} className="border-t border-slate-100 hover:bg-slate-50"><td className="px-5 py-4"><button disabled={!row.patientId} onClick={() => row.patientId && onPatientClick(row.patientId)} className="font-black text-[#142536] hover:underline">{row.name} {row.surname}</button></td><td className="px-5 py-4 font-bold text-slate-600">{row.treatmentCount}</td><td className="px-5 py-4 font-black text-slate-700">{money(row.total)}</td><td className="px-5 py-4 font-black text-emerald-600">{money(row.collected)}</td><td className="px-5 py-4 font-black text-red-600">{money(waiting)}</td><td className="px-5 py-4 font-black text-violet-600">{money(row.earning)}</td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 font-black ${waiting > 0 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{waiting > 0 ? 'Tahsilat bekliyor' : 'Tahsil edildi'}</span></td></tr> })}</tbody>
+          <thead className="bg-slate-50"><tr>{['Hasta','İşlem sayısı','Toplam işlem','Tahsil edilen','Bekleyen bakiye','Hakedişe yansıyan','Durum'].map((h) => <th key={h} className="whitespace-nowrap px-3 py-2 text-left font-black uppercase tracking-wide text-slate-400">{h}</th>)}</tr></thead>
+          <tbody>{patientRows.length === 0 ? <tr><td colSpan={7} className="p-6 text-center font-semibold text-slate-400">Seçili dönemde hasta işlemi bulunmuyor.</td></tr> : patientRows.map((row) => { const waiting = Math.max(row.total - row.collected, 0); return <tr key={row.key} className="border-t border-slate-100 hover:bg-slate-50"><td className="px-3 py-2"><button disabled={!row.patientId} onClick={() => row.patientId && onPatientClick(row.patientId)} className="font-black text-[#142536] hover:underline">{row.name} {row.surname}</button></td><td className="px-3 py-2 font-bold text-slate-600">{row.treatmentCount}</td><td className="px-3 py-2 font-black text-slate-700">{money(row.total)}</td><td className="px-3 py-2 font-black text-emerald-600">{money(row.collected)}</td><td className="px-3 py-2 font-black text-red-600">{money(waiting)}</td><td className="px-3 py-2 font-black text-violet-600">{money(row.earning)}</td><td className="px-3 py-2"><span className={`rounded-full px-2.5 py-1 font-black ${waiting > 0 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{waiting > 0 ? 'Tahsilat bekliyor' : 'Tahsil edildi'}</span></td></tr> })}</tbody>
         </table>
       </div>
     </section>
 
     <section className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
       <Header title="Hakediş Ödeme Geçmişi" subtitle="Son 10 ödeme açık gösterilir; Defter giderleriyle otomatik eşleşir" />
-      <div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-xs"><thead className="bg-slate-50"><tr>{['Tarih','Ödeme türü','Yöntem','Kasa / banka','Hakediş dönemi','Tutar','Açıklama','Ödemeyi yapan','İşlem'].map((h) => <th key={h} className="px-5 py-4 text-left font-black uppercase tracking-wide text-slate-400">{h}</th>)}</tr></thead><tbody>{payments.filter((p) => p.doctor_id === selected.doctor.id).slice(0,showAllPayments?undefined:10).map((p) => <tr key={p.id} className="border-t border-slate-100"><td className="px-5 py-4 font-semibold text-slate-500">{dateText(p.payment_date)}</td><td className="px-5 py-4 font-bold text-slate-700">{PAY_LABEL[p.payment_type] ?? p.payment_type}</td><td className="px-5 py-4 text-slate-500">{METHOD_LABEL[p.method ?? ''] ?? p.method ?? '—'}</td><td className="px-5 py-4 text-slate-500">{p.account_name || METHOD_LABEL[p.method ?? ''] || '—'}</td><td className="px-5 py-4 text-slate-500">{p.earning_period || p.payment_date.slice(0,7)}</td><td className="px-5 py-4 font-black text-red-600">{money(p.amount)}</td><td className="px-5 py-4 text-slate-500">{p.note || '—'}</td><td className="px-5 py-4 text-slate-500">{p.created_by_name || (p.created_by ? 'Yetkili kullanıcı' : 'Eski kayıt')}</td><td className="px-5 py-4">{canManagePayments && <button disabled={pending} onClick={() => removePayment(p.id)} className="font-black text-red-500 hover:underline">Sil</button>}</td></tr>)}</tbody></table></div>
+      <div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-xs"><thead className="bg-slate-50"><tr>{['Tarih','Ödeme türü','Yöntem','Kasa / banka','Hakediş dönemi','Tutar','Açıklama','Ödemeyi yapan','İşlem'].map((h) => <th key={h} className="px-3 py-2 text-left font-black uppercase tracking-wide text-slate-400">{h}</th>)}</tr></thead><tbody>{payments.filter((p) => p.doctor_id === selected.doctor.id).slice(0,showAllPayments?undefined:10).map((p) => <tr key={p.id} className="border-t border-slate-100"><td className="px-3 py-2 font-semibold text-slate-500">{dateText(p.payment_date)}</td><td className="px-3 py-2 font-bold text-slate-700">{PAY_LABEL[p.payment_type] ?? p.payment_type}</td><td className="px-3 py-2 text-slate-500">{METHOD_LABEL[p.method ?? ''] ?? p.method ?? '—'}</td><td className="px-3 py-2 text-slate-500">{p.account_name || METHOD_LABEL[p.method ?? ''] || '—'}</td><td className="px-3 py-2 text-slate-500">{p.earning_period || p.payment_date.slice(0,7)}</td><td className="px-3 py-2 font-black text-red-600">{money(p.amount)}</td><td className="px-3 py-2 text-slate-500">{p.note || '—'}</td><td className="px-3 py-2 text-slate-500">{p.created_by_name || (p.created_by ? 'Yetkili kullanıcı' : 'Eski kayıt')}</td><td className="px-3 py-2">{canManagePayments && <button disabled={pending} onClick={() => removePayment(p.id)} className="font-black text-red-500 hover:underline">Sil</button>}</td></tr>)}</tbody></table></div>
       {payments.filter((p) => p.doctor_id === selected.doctor.id).length > 10 && <button onClick={() => setShowAllPayments((value) => !value)} className="m-5 text-xs font-black text-[#0F766E]">{showAllPayments ? 'Son 10 ödemeyi göster' : 'Tüm ödeme geçmişini göster'}</button>}
     </section>
 

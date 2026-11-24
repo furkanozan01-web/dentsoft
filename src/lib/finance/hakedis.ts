@@ -98,6 +98,10 @@ export interface DetailRow {
   cost: number
   /** Masrafın içindeki KDV (dönemde kesilen faturaların KDV payı) */
   vat: number
+  /** Malzeme/lab masrafı (KDV hariç), tahsil edilen oranda */
+  materialCost: number
+  /** true: tedavide masraf girilmemişti, varsayılan masraf oranı uygulandı */
+  costEstimated: boolean
   net: number
   rate: number
   bonus: number
@@ -170,7 +174,9 @@ function commissionCore(
   txs: HakedisTx[],
   startISO: string,
   endISO: string,
-  vatBps: number
+  vatBps: number,
+  /** Masrafı girilmemiş (0) tedavilerde ücretin bu oranı masraf sayılır (baz puan, 1000 = %10) */
+  defaultCostBps = 0
 ) {
   const patientMap = new Map(patients.map((p) => [p.id, p]))
   const rate = doctor.commission_rate_bps ?? 0
@@ -260,7 +266,10 @@ function commissionCore(
     const collected = collectedBy.get(treatment.id) ?? 0
     const gross = collected
     // Masraf = lab/malzeme (tahsil edilen oranda) + KDV (yalnızca kesilen faturanın KDV'si; fatura döneminde düşer).
-    const materialCost = treatmentFee > 0 ? Math.round((treatment.cost ?? 0) * (collected / treatmentFee)) : 0
+    const enteredCost = treatment.cost ?? 0
+    const costEstimated = enteredCost <= 0 && defaultCostBps > 0
+    const unitCost = costEstimated ? Math.round((treatmentFee * defaultCostBps) / 10000) : enteredCost
+    const materialCost = treatmentFee > 0 ? Math.round(unitCost * (collected / treatmentFee)) : 0
     const vat = vatBy.get(treatment.id) ?? 0
     const cost = materialCost + vat
     const net = Math.max(gross - materialCost, 0) - vat
@@ -281,6 +290,8 @@ function commissionCore(
       gross,
       cost,
       vat,
+      materialCost,
+      costEstimated,
       net,
       rate,
       bonus: 0,
@@ -330,9 +341,10 @@ export function computeRange(
   endISO: string,
   /** Klinik KDV oranı (baz puan, örn. 1000 = %10). Tedavi ücretleri KDV dahildir; KDV hekime masraf olarak gösterilir. */
   vatBps = 0,
-  todayISO: string = localToday()
+  todayISO: string = localToday(),
+  defaultCostBps = 0
 ): DoctorSummary {
-  const core = commissionCore(doctor, treatments, patients, txs, startISO, endISO, vatBps)
+  const core = commissionCore(doctor, treatments, patients, txs, startISO, endISO, vatBps, defaultCostBps)
   const completedCount = core.periodTreatments.filter((t) => t.status === 'done').length
   const currentMonth = todayISO.slice(0, 7)
   const salary = doctor.monthly_salary ?? 0
@@ -359,7 +371,7 @@ export function computeRange(
     if (doctor.guarantee_active && (fullyCovered || currentCovered) && (salary <= 0 ? due <= todayISO : fixedDueIn(key))) {
       const m = fullyCovered && startISO === monthFirst(key) && endISO === monthLast(key)
         ? core
-        : commissionCore(doctor, treatments, patients, txs, monthFirst(key), monthLast(key), vatBps)
+        : commissionCore(doctor, treatments, patients, txs, monthFirst(key), monthLast(key), vatBps, defaultCostBps)
       const monthFixed = fixedDueIn(key) ? salary : 0
       const base = doctor.guarantee_method === 'commission_only' ? m.variable : monthFixed + m.variable
       guaranteeCompletion += Math.max((doctor.guarantee_amount ?? 0) - base, 0)
@@ -424,10 +436,11 @@ export function computeSummary(
   payments: HakedisDoctorPayment[],
   monthKey: string,
   profitByMonth: Record<string, number>,
-  vatBps = 0
+  vatBps = 0,
+  defaultCostBps = 0
 ): DoctorSummary {
   void profitByMonth
-  return computeRange(doctor, shares, treatments, patients, txs, payments, monthFirst(monthKey), monthLast(monthKey), vatBps)
+  return computeRange(doctor, shares, treatments, patients, txs, payments, monthFirst(monthKey), monthLast(monthKey), vatBps, localToday(), defaultCostBps)
 }
 
 /**
@@ -441,9 +454,10 @@ export function computeReceivable(
   patients: HakedisPatient[],
   txs: HakedisTx[],
   payments: HakedisDoctorPayment[],
-  vatBps = 0
+  vatBps = 0,
+  defaultCostBps = 0
 ): { entitlement: number; paid: number; remaining: number } {
   const today = localToday()
-  const s = computeRange(doctor, shares, treatments, patients, txs, payments, '1900-01-01', today, vatBps, today)
+  const s = computeRange(doctor, shares, treatments, patients, txs, payments, '1900-01-01', today, vatBps, today, defaultCostBps)
   return { entitlement: s.entitlement, paid: s.paid, remaining: s.remaining }
 }

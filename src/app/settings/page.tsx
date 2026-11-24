@@ -41,7 +41,7 @@ export default async function SettingsPage() {
   ] = await Promise.all([
     supabase
       .from('clinic_settings')
-      .select('id, clinic_name, address, phone, email, tax_no, tax_office, default_duration, work_start, work_end, online_booking, require_approval, vat_rate, logo_url, invoice_institution, authorized_person, unit_count, bank_fee_bps, default_currency, is_active, night_shift_active, night_shift_start, night_shift_end, night_shift_days, night_shift_doctor_ids, night_shift_branch_id, night_shift_interval, night_shift_note')
+      .select('id, clinic_name, address, phone, email, tax_no, tax_office, default_duration, work_start, work_end, online_booking, require_approval, vat_rate, logo_url, invoice_institution, authorized_person, unit_count, bank_fee_bps, default_cost_bps, default_currency, is_active, night_shift_active, night_shift_start, night_shift_end, night_shift_days, night_shift_doctor_ids, night_shift_branch_id, night_shift_interval, night_shift_note')
       .eq('id', clinicId)
       .single(),
     supabase

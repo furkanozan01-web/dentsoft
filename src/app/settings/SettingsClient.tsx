@@ -122,6 +122,8 @@ export default function SettingsClient({
           <TarifeTab
             tariffProfiles={initialTariffProfiles}
             tariffs={initialTariffs}
+            defaultCostBps={clinic.default_cost_bps ?? 1000}
+            canManage={isAdmin}
             onChanged={refresh}
             branches={branches}
             history={tariffHistory}

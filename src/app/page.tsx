@@ -264,8 +264,9 @@ export default async function DashboardPage() {
   }
 
   // Hekime masraf olarak gösterilen KDV için klinik KDV oranı (hakediş sayfalarıyla aynı hesap)
-  const { data: vatRow } = await supabase.from('clinic_settings').select('vat_rate').eq('id', clinicId).maybeSingle()
+  const { data: vatRow } = await supabase.from('clinic_settings').select('vat_rate, default_cost_bps').eq('id', clinicId).maybeSingle()
   const vatBps = vatRow?.vat_rate ?? 1000
+  const defaultCostBps = vatRow?.default_cost_bps ?? 0
 
   const ownSummary = currentDoctor
     ? computeReceivable(
@@ -281,7 +282,8 @@ export default async function DashboardPage() {
           earning_period: payment.earning_period,
           payment_type: payment.payment_type,
         })),
-        vatBps
+        vatBps,
+        defaultCostBps
       )
     : null
 

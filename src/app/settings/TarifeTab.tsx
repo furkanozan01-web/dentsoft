@@ -22,7 +22,8 @@ import {
 } from './actions'
 import type { TariffProfile } from './actions'
 import { fmtPrice } from './helpers'
-import TdbExcelImport, { TDB_OFFICIAL_URL } from './TdbExcelImport'
+import DefaultCostCard from './DefaultCostCard'
+import TdbExcelImport,{ TDB_OFFICIAL_URL } from './TdbExcelImport'
 import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
 import { BulkPriceModal, PriceHistoryModal, TariffCards, TreatmentVisual, VISUAL_SCHEMAS, inferTariffVisual } from './TariffEnhancements'
 import { SummaryLine, SettingsIconBox, UserStatCard, IconClipboard, IconCheckCircle, IconPlus, IconInfo, IconCalendar } from './SettingsSharedUI'
@@ -31,12 +32,16 @@ import type { Branch, Tariff, TariffPriceHistory, R } from './types'
 export default function TarifeTab({
   tariffProfiles,
   tariffs,
+  defaultCostBps,
+  canManage,
   onChanged,
   branches,
   history,
 }: {
   tariffProfiles: TariffProfile[]
   tariffs: Tariff[]
+  defaultCostBps: number
+  canManage: boolean
   onChanged: () => void
   branches: Branch[]
   history: TariffPriceHistory[]
@@ -214,6 +219,7 @@ export default function TarifeTab({
 
   return (
     <div className="space-y-6">
+      <DefaultCostCard defaultCostBps={defaultCostBps} canManage={canManage} onChanged={onChanged} />
       {/* Profil sekmeleri */}
       <div className="flex items-center gap-3 flex-wrap">
         {tariffProfiles.map((p) => (

@@ -904,8 +904,9 @@ export async function getHekimHakedis(input: {
   if (!doctors || doctors.length === 0) return { error: 'Hekim bulunamadı.' }
 
   const fmt = (kurus: number) => Math.round(kurus) / 100
-  const { data: vatRow } = await supabase.from('clinic_settings').select('vat_rate').eq('id', clinicId).maybeSingle()
+  const { data: vatRow } = await supabase.from('clinic_settings').select('vat_rate, default_cost_bps').eq('id', clinicId).maybeSingle()
   const vatBps = vatRow?.vat_rate ?? 1000
+  const defaultCostBps = vatRow?.default_cost_bps ?? 0
 
   const profitByMonth: Record<string, number> = {}
   for (const tx of txs ?? []) {
@@ -932,7 +933,8 @@ export async function getHekimHakedis(input: {
       (payments ?? []) as Parameters<typeof computeSummary>[5],
       monthKey,
       profitByMonth,
-      vatBps
+      vatBps,
+      defaultCostBps
     )
     return {
       hekim_id: doc.id,

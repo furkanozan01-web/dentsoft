@@ -19,6 +19,8 @@ export interface ClinicSettings {
   authorized_person: string | null
   unit_count: number
   bank_fee_bps: number
+  /** Masrafı girilmemiş tedavilerde hakedişte ücretin kaçı masraf sayılır (baz puan, 1000 = %10) */
+  default_cost_bps: number
   default_currency: string
   is_active: boolean
   night_shift_active: boolean
