@@ -337,7 +337,7 @@ export async function getTransactionsRange(
   }
 }
 
-// ── Kasa (şube kasası) ────────────────────────────────────────────────────────
+// ── Kâr payı dağıtımı ────────────────────────────────────────────────────────
 
 export async function distributeBranchProfit(input: {
   branchId: number

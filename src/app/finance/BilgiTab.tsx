@@ -120,7 +120,7 @@ export default function BilgiTab({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <Kpi label="Bu Ay Gelir" value={monthIncome} description="Seçili ay toplam geliri" tone="blue" icon={<IconTrendingUp />} />
         <Kpi label="Bu Ay Gider" value={monthExpense} description="Seçili ay gider toplamı" tone="red" icon={<IconTrendingDown />} />
-        <Kpi label="Net Kâr" value={netProfit} description="Gelir - gider farkı (kasa)" tone="green" icon={<IconWallet />} />
+        <Kpi label="Net Kâr" value={netProfit} description="Gelir - gider farkı" tone="green" icon={<IconWallet />} />
         <Kpi label="Hakediş Sonrası Net Kâr" value={netProfitAfterHakedis} description="Net kâr - ödenmemiş hakediş" tone="green" icon={<IconWallet />} />
         <button type="button" onClick={onHakedisClick} className="text-left cursor-pointer rounded-[20px] border border-slate-200/90 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition hover:border-violet-200 hover:shadow-[0_8px_24px_rgba(139,92,246,0.12)]">
           <Kpi label="Toplam Hakediş" value={totalHakedis} description="Hakediş sekmesine git →" tone="violet" icon={<IconReceipt />} noBorder />

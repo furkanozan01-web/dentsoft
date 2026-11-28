@@ -37,7 +37,7 @@ export function BranchSharesEditor({
         <div>
           <h2 className="text-base font-black text-[#142536]">Hissedarlar (Şube Bazlı)</h2>
           <p className="mt-1 text-sm font-medium text-slate-400">
-            Her şubenin hissedarlarını ve oranlarını belirleyin. Bir şubenin toplamı tam %100 olmalıdır. Kasa → Kâr Payı Öde bu oranlarla dağıtır.
+            Her şubenin hissedarlarını ve oranlarını belirleyin. Bir şubenin toplamı tam %100 olmalıdır. Finans → Hakediş → Kâr Payı Dağıt bu oranlarla dağıtır.
           </p>
         </div>
       </div>

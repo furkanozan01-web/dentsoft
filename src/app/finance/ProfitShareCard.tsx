@@ -5,7 +5,7 @@ import { localDateValue } from '@/lib/format'
 import { usePersistedPreference } from '@/lib/hooks/usePersistedPreference'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ConfirmModal'
-import { DistributeModal } from './KasaDashboard'
+import { DistributeModal } from './DistributeModal'
 import { deleteProfitDistribution } from './actions'
 import type { DoctorPayment, FinBranch, FinDoctor, FinDoctorShare } from './FinanceClient'
 
@@ -19,7 +19,7 @@ function dateText(value: string) {
 /**
  * Hakediş sekmesi — "Kâr Payı Dağıtımı" kutusu.
  * Şube seçilir; o şubenin hissedarları ve oranları görünür; girilen tutar oranlara göre hissedarlara dağıtılır
- * (Kasa sekmesindeki "Kâr Payı Öde" ile aynı işlem). Dağıtımlar hakediş alacağına sayılmaz.
+ * Tutarı elle girersiniz; kasa bakiyesine bağlı değildir. Dağıtımlar hakediş alacağına sayılmaz.
  */
 export default function ProfitShareCard({
   branches, doctors, doctorShares, payments, profitByMonth, monthKey, onChanged,

@@ -18,7 +18,6 @@ const EarningsDashboard = dynamic(() => import('./EarningsDashboard'))
 const PartnersDashboard = dynamic(() => import('./PartnersDashboard'))
 const BilgiTab = dynamic(() => import('./BilgiTab'))
 const BorclarTab = dynamic(() => import('./BorclarTab'))
-const KasaDashboard = dynamic(() => import('./KasaDashboard'))
 
 export interface FinTx {
   id: number
@@ -161,13 +160,10 @@ export interface DoctorPayment {
   branch_id?: number | null
 }
 /** Hasta ödemesinin şubelere paylaştırılmış payı (tedaviyi yapan hekimlerin şubeleri, ücret payı oranında) */
-export interface PaymentAllocation { tx_id: number; branch_id: number | null; amount: number }
-
-type Tab = 'bilgi' | 'defter' | 'kasa' | 'bakiye' | 'hakedis' | 'borclar' | 'ortaklar' | 'gecmis'
+type Tab = 'bilgi' | 'defter' | 'bakiye' | 'hakedis' | 'borclar' | 'ortaklar' | 'gecmis'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'bilgi', label: 'Bilgi' },
   { id: 'defter', label: 'Defter' },
-  { id: 'kasa', label: 'Kasa' },
   { id: 'bakiye', label: 'Bakiye' },
   { id: 'hakedis', label: 'Hakediş' },
   { id: 'borclar', label: 'Borçlar' },
@@ -193,9 +189,6 @@ export default function FinanceClient({
   defaultCostBps,
   partnerServices,
   profitByMonth,
-  kasaTotals,
-  kasaMethods,
-  payAllocations,
   years,
   windowStart,
   branches,
@@ -217,9 +210,6 @@ export default function FinanceClient({
   defaultCostBps: number
   partnerServices: PartnerService[]
   profitByMonth: Record<string, number>
-  kasaTotals: Record<string, { income: number; expense: number }>
-  kasaMethods: Record<string, Record<string, { income: number; expense: number }>>
-  payAllocations: PaymentAllocation[]
   years: number[]
   windowStart: string
   branches: FinBranch[]
@@ -414,18 +404,6 @@ export default function FinanceClient({
             currentDoctorId={currentDoctorId}
             onChanged={() => router.refresh()}
             onPatientClick={(id) => router.push(`/patients?patient_id=${id}&tab=hesap`)}
-          />
-        )}
-        {tab === 'kasa' && (
-          <KasaDashboard
-            branches={branches}
-            txs={windowTxs}
-            totals={kasaTotals}
-            methodTotals={kasaMethods}
-            allocations={payAllocations}
-            doctorShares={doctorShares}
-            doctors={doctors}
-            onChanged={() => router.refresh()}
           />
         )}
         {tab === 'borclar' && (

@@ -326,7 +326,7 @@ function commissionCore(
  * - Sabit maaş: maaş günü (boşsa ayın 1'i) aralığa düşen her ay için bir kez, tam tutar. Birikim,
  *   hekimin "göreve başlama tarihinden" başlar (boşsa içinde bulunulan aydan). Maaş günü gelmemişse sayılmaz.
  * - Garanti tamamlama: ayın tamamı aralıktaysa (veya aralık bu ayın başından bugüne kadarsa) aylık hesaplanır.
- * - Kâr payı hakedişe dahil değildir (Kasa > "Kâr Payı Öde" ile dağıtılır).
+ * - Kâr payı hakedişe dahil değildir (Hakediş > "Kâr Payı Dağıt" ile elle dağıtılır).
  *
  * @param startISO / endISO 'YYYY-MM-DD' (dahil)
  */

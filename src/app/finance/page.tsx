@@ -35,7 +35,7 @@ export default async function FinancePage() {
   const clinicId = profile.clinic_id
   const isAdmin = profile.role === 'bashekim'
   // İşlem satırları son 13 ay ile sınırlıdır; daha eskisi istemciden getTransactionsRange ile yüklenir.
-  // Tüm zamanlar toplamları (Kasa, hisse kâr tabanı) satırdan değil finance_totals RPC'sinden gelir.
+  // Tüm zamanlar toplamları (şube kâr tabanı) satırdan değil finance_totals RPC'sinden gelir.
   const windowStart = new Date(new Date().getFullYear(), new Date().getMonth() - 12, 1).toLocaleDateString('en-CA')
 
   const [
@@ -183,7 +183,6 @@ export default async function FinancePage() {
   // Toplamlar satırlardan değil finance_totals RPC'sinden: PostgREST satır sınırından bağımsız.
   const totals = (totalsRaw ?? []) as { branch_id: number | null; month: string; type: string; total: number }[]
   const profitByMonth: Record<string, number> = {}
-  const kasaTotals: Record<string, { income: number; expense: number }> = {}
   const yearSet = new Set<number>([new Date().getFullYear()])
   for (const row of totals) {
     const signed = row.type === 'payment' ? row.total : -row.total
@@ -192,32 +191,10 @@ export default async function FinancePage() {
     if (row.branch_id) {
       const branchKey = `${row.branch_id}:${row.month}`
       profitByMonth[branchKey] = (profitByMonth[branchKey] ?? 0) + signed
-      // Kasa yalnızca hakediş yetkisi olanlara açık (satır maskeleme kuralıyla aynı)
-      if (canSeeAllHakedis) {
-        const k = (kasaTotals[row.branch_id] ??= { income: 0, expense: 0 })
-        if (row.type === 'payment') k.income += row.total
-        else if (row.type === 'expense' || row.type === 'refund') k.expense += row.total
-      }
     }
     yearSet.add(Number(row.month.slice(0, 4)))
   }
   const years = Array.from(yearSet).sort((a, b) => b - a)
-
-  // Kasa dökümü: şube → ödeme yöntemi → gelir/gider (tüm zamanlar). Yalnızca hakediş yetkisi olanlara.
-  const kasaMethods: Record<string, Record<string, { income: number; expense: number }>> = {}
-  const payAllocations: { tx_id: number; branch_id: number | null; amount: number }[] = []
-  if (canSeeAllHakedis) {
-    const { data: allocRows } = await supabase.rpc('alloc_payment_branches')
-    for (const row of (allocRows ?? []) as { tx_id: number; branch_id: number | null; amount: number }[]) payAllocations.push({ tx_id: Number(row.tx_id), branch_id: row.branch_id === null ? null : Number(row.branch_id), amount: Number(row.amount) })
-    const { data: methodRows } = await supabase.rpc('finance_kasa_totals')
-    for (const row of (methodRows ?? []) as { branch_id: number | null; method: string; type: string; total: number }[]) {
-      if (!row.branch_id) continue
-      const byMethod = (kasaMethods[row.branch_id] ??= {})
-      const m = (byMethod[row.method] ??= { income: 0, expense: 0 })
-      if (row.type === 'payment') m.income += Number(row.total)
-      else if (row.type === 'expense' || row.type === 'refund') m.expense += Number(row.total)
-    }
-  }
 
   return (
     <div className="flex min-h-screen bg-[#F0F4F9]">
@@ -242,9 +219,6 @@ export default async function FinancePage() {
           defaultCostBps={clinic?.default_cost_bps ?? 0}
           partnerServices={(partnerServices ?? []) as PartnerService[]}
           profitByMonth={profitByMonth}
-          kasaTotals={kasaTotals}
-          kasaMethods={kasaMethods}
-          payAllocations={payAllocations}
           years={years}
           windowStart={windowStart}
         />
